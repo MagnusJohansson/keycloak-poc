@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Renewing session</title>
+  </head>
+  <body>
+    <!--
+      Loaded in a hidden iframe by oidc-client-ts when the access token nears expiry.
+      A real Vite entry point, so the OIDC library is bundled rather than fetched from
+      a CDN at runtime - this page must work offline and behind a strict CSP.
+    -->
+    <script type="module" src="/src/silent-renew.ts"></script>
+  </body>
+</html>

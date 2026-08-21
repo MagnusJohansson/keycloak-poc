@@ -1,0 +1,13 @@
+{
+  "name": "docvault-desktop",
+  "version": "1.0.0",
+  "description": "DocVault desktop client - OIDC for Electron done safely. No runtime dependencies: the authorization-code + PKCE flow is ~80 lines of Node built-ins, and seeing it written out is more instructive than delegating it to a library.",
+  "main": "src/main.js",
+  "private": true,
+  "scripts": {
+    "start": "electron ."
+  },
+  "devDependencies": {
+    "electron": "^33.2.0"
+  }
+}

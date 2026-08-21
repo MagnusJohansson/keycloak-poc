@@ -1,0 +1,16 @@
+# Self-hosted Keycloak on Azure (infra/terraform/15-selfhosted-keycloak).
+#
+# Note how little differs from local/realm.tfvars: a URL and a credential.
+# Not one resource in 20-realm/ changes between the two.
+#
+# Generate this file rather than filling it in by hand:
+#   terraform -chdir=infra/terraform/15-selfhosted-keycloak output -raw realm_tfvars \
+#     > infra/environments/selfhosted/realm.tfvars
+keycloak_url    = "https://ca-keycloak.REPLACE.swedencentral.azurecontainerapps.io"
+admin_client_id = "admin-cli"
+admin_username  = "admin"
+admin_password  = "REPLACE-from-key-vault"
+
+web_react_origin = "https://REPLACE.azurestaticapps.net"
+web_vue_origin   = "https://REPLACE-vue.azurestaticapps.net"
+api_origin       = "https://REPLACE.azurecontainerapps.io"

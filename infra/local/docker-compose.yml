@@ -1,0 +1,88 @@
+# ---------------------------------------------------------------------------
+# The local Keycloak lab.
+#
+# Upstream Keycloak, configured to behave like the Azure deployment in
+# infra/terraform/10-keycloak-azure: same version, same feature flags, real
+# Postgres rather than the dev-mode in-memory database. That is the point -
+# infra/terraform/20-realm applies to this container and to Azure with no change
+# beyond a URL, so the free lab is a faithful rehearsal rather than a toy.
+# ---------------------------------------------------------------------------
+name: docvault
+
+# Image refs are overridable because Docker Hub rate-limits anonymous pulls
+# (HTTP 429) and that is the single most common reason `make up` fails on a fresh
+# machine. The defaults therefore avoid Docker Hub: Keycloak comes from quay.io
+# (its home registry), and the two Docker Hub images come via Google's public
+# pull-through mirror. Override with your own registry if you prefer:
+#
+#   POSTGRES_IMAGE=docker.io/library/postgres:17-alpine make up
+services:
+  postgres:
+    image: ${POSTGRES_IMAGE:-mirror.gcr.io/library/postgres:17-alpine}
+    environment:
+      POSTGRES_DB: keycloak
+      POSTGRES_USER: keycloak
+      POSTGRES_PASSWORD: keycloak
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U keycloak -d keycloak"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  keycloak:
+    # Pinned to the same version as infra/terraform/10-keycloak-azure, so local
+    # and cloud behave identically. Keep the two in step.
+    image: ${KEYCLOAK_IMAGE:-quay.io/keycloak/keycloak:26.6.3}
+    command: ["start-dev", "--import-realm"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN:-admin}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
+
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: keycloak
+
+      # Exposes /health/ready and /metrics on the management port (9000).
+      KC_HEALTH_ENABLED: "true"
+      KC_METRICS_ENABLED: "true"
+
+      # Keep in step with the Azure deployment so behaviour is identical.
+      #   organization  - multi-tenancy primitives
+      #   opentelemetry - tracing
+      KC_FEATURES: "organization,opentelemetry"
+
+      KC_LOG_LEVEL: info
+    ports:
+      - "8080:8080"   # public / auth endpoints
+      - "9000:9000"   # management: health + metrics (keep internal in production)
+    volumes:
+      # Seeds a realm on first boot IF one has been exported. Optional - the
+      # canonical path is `make seed` (Terraform). See tools/export-realm.sh.
+      - ./realm-export:/opt/keycloak/data/import:ro
+    healthcheck:
+      # The Keycloak image ships no curl or wget, so probe with bash's /dev/tcp.
+      # Note the CRLF: HTTP requires \r\n line endings, and bare \n gets a 400
+      # Bad Request - which surfaces as a permanently "unhealthy" container
+      # sitting next to a Keycloak that is actually serving fine.
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/9000 && printf 'GET /health/ready HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && cat <&3 | grep -q '\"status\": \"UP\"'"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+
+  # Catches password-reset / verification mail so the email flows in
+  # docs/use-cases are actually demonstrable. UI at http://localhost:8025
+  mailpit:
+    image: ${MAILPIT_IMAGE:-mirror.gcr.io/axllent/mailpit:latest}
+    ports:
+      - "8025:8025"   # web UI
+      - "1025:1025"   # SMTP
+
+volumes:
+  pgdata:

@@ -1,0 +1,133 @@
+# ---------------------------------------------------------------------------
+# DocVault - a Keycloak identity lab.
+#
+#   make up && make seed && make api      # then, in another shell: make web
+#
+# Everything here targets the LOCAL Docker Keycloak so the lab costs nothing.
+# The cloud equivalents are the azure-* targets.
+# ---------------------------------------------------------------------------
+SHELL := /bin/bash
+.DEFAULT_GOAL := help
+
+COMPOSE  := docker compose -f infra/local/docker-compose.yml
+TF       := terraform
+REALM_DIR    := infra/terraform/20-realm
+KEYCLOAK_AZURE_DIR := infra/terraform/10-keycloak-azure
+APPS_AZURE_DIR     := infra/terraform/30-azure
+LOCAL_VARS   := -var-file=$(CURDIR)/infra/environments/local/realm.tfvars
+
+.PHONY: help
+help: ## Show this help
+	@grep -hE '^[a-zA-Z0-9_-]+:.*?## ' $(MAKEFILE_LIST) \
+		| awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
+
+# --- Local lab --------------------------------------------------------------
+.PHONY: up
+up: ## Start Keycloak + Postgres + Mailpit, wait for readiness
+	$(COMPOSE) up -d
+	@echo "Waiting for Keycloak..."
+	@for i in $$(seq 1 60); do \
+		if curl -sfo /dev/null http://localhost:8080/realms/master; then \
+			echo "Keycloak ready at http://localhost:8080 (admin/admin)"; exit 0; fi; \
+		sleep 2; \
+	done; echo "Keycloak did not become ready in time; try: make logs"; exit 1
+
+.PHONY: down
+down: ## Stop the lab (keeps the database volume)
+	$(COMPOSE) down
+
+.PHONY: clean
+clean: ## Stop the lab AND delete all data + Terraform state
+	$(COMPOSE) down -v
+	rm -f $(REALM_DIR)/terraform.tfstate $(REALM_DIR)/terraform.tfstate.backup
+
+.PHONY: logs
+logs: ## Tail Keycloak logs
+	$(COMPOSE) logs -f keycloak
+
+# --- Realm ------------------------------------------------------------------
+.PHONY: seed
+seed: ## Apply the DocVault realm to the local Keycloak
+	cd $(REALM_DIR) && $(TF) init -backend=false -input=false >/dev/null
+	cd $(REALM_DIR) && $(TF) apply -auto-approve -input=false $(LOCAL_VARS)
+	@echo
+	@$(MAKE) --no-print-directory show-secrets
+
+.PHONY: plan
+plan: ## Show what applying the realm would change
+	cd $(REALM_DIR) && $(TF) plan -input=false $(LOCAL_VARS)
+
+.PHONY: unseed
+unseed: ## Destroy the realm (leaves Keycloak running)
+	cd $(REALM_DIR) && $(TF) destroy -auto-approve -input=false $(LOCAL_VARS)
+
+.PHONY: show-secrets
+show-secrets: ## Print the generated client secrets and demo logins
+	@cd $(REALM_DIR) && \
+	echo "Issuer:  $$($(TF) output -raw issuer)" && \
+	echo "Worker client secret: $$($(TF) output -raw worker_client_secret)" && \
+	echo "Demo users: alice / bob / carol / dave   password: DocVaultLab!2026"
+
+.PHONY: export-realm
+export-realm: ## Regenerate infra/local/realm-export/docvault-realm.json
+	./tools/export-realm.sh
+
+# --- Apps -------------------------------------------------------------------
+.PHONY: api
+api: ## Run the .NET API on :5001
+	ASPNETCORE_URLS=http://localhost:5001 \
+		dotnet run --project apps/api-dotnet/DocVault.Api --no-launch-profile
+
+.PHONY: web
+web: ## Run the React SPA on :5173
+	cd apps/web-react && npm run dev
+
+.PHONY: web-vue
+web-vue: ## Run the Vue SPA on :5174
+	cd apps/web-vue && npm run dev
+
+.PHONY: worker
+worker: ## Run the background worker (client_credentials demo)
+	dotnet run --project apps/api-dotnet/DocVault.Worker
+
+# --- Tests ------------------------------------------------------------------
+.PHONY: test
+test: ## Unit + integration + security tests (no Docker, no network)
+	dotnet test apps/api-dotnet/DocVault.slnx
+
+.PHONY: e2e
+e2e: ## Playwright browser tests (requires: make up, seed, api, web)
+	cd tests/e2e-playwright && npx playwright test
+
+.PHONY: token
+token: ## Mint a client_credentials token and decode it
+	./tools/decode-token.sh
+
+# --- Azure ------------------------------------------------------------------
+# Two separate deployments, applied in order:
+#   1. Keycloak itself   (10-keycloak-azure)
+#   2. your applications (30-azure)
+.PHONY: azure-plan
+azure-plan: ## Plan Keycloak on Azure (read-only; needs `az login`)
+	cd $(KEYCLOAK_AZURE_DIR) && $(TF) init -input=false && $(TF) plan -input=false
+
+.PHONY: azure-apply
+azure-apply: ## Deploy Keycloak into your Azure subscription, then write realm.tfvars
+	cd $(KEYCLOAK_AZURE_DIR) && $(TF) apply -input=false
+	cd $(KEYCLOAK_AZURE_DIR) && $(TF) output -raw realm_tfvars \
+		> $(CURDIR)/infra/environments/azure/realm.tfvars
+	@echo "Wrote infra/environments/azure/realm.tfvars"
+	@echo "Now: make seed-azure"
+
+.PHONY: seed-azure
+seed-azure: ## Apply the SAME realm module to your Azure Keycloak
+	cd $(REALM_DIR) && $(TF) apply -input=false \
+		-var-file=$(CURDIR)/infra/environments/azure/realm.tfvars
+
+.PHONY: azure-destroy
+azure-destroy: ## Tear down the Azure Keycloak deployment
+	cd $(KEYCLOAK_AZURE_DIR) && $(TF) destroy -input=false
+
+.PHONY: apps-plan
+apps-plan: ## Plan the Azure resources that host your apps (30-azure)
+	cd $(APPS_AZURE_DIR) && $(TF) init -input=false && $(TF) plan -input=false

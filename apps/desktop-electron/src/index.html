@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <!-- No remote content, no inline eval. -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'" />
+    <title>DocVault Desktop</title>
+    <style>
+      :root { color-scheme: dark; font-family: ui-sans-serif, system-ui, sans-serif; }
+      body { margin: 0; background: #0f1115; color: #e6e8ec; padding: 2rem; }
+      button { background: #5b8def; color: #fff; border: 0; border-radius: 6px; padding: .5rem .9rem; font: inherit; cursor: pointer; margin-right: .5rem; }
+      button.secondary { background: #272b35; }
+      pre { background: #171a21; border: 1px solid #272b35; border-radius: 8px; padding: 1rem; overflow-x: auto; font-size: .8rem; }
+      .muted { color: #949aa6; } .error { color: #e5534b; }
+      ul { list-style: none; padding: 0; display: grid; gap: .5rem; }
+      li { background: #171a21; border: 1px solid #272b35; border-radius: 8px; padding: .6rem .9rem; }
+    </style>
+  </head>
+  <body>
+    <h1>DocVault <small class="muted">Electron</small></h1>
+    <p class="muted">Sign-in opens your real browser. Tokens stay in the main process.</p>
+
+    <button id="signin">Sign in</button>
+    <button id="documents" class="secondary">Load documents</button>
+    <button id="stepup" class="secondary">Step up (OTP)</button>
+    <button id="signout" class="secondary">Sign out</button>
+
+    <p id="status" class="error"></p>
+    <ul id="list"></ul>
+    <pre id="claims"></pre>
+
+    <script src="renderer.js"></script>
+  </body>
+</html>

@@ -1,0 +1,124 @@
+# Runs entirely against Docker Keycloak: no cloud account, no secrets.
+# That is deliberate - a lab whose CI needs a paid subscription is a lab nobody
+# can contribute to.
+name: CI
+
+on:
+  push: { branches: [main] }
+  pull_request:
+
+jobs:
+  api:
+    name: .NET API
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - run: dotnet restore apps/api-dotnet/DocVault.slnx
+      - run: dotnet build apps/api-dotnet/DocVault.slnx --no-restore --configuration Release
+      - name: Test (unit + integration + security)
+        run: dotnet test apps/api-dotnet/DocVault.slnx --no-build --configuration Release --verbosity normal
+
+  web:
+    name: Web clients
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        app: [web-react, web-vue]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci || npm install
+        working-directory: apps/${{ matrix.app }}
+      - name: Build
+        working-directory: apps/${{ matrix.app }}
+        env:
+          # Build-time only; the real value is injected at deploy time.
+          VITE_OIDC_AUTHORITY: http://localhost:8080/realms/docvault
+          VITE_OIDC_CLIENT_ID: docvault-${{ matrix.app }}
+        run: npm run build
+
+  flutter:
+    name: Flutter client
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - run: flutter pub get
+        working-directory: apps/mobile-flutter
+      - run: flutter analyze
+        working-directory: apps/mobile-flutter
+      - run: flutter test
+        working-directory: apps/mobile-flutter
+
+  terraform:
+    name: Terraform validate
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        module: [10-platform, 15-selfhosted-keycloak, 20-realm, 30-azure]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+      - run: terraform fmt -check -diff
+        working-directory: infra/terraform/${{ matrix.module }}
+      # -backend=false: validation needs no state and no credentials.
+      - run: terraform init -backend=false -input=false
+        working-directory: infra/terraform/${{ matrix.module }}
+      - run: terraform validate
+        working-directory: infra/terraform/${{ matrix.module }}
+
+  realm-applies:
+    name: Realm applies to real Keycloak
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+
+      # The claim this repo rests on: the realm module works against upstream
+      # Keycloak. If that ever stops being true, this job fails.
+      - name: Start Keycloak
+        run: |
+          docker compose -f infra/local/docker-compose.yml up -d
+          for i in $(seq 1 60); do
+            curl -sfo /dev/null http://localhost:8080/realms/master && exit 0
+            sleep 2
+          done
+          docker compose -f infra/local/docker-compose.yml logs keycloak
+          exit 1
+
+      - name: Apply the realm
+        working-directory: infra/terraform/20-realm
+        run: |
+          terraform init -backend=false -input=false
+          terraform apply -auto-approve -input=false \
+            -var-file="$GITHUB_WORKSPACE/infra/environments/local/realm.tfvars"
+
+      - name: Assert the silent-failure configuration actually took effect
+        run: |
+          set -euo pipefail
+          # Both of these produce NO error when missing, so assert them explicitly.
+          acr=$(curl -sf http://localhost:8080/realms/docvault/.well-known/openid-configuration \
+                 | python3 -c 'import json,sys; print(",".join(json.load(sys.stdin)["acr_values_supported"]))')
+          echo "acr_values_supported = $acr"
+          echo "$acr" | grep -q silver || { echo "acr.loa.map did not take effect"; exit 1; }
+
+          secret=$(terraform -chdir=infra/terraform/20-realm output -raw worker_client_secret)
+          aud=$(curl -sf -X POST http://localhost:8080/realms/docvault/protocol/openid-connect/token \
+                  -d client_id=docvault-worker -d "client_secret=$secret" -d grant_type=client_credentials \
+                | python3 -c 'import base64,json,sys; t=json.load(sys.stdin)["access_token"].split(".")[1]; t+="="*(-len(t)%4); print(json.loads(base64.urlsafe_b64decode(t))["aud"])')
+          echo "aud = $aud"
+          echo "$aud" | grep -q docvault-api || { echo "audience mapper did not take effect"; exit 1; }
+
+      - name: Plan is empty (no drift)
+        working-directory: infra/terraform/20-realm
+        run: |
+          terraform plan -detailed-exitcode -input=false \
+            -var-file="$GITHUB_WORKSPACE/infra/environments/local/realm.tfvars" \
+            || { code=$?; [ "$code" = "2" ] && echo "Realm drifted on re-plan" && exit 1; exit $code; }

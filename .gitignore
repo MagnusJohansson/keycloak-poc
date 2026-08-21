@@ -1,0 +1,37 @@
+# --- secrets ---
+.env
+.env.local
+# Terraform vars hold credentials by default, so ignore them...
+*.tfvars
+# ...except the local lab's, which contains only admin/admin against a throwaway
+# Docker container and MUST be committed - `make seed` and CI both depend on it.
+!infra/environments/local/*.tfvars
+!infra/environments/**/*.example.tfvars
+
+# --- terraform ---
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+.terraform.lock.hcl
+crash.log
+
+# --- dotnet ---
+bin/
+obj/
+*.user
+
+# --- node ---
+node_modules/
+dist/
+.vite/
+playwright-report/
+test-results/
+
+# --- flutter ---
+.dart_tool/
+build/
+.flutter-plugins*
+
+# --- misc ---
+.DS_Store
+*.log
