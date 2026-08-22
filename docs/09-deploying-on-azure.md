@@ -36,8 +36,11 @@ it talks to the Keycloak Admin REST API, which is identical in both places.
 ## Prerequisites
 
 ```bash
-brew install hashicorp/tap/terraform     # macOS; see terraform.io/install for others
-az login                                 # and az account set -s <subscription> if you have several
+# terraform is no longer in homebrew-core, so the tap is required
+brew tap hashicorp/tap && brew install hashicorp/tap/terraform
+# other platforms: https://developer.hashicorp.com/terraform/install
+
+az login          # and `az account set -s <subscription>` if you have several
 ```
 
 Terraform is **not** bundled with the repo, and the Makefile assumes it is on

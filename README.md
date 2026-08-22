@@ -10,6 +10,37 @@ and applied unchanged to either a local Docker Keycloak or an Azure deployment �
 so the free local lab is a faithful rehearsal for the cloud one, not a
 simplified toy.
 
+## Prerequisites
+
+For the local lab — everything in the Quickstart below:
+
+| Tool | Version | Why | Install (macOS) |
+|---|---|---|---|
+| **Docker** | with Compose v2 | runs Keycloak, Postgres, Mailpit | [Docker Desktop](https://docs.docker.com/desktop/) |
+| **Terraform** | **≥ 1.9** | applies the realm — `make seed` is Terraform, not a script | `brew tap hashicorp/tap && brew install hashicorp/tap/terraform` |
+| **.NET SDK** | **10.0** | the API, worker and tests | `brew install --cask dotnet-sdk` |
+| **Node** | **20.19+ or 22.12+** | the React and Vue clients (Vite 8) | `brew install node` |
+
+Terraform is the one people miss: it is not bundled, and `make seed` fails
+without it. Check with `terraform version`.
+
+> The `brew tap` step is required — `terraform` is no longer in homebrew-core
+> (it moved to HashiCorp's own tap after the licence change), so plain
+> `brew install terraform` fails with *"No available formula"*. Other platforms:
+> [terraform.io/install](https://developer.hashicorp.com/terraform/install).
+
+Only for the parts you actually try:
+
+| Doing what | Also needs |
+|---|---|
+| Deploying to Azure | **Azure CLI**, logged in (`brew install azure-cli && az login`) |
+| The Flutter client | **Flutter** (Dart SDK ≥ 3.13) — `brew install --cask flutter` |
+| The WinUI 3 client | **Windows** — WinUI XAML does not compile on macOS or Linux |
+| The e2e tests | Playwright browsers — `npx playwright install chromium` |
+
+Nothing here needs a paid account. Docker, .NET, Node and Terraform are enough
+for the entire lab including the full test suite.
+
 ## Quickstart
 
 ```bash
@@ -25,10 +56,6 @@ Sign in as **alice** / `DocVaultLab!2026`. `make help` lists everything.
 The Keycloak admin console is at <http://localhost:8080/admin> (`admin`/`admin`) —
 note it opens on the `master` realm, so switch to **`docvault`** to see the demo
 users and clients.
-
-Prerequisites: Docker, .NET 10 SDK, Node 20+, Terraform 1.9+
-(`brew install hashicorp/tap/terraform`). Azure deployment additionally needs the
-Azure CLI, logged in.
 
 ## What it demonstrates
 
