@@ -33,6 +33,16 @@ it talks to the Keycloak Admin REST API, which is identical in both places.
 | API, React, Vue, Flutter, Electron | **none** — only the `Authority` / issuer URL |
 | `infra/local/docker-compose.yml` | not used in Azure |
 
+## Prerequisites
+
+```bash
+brew install hashicorp/tap/terraform     # macOS; see terraform.io/install for others
+az login                                 # and az account set -s <subscription> if you have several
+```
+
+Terraform is **not** bundled with the repo, and the Makefile assumes it is on
+`PATH`. Check with `terraform version` before starting.
+
 ## Deploy
 
 ```bash

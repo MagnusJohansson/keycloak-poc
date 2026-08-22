@@ -26,7 +26,9 @@ The Keycloak admin console is at <http://localhost:8080/admin> (`admin`/`admin`)
 note it opens on the `master` realm, so switch to **`docvault`** to see the demo
 users and clients.
 
-Prerequisites: Docker, .NET 10 SDK, Node 20+, Terraform 1.9+.
+Prerequisites: Docker, .NET 10 SDK, Node 20+, Terraform 1.9+
+(`brew install hashicorp/tap/terraform`). Azure deployment additionally needs the
+Azure CLI, logged in.
 
 ## What it demonstrates
 

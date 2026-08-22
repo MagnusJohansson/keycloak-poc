@@ -120,9 +120,13 @@ token: ## Mint a client_credentials token and decode it
 azure-plan: ## Plan Keycloak on Azure (read-only; needs `az login`)
 	cd $(KEYCLOAK_AZURE_DIR) && $(TF) init -input=false && $(TF) plan -input=false
 
+# NOTE: the azure-* targets deliberately do NOT pass -auto-approve. They create
+# billable resources, so Terraform's "yes" prompt is the last chance to read the
+# plan. (They also must not pass -input=false, which suppresses that prompt and
+# then fails with "error asking for approval: EOF".)
 .PHONY: azure-apply
 azure-apply: ## Deploy Keycloak into your Azure subscription, then write realm.tfvars
-	cd $(KEYCLOAK_AZURE_DIR) && $(TF) apply -input=false
+	cd $(KEYCLOAK_AZURE_DIR) && $(TF) init && $(TF) apply
 	cd $(KEYCLOAK_AZURE_DIR) && $(TF) output -raw realm_tfvars \
 		> $(CURDIR)/infra/environments/azure/realm.tfvars
 	@echo "Wrote infra/environments/azure/realm.tfvars"
@@ -130,13 +134,13 @@ azure-apply: ## Deploy Keycloak into your Azure subscription, then write realm.t
 
 .PHONY: seed-azure
 seed-azure: ## Apply the SAME realm module to your Azure Keycloak
-	cd $(REALM_DIR) && $(TF) apply -input=false \
+	cd $(REALM_DIR) && $(TF) init && $(TF) apply \
 		-var-file=$(CURDIR)/infra/environments/azure/realm.tfvars
 
 .PHONY: azure-destroy
 azure-destroy: ## Tear down the Azure Keycloak deployment
-	cd $(KEYCLOAK_AZURE_DIR) && $(TF) destroy -input=false
+	cd $(KEYCLOAK_AZURE_DIR) && $(TF) init && $(TF) destroy
 
 .PHONY: apps-plan
 apps-plan: ## Plan the Azure resources that host your apps (30-azure)
-	cd $(APPS_AZURE_DIR) && $(TF) init -input=false && $(TF) plan -input=false
+	cd $(APPS_AZURE_DIR) && $(TF) init && $(TF) plan
