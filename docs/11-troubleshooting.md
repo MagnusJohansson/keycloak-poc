@@ -65,6 +65,8 @@ make token          # decode a real token: aud, resource_access, exp, acr
 | `make up` fails pulling images | Docker Hub anonymous rate limit (429) | Defaults avoid Docker Hub; override with `POSTGRES_IMAGE=…` |
 | Keycloak unhealthy but reachable | Health endpoint is on port **9000**, not 8080 | By design in Keycloak 25+ |
 | Realm gone after `make clean` | `clean` removes the volume | Use `make down` to keep data |
+| Demo users (`alice`, `bob`…) missing in the admin console | You are looking at the **`master`** realm, which only holds `admin` | Switch realms via the top-left selector, or open <http://localhost:8080/admin/master/console/#/docvault/users> |
+| Realm itself missing | `make seed` has not run, or `make clean` wiped the volume | `make seed` — Terraform creates the realm; Keycloak does **not** auto-import it |
 | Changes to the realm JSON ignored | It is a **generated artifact** | Edit the HCL; `make export-realm` regenerates |
 
 ## Reading the logs

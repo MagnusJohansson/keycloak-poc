@@ -9,11 +9,20 @@ make seed    # apply the DocVault realm
 
 | Service | URL | Credentials |
 |---|---|---|
-| Keycloak admin | http://localhost:8080 | `admin` / `admin` |
+| Keycloak admin | http://localhost:8080/admin | `admin` / `admin` |
 | Mailpit (catches email) | http://localhost:8025 | — |
 | API | http://localhost:5001 | bearer token |
 | React SPA | http://localhost:5173 | `alice` / `DocVaultLab!2026` |
 | Vue SPA | http://localhost:5174 | same |
+
+> **The admin console opens on the `master` realm, which contains only `admin`.**
+> The demo users live in the **`docvault`** realm, so switch realms with the
+> selector at the top-left before looking for them — or go straight to
+> <http://localhost:8080/admin/master/console/#/docvault/users>.
+>
+> `master` exists to administer the server and should never hold application
+> users. Every realm is a separate universe of users, clients and signing keys;
+> see [Keycloak concepts](01-keycloak-concepts.md#realm).
 
 Demo users, each chosen to make one authorization outcome visible:
 
