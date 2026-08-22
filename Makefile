@@ -94,6 +94,15 @@ worker: ## Run the background worker (client_credentials demo)
 .PHONY: test
 test: ## Unit + integration + security tests (no Docker, no network)
 	dotnet test apps/api-dotnet/DocVault.slnx
+	dotnet test apps/desktop-winui/DocVault.Desktop.Auth.Tests
+
+.PHONY: winui-test
+winui-test: ## Test the desktop OIDC library (cross-platform; no Windows needed)
+	dotnet test apps/desktop-winui/DocVault.Desktop.Auth.Tests
+
+.PHONY: winui
+winui: ## Run the WinUI 3 client. WINDOWS ONLY - XAML will not compile elsewhere.
+	dotnet run --project apps/desktop-winui/DocVault.WinUI
 
 .PHONY: e2e
 e2e: ## Playwright browser tests (requires: make up, seed, api, web)

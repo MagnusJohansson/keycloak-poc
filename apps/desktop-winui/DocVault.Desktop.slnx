@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="DocVault.Desktop.Auth/DocVault.Desktop.Auth.csproj" />
+  <Project Path="DocVault.Desktop.Auth.Tests/DocVault.Desktop.Auth.Tests.csproj" />
+  <Project Path="DocVault.WinUI/DocVault.WinUI.csproj" />
+</Solution>

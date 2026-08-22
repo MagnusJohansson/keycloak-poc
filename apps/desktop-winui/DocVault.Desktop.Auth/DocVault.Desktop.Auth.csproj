@@ -1,0 +1,21 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Duende.IdentityModel.OidcClient" Version="7.1.0" />
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="10.0.11" />
+  </ItemGroup>
+
+
+  <ItemGroup>
+    <!-- The loopback guard is an implementation detail, but it is security-relevant enough to
+         deserve tests. Exposing it to the test project keeps it out of the public API. -->
+    <InternalsVisibleTo Include="DocVault.Desktop.Auth.Tests" />
+  </ItemGroup>
+
+</Project>

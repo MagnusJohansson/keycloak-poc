@@ -80,8 +80,8 @@ Password `DocVaultLab!2026`.
 ### Client matrix
 
 `apps/web-react` is the full reference (PKCE, RBAC guards, step-up, TokenInspector). Vue, Flutter,
-React Native and Electron are runnable-lite — each documents the *one* thing that differs from the
-web case. The web clients use `react-oidc-context` + `oidc-client-ts` rather than `keycloak-js`,
+React Native, Electron and WinUI 3 are runnable-lite — each documents the *one* thing that differs
+from the web case. The web clients use `react-oidc-context` + `oidc-client-ts` rather than `keycloak-js`,
 deliberately: plain OIDC keeps the client code portable.
 
 ## Traps this repo has already hit
@@ -127,6 +127,20 @@ Every one of these cost real debugging time and is now load-bearing. Do not "sim
 - `start`, never `start-dev`: dev mode disables hostname and HTTPS checks and will run happily in
   production while silently weakening both.
 
+**WinUI 3 desktop (`apps/desktop-winui`):**
+
+- The OIDC logic is a plain `net10.0` library (`DocVault.Desktop.Auth`) *on purpose* — WinUI XAML
+  compiles only on Windows, so keeping the logic out of the shell is what makes it testable on
+  Linux/macOS and in the normal CI job. Do not move logic into the XAML code-behind.
+- `DocVault.WinUI` must stay **out of `apps/api-dotnet/DocVault.slnx`** — that solution builds on
+  ubuntu in CI and a Windows-only TFM breaks it. It lives in `apps/desktop-winui/DocVault.Desktop.slnx`.
+- `OidcClient` refuses plain-HTTP discovery by default; the local lab is HTTP on loopback, and the
+  error names the *policy* rather than the URL. `DiscoveryPolicy.RequireHttps` is derived from
+  whether the authority is loopback — never hardcode it false.
+- `LoginRequest.FrontChannelExtraParameters` is the real API for `acr_values`/`prompt` (not a
+  `FrontChannel.Extra` property, which does not exist in 7.x).
+- Unpackaged (`WindowsPackageType=None`), so `PasswordVault` is unavailable — tokens use DPAPI.
+
 **Runtime:**
 
 - **`WWW-Authenticate` is not CORS-safelisted.** Without `.WithExposedHeaders("WWW-Authenticate")`
@@ -157,9 +171,10 @@ Every one of these cost real debugging time and is now load-bearing. Do not "sim
 
 ## Verification status
 
-Proven against real software: 68 Terraform resources applied to Keycloak 26.6.3 with a clean
-re-plan; 27 .NET tests (including forged `alg:none`, wrong-key, wrong-audience, wrong-realm and
-expired tokens); 7 Playwright tests in a real browser; React/Vue build; Flutter analyzes clean.
+Proven against real software: 71 Terraform resources applied to Keycloak 26.6.3 with a clean
+re-plan; 27 API + 30 desktop-auth .NET tests (including forged `alg:none`, wrong-key,
+wrong-audience, wrong-realm and expired tokens); 7 Playwright tests in a real browser; React/Vue
+build; Flutter analyzes clean.
 
 **Not executed:** `10-keycloak-azure` and `30-azure` have never been applied — that needs an Azure
 subscription. `10-keycloak-azure` got as far as a read-only `terraform plan` succeeding against
@@ -167,3 +182,7 @@ real Azure APIs (20 resources), which validates SKUs, subnet delegations and pri
 nothing is runtime-proven. uc2 (Entra SSO) is documented from real schemas but unrun. OTP
 *enrolment* is not automated; the e2e test asserts the challenge is issued, which is the part that
 regresses silently.
+
+The **WinUI 3 XAML shell has never been compiled or run on this machine** (macOS; WinUI needs
+Windows). The `windows-latest` CI job is what compiles it. No end-to-end desktop sign-in has been
+performed by anyone — the 30 library tests cover the logic, not the button wiring.

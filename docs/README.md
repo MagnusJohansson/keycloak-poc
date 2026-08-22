@@ -13,7 +13,7 @@ Read in order, or jump to what you need.
 ### Integrate
 5. [Web — React & Vue](04-integration-web.md)
 6. [Mobile — Flutter & React Native](05-integration-mobile.md)
-7. [Desktop — Electron](06-integration-desktop.md)
+7. [Desktop — Electron & WinUI 3](06-integration-desktop.md)
 8. [Backend — .NET 10](07-integration-backend.md)
 
 ### Apply

@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+
+    <!-- The Windows-specific TFM is what makes this project Windows-only, and why it is NOT in
+         apps/api-dotnet/DocVault.slnx: that solution is built on ubuntu in CI and would fail.
+         All the OIDC logic lives in DocVault.Desktop.Auth (plain net10.0) so it can be built and
+         tested on any OS; this project is only the XAML shell. -->
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
+
+    <RootNamespace>DocVault.WinUI</RootNamespace>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <Platforms>x86;x64;ARM64</Platforms>
+    <RuntimeIdentifiers>win-x86;win-x64;win-arm64</RuntimeIdentifiers>
+
+    <UseWinUI>true</UseWinUI>
+
+    <!-- Unpackaged: runs with `dotnet run` and needs no MSIX signing, which keeps the lab easy
+         to try. The trade-off is that Windows.Security.Credentials.PasswordVault is unavailable
+         (it requires package identity), so tokens are protected with DPAPI instead - see
+         DpapiTokenStore. -->
+    <WindowsPackageType>None</WindowsPackageType>
+    <EnableMsixTooling>true</EnableMsixTooling>
+
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.4.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\DocVault.Desktop.Auth\DocVault.Desktop.Auth.csproj" />
+  </ItemGroup>
+
+</Project>

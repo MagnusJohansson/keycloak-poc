@@ -1,6 +1,18 @@
-# 7. Desktop integration (Electron)
+# 7. Desktop integration (Electron & WinUI 3)
 
-Source: `apps/desktop-electron`.
+Two desktop clients, solving the same problem with different tools:
+
+| | Electron | WinUI 3 / .NET 10 |
+|---|---|---|
+| Source | `apps/desktop-electron` | `apps/desktop-winui` |
+| PKCE | hand-rolled, ~80 lines of Node built-ins | `Duende.IdentityModel.OidcClient` (certified) |
+| Redirect | loopback `http://127.0.0.1:*/callback` | **identical** |
+| Browser | `shell.openExternal` | `Process.Start(UseShellExecute = true)` |
+| Token isolation | main process only, never the renderer | in-process; DPAPI-encrypted at rest |
+
+The redirect row is the point: it is byte-identical, because the pattern is a
+property of *native apps*, not of any UI framework. Everything below applies to
+both unless stated.
 
 ## The two rules
 
@@ -76,6 +88,106 @@ DOCVAULT_ISSUER=http://localhost:8080/realms/docvault npm start
   credentials is indistinguishable from malware.
 - **Keep the CSP.** `index.html` sets `default-src 'self'`; no remote content, no
   inline eval.
+
+## WinUI 3 / .NET 10
+
+**Yes, WinUI 3 works with Keycloak** — it is an ordinary OAuth 2.0 public client.
+Nothing about it is special; it does exactly what the Electron client does.
+
+### Layout, and why it is split
+
+```
+apps/desktop-winui/
+├── DocVault.Desktop.Auth/        net10.0    <- all the OIDC logic
+├── DocVault.Desktop.Auth.Tests/  net10.0    <- 30 tests, run on Linux/macOS in CI
+└── DocVault.WinUI/               net10.0-windows10.0.19041.0
+```
+
+WinUI XAML compiles only on Windows. Putting the OIDC logic in a plain `net10.0`
+library means the part that can actually be *wrong* — PKCE, refresh, claim
+parsing, step-up handling — is unit-tested on every platform, while only the
+button-wiring needs a Windows runner. The `winui` job in CI builds the shell on
+`windows-latest`.
+
+`apps/api-dotnet/DocVault.slnx` deliberately does **not** reference the WinUI
+project: that solution is built on Linux in CI and a Windows-only TFM would break it.
+
+### The library
+
+`Duende.IdentityModel.OidcClient` (Apache-2.0, RFC 8252 certified) handles
+discovery, PKCE, and refresh. PKCE is always on and cannot be disabled — correct
+for a public client.
+
+```csharp
+_client = new OidcClient(new OidcClientOptions
+{
+    Authority   = "http://localhost:8080/realms/docvault",
+    ClientId    = "docvault-winui",
+    RedirectUri = _browser.RedirectUri,     // http://127.0.0.1:{ephemeral}/callback
+    Scope       = "openid profile email",
+    Browser     = new LoopbackBrowser(),
+    Policy = new Policy
+    {
+        Discovery = new DiscoveryPolicy { RequireHttps = !IsLoopback(authority) },
+    },
+});
+```
+
+> **The one setting that will catch you out.** OidcClient refuses plain-HTTP
+> discovery by default. Against the local lab (`http://localhost:8080`) it fails
+> before reaching Keycloak at all, and the error names the *policy*, not the URL —
+> which sends you looking in entirely the wrong place. Relax it only for loopback;
+> the sample derives that from the authority rather than hardcoding it.
+
+### Step-up
+
+Same ACR contract as every other client:
+
+```csharp
+await _client.LoginAsync(new LoginRequest
+{
+    FrontChannelExtraParameters = new Parameters
+    {
+        { "acr_values", "silver" },
+        { "prompt", "login" },     // without this the SSO cookie satisfies it silently
+    },
+});
+```
+
+### Token storage
+
+DPAPI (`ProtectedData`, `DataProtectionScope.CurrentUser`), which ties the
+ciphertext to the signed-in Windows account.
+
+`Windows.Security.Credentials.PasswordVault` is the nicer API but needs a
+**packaged** (MSIX) app and throws for unpackaged ones. This sample runs
+unpackaged (`<WindowsPackageType>None</WindowsPackageType>`) so it starts with
+`dotnet run`; if you ship MSIX, prefer `PasswordVault`.
+
+### Running it
+
+```powershell
+make seed                     # registers the docvault-winui client
+dotnet run --project apps/desktop-winui/DocVault.WinUI
+```
+
+Override the target with `DOCVAULT_AUTHORITY` / `DOCVAULT_API_URL` to point at an
+Azure deployment.
+
+### Two alternatives worth knowing
+
+**Windows App SDK `OAuth2Manager`** is Microsoft's first-party answer — it always
+uses the system browser and follows RFC 8252. It is not used here because it ships
+only in the **experimental** channel (a prerelease `-experimental`
+`Microsoft.WindowsAppSDK`), and its custom-scheme redirect wants MSIX packaging for
+protocol activation. Revisit it when it reaches stable; the swap would be confined
+to `LoopbackBrowser` and `KeycloakDesktopClient`.
+
+**MSAL + WAM** is the better choice *if* every user signs in with a Microsoft Entra
+ID account and you want silent SSO from the Windows session, plus Windows Hello and
+conditional access. If you need both corporate and non-corporate identities, keep
+Keycloak and broker Entra into it instead — see
+[uc2](use-cases/uc2-enterprise-sso-entra.md).
 
 ---
 

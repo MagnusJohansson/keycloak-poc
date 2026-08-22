@@ -21,6 +21,11 @@ jobs:
       - name: Test (unit + integration + security)
         run: dotnet test apps/api-dotnet/DocVault.slnx --no-build --configuration Release --verbosity normal
 
+      # The desktop OIDC logic lives in a plain net10.0 library precisely so it can be tested
+      # here, on Linux, without a Windows runner. Only the XAML shell needs Windows.
+      - name: Test desktop auth library
+        run: dotnet test apps/desktop-winui/DocVault.Desktop.Auth.Tests --configuration Release --verbosity normal
+
   web:
     name: Web clients
     runs-on: ubuntu-latest
@@ -56,6 +61,21 @@ jobs:
         working-directory: apps/mobile-flutter
       - run: flutter test
         working-directory: apps/mobile-flutter
+
+  winui:
+    name: WinUI 3 desktop client
+    # The only job that needs Windows. WinUI XAML compilation cannot run on Linux or macOS, so
+    # without this the shell would ship having never been compiled anywhere.
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Build
+        run: dotnet build apps/desktop-winui/DocVault.Desktop.slnx --configuration Release
+      - name: Test
+        run: dotnet test apps/desktop-winui/DocVault.Desktop.Auth.Tests --configuration Release --verbosity normal
 
   terraform:
     name: Terraform validate

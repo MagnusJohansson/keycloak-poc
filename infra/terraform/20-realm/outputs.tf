@@ -20,6 +20,7 @@ output "client_ids" {
     vue       = keycloak_openid_client.spa["docvault-web-vue"].client_id
     mobile    = keycloak_openid_client.mobile.client_id
     desktop   = keycloak_openid_client.desktop.client_id
+    winui     = keycloak_openid_client.winui.client_id
     worker    = keycloak_openid_client.worker.client_id
     analytics = keycloak_openid_client.analytics.client_id
   }

@@ -122,6 +122,29 @@ resource "keycloak_openid_client" "desktop" {
   valid_post_logout_redirect_uris = ["http://127.0.0.1:*/logout"]
 }
 
+# --- Desktop (WinUI 3 / .NET 10) --------------------------------------------
+# A second desktop client, identical in protocol terms to the Electron one: both are
+# native apps doing authorization code + PKCE against a loopback redirect (RFC 8252).
+#
+# It gets its OWN client rather than sharing docvault-desktop so the two can be
+# revoked, scoped and audited independently - the same reason every other app here
+# has one. The redirect URI is byte-identical because the pattern is a property of
+# native apps, not of the UI framework.
+resource "keycloak_openid_client" "winui" {
+  realm_id  = keycloak_realm.docvault.id
+  client_id = "docvault-winui"
+  name      = "DocVault Desktop (WinUI 3)"
+  enabled   = true
+
+  access_type                  = "PUBLIC"
+  standard_flow_enabled        = true
+  direct_access_grants_enabled = false
+  pkce_code_challenge_method   = "S256"
+
+  valid_redirect_uris             = ["http://127.0.0.1:*/callback"]
+  valid_post_logout_redirect_uris = ["http://127.0.0.1:*/callback"]
+}
+
 # --- Machine-to-machine worker ---------------------------------------------
 # No user is ever present. Uses client_credentials and gets its own service
 # account identity, which can hold roles just like a human.

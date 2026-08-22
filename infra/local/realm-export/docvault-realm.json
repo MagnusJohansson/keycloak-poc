@@ -367,6 +367,7 @@
             "docvault-web-vue": [],
             "docvault-desktop": [],
             "admin-cli": [],
+            "docvault-winui": [],
             "docvault-worker": [],
             "account": [
                 {
@@ -1500,6 +1501,96 @@
             ]
         },
         {
+            "id": "e14b03d0-3e1c-4222-83e8-2a255e9112ea",
+            "clientId": "docvault-winui",
+            "name": "DocVault Desktop (WinUI 3)",
+            "description": "",
+            "adminUrl": "",
+            "baseUrl": "",
+            "surrogateAuthRequired": false,
+            "enabled": true,
+            "alwaysDisplayInConsole": false,
+            "clientAuthenticatorType": "client-secret",
+            "redirectUris": [
+                "http://127.0.0.1:*/callback"
+            ],
+            "webOrigins": [],
+            "notBefore": 0,
+            "bearerOnly": false,
+            "consentRequired": false,
+            "standardFlowEnabled": true,
+            "implicitFlowEnabled": false,
+            "directAccessGrantsEnabled": false,
+            "serviceAccountsEnabled": false,
+            "publicClient": true,
+            "frontchannelLogout": false,
+            "protocol": "openid-connect",
+            "attributes": {
+                "oauth2.jwt.authorization.grant.enabled": "false",
+                "standard.token.exchange.enabled": "false",
+                "post.logout.redirect.uris": "http://127.0.0.1:*/callback",
+                "oauth2.device.authorization.grant.enabled": "false",
+                "backchannel.logout.revoke.offline.tokens": "false",
+                "use.refresh.tokens": "true",
+                "exclude.session.state.from.auth.response": "false",
+                "realm_client": "false",
+                "exclude.issuer.from.auth.response": "false",
+                "backchannel.logout.session.required": "true",
+                "client_credentials.use_refresh_token": "false",
+                "display.on.consent.screen": "false",
+                "pkce.code.challenge.method": "S256",
+                "dpop.bound.access.tokens": "false"
+            },
+            "authenticationFlowBindingOverrides": {},
+            "fullScopeAllowed": true,
+            "nodeReRegistrationTimeout": -1,
+            "protocolMappers": [
+                {
+                    "id": "a411fe0e-f5fb-4603-9bc5-28a526bb937a",
+                    "name": "docvault-api-audience",
+                    "protocol": "openid-connect",
+                    "protocolMapper": "oidc-audience-mapper",
+                    "consentRequired": false,
+                    "config": {
+                        "included.client.audience": "docvault-api",
+                        "id.token.claim": "false",
+                        "access.token.claim": "true",
+                        "introspection.token.claim": "true"
+                    }
+                },
+                {
+                    "id": "a347880e-25bf-4b0e-b00f-70cc2a2b5c83",
+                    "name": "groups",
+                    "protocol": "openid-connect",
+                    "protocolMapper": "oidc-group-membership-mapper",
+                    "consentRequired": false,
+                    "config": {
+                        "full.path": "true",
+                        "id.token.claim": "true",
+                        "introspection.token.claim": "false",
+                        "access.token.claim": "true",
+                        "claim.name": "groups",
+                        "userinfo.token.claim": "true"
+                    }
+                }
+            ],
+            "defaultClientScopes": [
+                "web-origins",
+                "acr",
+                "roles",
+                "profile",
+                "basic",
+                "email"
+            ],
+            "optionalClientScopes": [
+                "address",
+                "phone",
+                "offline_access",
+                "organization",
+                "microprofile-jwt"
+            ]
+        },
+        {
             "id": "8f7e0735-0ed2-4dd3-a4e7-e61cc391eee6",
             "clientId": "docvault-worker",
             "name": "DocVault Worker (background jobs)",
@@ -1550,12 +1641,11 @@
                     "consentRequired": false,
                     "config": {
                         "full.path": "true",
-                        "introspection.token.claim": "false",
-                        "userinfo.token.claim": "true",
-                        "multivalued": "true",
                         "id.token.claim": "true",
+                        "introspection.token.claim": "false",
                         "access.token.claim": "true",
-                        "claim.name": "groups"
+                        "claim.name": "groups",
+                        "userinfo.token.claim": "true"
                     }
                 },
                 {
@@ -1912,8 +2002,8 @@
                     "protocolMapper": "oidc-allowed-origins-mapper",
                     "consentRequired": false,
                     "config": {
-                        "access.token.claim": "true",
-                        "introspection.token.claim": "true"
+                        "introspection.token.claim": "true",
+                        "access.token.claim": "true"
                     }
                 }
             ]
@@ -1946,8 +2036,8 @@
                     "consentRequired": false,
                     "config": {
                         "id.token.claim": "true",
-                        "access.token.claim": "true",
-                        "introspection.token.claim": "true"
+                        "introspection.token.claim": "true",
+                        "access.token.claim": "true"
                     }
                 }
             ]
@@ -3382,8 +3472,7 @@
             "builtIn": false,
             "authenticationExecutions": [
                 {
-                    "authenticatorConfig": "stepup-loa2-condition",
-                    "authenticator": "conditional-level-of-authentication",
+                    "authenticator": "auth-otp-form",
                     "authenticatorFlow": false,
                     "requirement": "REQUIRED",
                     "priority": 0,
@@ -3391,7 +3480,8 @@
                     "userSetupAllowed": false
                 },
                 {
-                    "authenticator": "auth-otp-form",
+                    "authenticatorConfig": "stepup-loa2-condition",
+                    "authenticator": "conditional-level-of-authentication",
                     "authenticatorFlow": false,
                     "requirement": "REQUIRED",
                     "priority": 0,

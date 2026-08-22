@@ -51,6 +51,7 @@ apps/
   mobile-flutter/         runnable-lite  (flutter_appauth + Keychain/Keystore)
   mobile-react-native/    auth module    (react-native-app-auth)
   desktop-electron/       runnable-lite  (loopback PKCE, tokens never in the renderer)
+  desktop-winui/          WinUI 3 / .NET 10 (Duende OidcClient, DPAPI) + cross-platform auth lib
 tests/e2e-playwright/     browser login -> API call
 tools/                    export-realm.sh, decode-token.sh
 ```
@@ -86,6 +87,8 @@ Built and checked against real software, not just written down:
 - .NET 10 API: 27 tests pass, including forged `alg:none`, wrong-key,
   wrong-audience, wrong-realm and expired tokens, and 403-vs-401 for an
   authenticated-but-unauthorized caller.
+- Desktop auth library: 30 tests pass on macOS/Linux. The WinUI XAML shell is
+  compiled by the `windows-latest` CI job; it has not been run end-to-end.
 - 7 Playwright tests pass in a real browser against real Keycloak.
 - React and Vue build; Flutter analyzes clean and its tests pass.
 - The Azure module plans cleanly against real Azure APIs (20 resources), but has
