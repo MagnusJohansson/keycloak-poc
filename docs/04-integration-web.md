@@ -1,4 +1,4 @@
-# 6. Web integration (React & Vue)
+# 5. Web integration (React & Vue)
 
 Source: `apps/web-react` (full reference) and `apps/web-vue` (runnable-lite).
 
@@ -145,4 +145,4 @@ Both use `strictPort`, so a port shift fails loudly instead of producing
 
 ---
 
-Next: [7. Mobile integration](05-integration-mobile.md).
+Next: [6. Mobile integration](05-integration-mobile.md).

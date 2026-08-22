@@ -1,7 +1,7 @@
 # UC1 — Secure document sharing (RBAC + per-resource authorization)
 
-> Maps to PRD §4 "secure file sharing". Keycloak does not store or encrypt your
-> files; it decides **who may do what to which file**.
+> Keycloak does not store or encrypt your files. It decides **who may do what to
+> which file**, which is the half of "secure file sharing" that identity owns.
 
 ## Problem
 

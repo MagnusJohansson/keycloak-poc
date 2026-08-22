@@ -1,4 +1,4 @@
-# 9. Backend integration (.NET 10)
+# 8. Backend integration (.NET 10)
 
 Source: `apps/api-dotnet/`.
 

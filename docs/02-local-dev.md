@@ -1,4 +1,4 @@
-# 4. Local development
+# 3. Local development
 
 The whole lab runs on your machine, free, against upstream Keycloak.
 
@@ -80,4 +80,4 @@ make clean          # tear everything down, including the database volume
 
 ---
 
-Next: [5. Realm design](03-realm-design.md).
+Next: [4. Realm design](03-realm-design.md).

@@ -1,4 +1,4 @@
-# 7. Mobile integration (Flutter & React Native)
+# 6. Mobile integration (Flutter & React Native)
 
 Source: `apps/mobile-flutter`, `apps/mobile-react-native`.
 
@@ -104,4 +104,4 @@ README has the scaffolding steps.
 
 ---
 
-Next: [8. Desktop integration](06-integration-desktop.md).
+Next: [7. Desktop integration](06-integration-desktop.md).

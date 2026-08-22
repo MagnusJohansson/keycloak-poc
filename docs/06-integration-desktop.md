@@ -1,4 +1,4 @@
-# 8. Desktop integration (Electron)
+# 7. Desktop integration (Electron)
 
 Source: `apps/desktop-electron`.
 
@@ -79,4 +79,4 @@ DOCVAULT_ISSUER=http://localhost:8080/realms/docvault npm start
 
 ---
 
-Next: [9. Backend integration](07-integration-backend.md).
+Next: [8. Backend integration](07-integration-backend.md).

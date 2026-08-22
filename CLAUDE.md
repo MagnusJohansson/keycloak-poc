@@ -7,20 +7,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 A runnable proof-of-concept lab for **[Keycloak](https://www.keycloak.org/)**, the open-source
 identity and access management server — OIDC, OAuth 2.0, SAML, MFA, RBAC, federation, audit.
 
-One correction from the original brief is load-bearing and easy to reintroduce by accident:
-`docs/PRD.md` originally framed the goal as "secure data sharing and privacy" with use cases like
-*encrypted messaging* and *privacy-preserving analytics*. Keycloak is an **authentication and
-authorization** server — it does not encrypt application data or carry messages. Those scenarios
-were re-expressed as things Keycloak genuinely does (service-to-service auth; consent + pairwise
-subject identifiers). `docs/00-what-keycloak-is.md` is the canonical statement. Do not "restore"
-the original framing.
-
-> Historical note: this repo began life targeting *Skycloak*, a managed-Keycloak SaaS, before the
-> intent was corrected to open-source Keycloak. The Skycloak-specific module, the vendor
-> references, the old folder name and the original git remote were all removed. If you find any
-> `skycloak`/`skyvault` identifier anywhere, it is a leftover and should be cleaned.
->
-> There is deliberately **no git remote** configured.
+> This repo briefly targeted *Skycloak*, a managed-Keycloak SaaS, before being refocused on
+> open-source Keycloak. Every vendor reference was removed, so any `skycloak`/`skyvault`
+> identifier you find is a leftover and should be cleaned.
 
 ## Commands
 

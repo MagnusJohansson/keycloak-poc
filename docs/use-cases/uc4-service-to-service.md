@@ -1,7 +1,7 @@
 # UC4 — Machine-to-machine authentication
 
-> Re-framed from PRD §4 "encrypted messaging". Keycloak does not carry messages;
-> it authenticates the services that do.
+> Keycloak does not carry messages between your services. It authenticates the
+> services that do, so each one can prove who it is without a shared API key.
 
 ## Problem
 

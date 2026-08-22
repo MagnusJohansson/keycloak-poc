@@ -1,4 +1,4 @@
-# 5. Realm design
+# 4. Realm design
 
 The DocVault realm, and why each decision was made. Source:
 `infra/terraform/20-realm/`.
@@ -132,4 +132,4 @@ make plan                              # diff without applying
 
 ---
 
-Next: [6. Web integration](04-integration-web.md).
+Next: [5. Web integration](04-integration-web.md).

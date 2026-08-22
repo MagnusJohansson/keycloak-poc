@@ -22,21 +22,11 @@ your messages. This distinction matters because the two categories fail
 differently: an IAM outage locks everyone out; an encryption product's failure
 exposes data.
 
-The original brief for this repo ([PRD.md](PRD.md)) initially framed the goal as
-"secure data sharing and privacy" with use cases such as *encrypted messaging*
-and *privacy-preserving data analytics*. Those describe a different category of
-product. They have been re-expressed here as things Keycloak genuinely does:
-
-| Original framing | What this lab actually builds |
-|---|---|
-| Secure file sharing | RBAC plus per-document ownership via Keycloak Authorization Services ([uc1](use-cases/uc1-rbac-document-sharing.md)) |
-| Encrypted messaging | Machine-to-machine auth: `client_credentials` and service accounts ([uc4](use-cases/uc4-service-to-service.md)) — the authentication layer, not the encryption |
-| Privacy-preserving analytics | Consent plus data minimisation: optional scopes and **pairwise subject identifiers**, so an analytics client cannot correlate a user against any other client ([uc5](use-cases/uc5-consent-and-privacy.md)) |
-
-The last one is worth dwelling on, because it is real privacy engineering — just
-not the kind the brief imagined. Keycloak can issue each client a *different*,
-non-reversible `sub` for the same person, so two services holding "the same
-user" cannot prove it. That is a meaningful privacy control, and it is free.
+Where Keycloak *does* touch privacy is worth knowing, because it is easy to
+miss: it can issue each client a **different, non-reversible `sub`** for the same
+person, so two services holding "the same user" cannot prove it. That is a real
+privacy control and it costs nothing — see
+[uc5](use-cases/uc5-consent-and-privacy.md).
 
 ## What you get
 

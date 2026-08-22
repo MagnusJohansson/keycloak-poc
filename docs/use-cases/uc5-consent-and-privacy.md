@@ -1,8 +1,7 @@
 # UC5 — Consent and data minimisation
 
-> Re-framed from PRD §4 "privacy-preserving data analytics". Keycloak does not
-> anonymise your data warehouse — but it *can* stop a client from ever learning
-> who a user is, which is real privacy engineering.
+> Keycloak does not anonymise your data warehouse — but it *can* stop a client
+> from ever learning who a user is, which is real privacy engineering.
 
 ## Problem
 

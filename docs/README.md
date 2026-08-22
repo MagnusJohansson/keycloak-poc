@@ -27,5 +27,4 @@ Read in order, or jump to what you need.
 
 ---
 
-[PRD.md](PRD.md) is the brief this lab was built from. Where the guide departs
-from it, [00-what-keycloak-is](00-what-keycloak-is.md) says why.
+[PRD.md](PRD.md) is the brief this lab was built from.
