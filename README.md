@@ -14,32 +14,59 @@ simplified toy.
 
 For the local lab — everything in the Quickstart below:
 
-| Tool | Version | Why | Install (macOS) |
-|---|---|---|---|
-| **Docker** | with Compose v2 | runs Keycloak, Postgres, Mailpit | [Docker Desktop](https://docs.docker.com/desktop/) |
-| **Terraform** | **≥ 1.9** | applies the realm — `make seed` is Terraform, not a script | `brew tap hashicorp/tap && brew install hashicorp/tap/terraform` |
-| **.NET SDK** | **10.0** | the API, worker and tests | `brew install --cask dotnet-sdk` |
-| **Node** | **20.19+ or 22.12+** | the React and Vue clients (Vite 8) | `brew install node` |
+| Tool | Version | Why |
+|---|---|---|
+| **Docker** | with Compose v2 | runs Keycloak, Postgres and Mailpit |
+| **Terraform** | **≥ 1.9** | applies the realm — `make seed` *is* Terraform, not a script |
+| **.NET SDK** | **10.0** | the API, the worker and the test suite |
+| **Node** | **20.19+ or 22.12+** | the React and Vue clients (Vite 8 requires it) |
+
+**macOS**
+
+```bash
+brew install --cask docker
+brew tap hashicorp/tap && brew install hashicorp/tap/terraform
+brew install --cask dotnet-sdk
+brew install node
+```
+
+**Windows**
+
+```powershell
+winget install Docker.DockerDesktop
+winget install Hashicorp.Terraform
+winget install Microsoft.DotNet.SDK.10
+winget install OpenJS.NodeJS
+```
 
 Terraform is the one people miss: it is not bundled, and `make seed` fails
 without it. Check with `terraform version`.
 
-> The `brew tap` step is required — `terraform` is no longer in homebrew-core
-> (it moved to HashiCorp's own tap after the licence change), so plain
-> `brew install terraform` fails with *"No available formula"*. Other platforms:
-> [terraform.io/install](https://developer.hashicorp.com/terraform/install).
+> On macOS the `brew tap` step is required — `terraform` is no longer in
+> homebrew-core (it moved to HashiCorp's own tap after the licence change), so
+> plain `brew install terraform` fails with *"No available formula"*. Other
+> platforms: [terraform.io/install](https://developer.hashicorp.com/terraform/install).
+
+> `make` is preinstalled on macOS but not on Windows. Use
+> `winget install GnuWin32.Make`, run the lab from WSL, or read the Makefile and
+> run the underlying commands directly — they are all one-liners.
 
 Only for the parts you actually try:
 
-| Doing what | Also needs |
-|---|---|
-| Deploying to Azure | **Azure CLI**, logged in (`brew install azure-cli && az login`) |
-| The Flutter client | **Flutter** (Dart SDK ≥ 3.13) — `brew install --cask flutter` |
-| The WinUI 3 client | **Windows** — WinUI XAML does not compile on macOS or Linux |
-| The e2e tests | Playwright browsers — `npx playwright install chromium` |
+| Doing what | Also needs | macOS | Windows |
+|---|---|---|---|
+| Deploying to Azure | Azure CLI, logged in | `brew install azure-cli` | `winget install Microsoft.AzureCLI` |
+| The e2e tests | Playwright browsers | `npx playwright install chromium` | same |
+| The Flutter client | Flutter (Dart SDK ≥ 3.13) | `brew install --cask flutter` | [docs.flutter.dev/install](https://docs.flutter.dev/install) — not in winget |
+| The WinUI 3 client | **Windows only** | not possible — XAML does not compile off Windows | .NET 10 SDK; see the note below |
+
+> **WinUI 3 build requirements.** CI builds it on `windows-latest`, which ships
+> Visual Studio Enterprise 2022 — so a build with *only* the .NET SDK is
+> untested. If `dotnet build` alone fails, install Visual Studio 2022 with the
+> **Windows application development** workload, which is the documented path.
 
 Nothing here needs a paid account. Docker, .NET, Node and Terraform are enough
-for the entire lab including the full test suite.
+for the entire lab, including the full test suite.
 
 ## Quickstart
 
