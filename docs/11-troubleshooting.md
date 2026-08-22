@@ -58,6 +58,8 @@ make token          # decode a real token: aud, resource_access, exp, acr
 | `Failed to get redirect URIs from the Sector Identifier URI` | Keycloak fetches that URL at mapper-creation time | Omit `sectorIdentifierUri` for a single-host client |
 | 409 Conflict on users after a failed apply | Partial apply left objects Terraform does not know about | Delete the realm and re-apply; state and reality must agree |
 | Realm changes silently reverted | Someone edited the admin console | `make plan` should be empty; treat drift as a bug |
+| After seeding Azure, `make plan` wants to recreate the whole local realm | Wrong Terraform workspace — both environments would otherwise share one state | `terraform workspace select local` (the make targets do this for you) |
+| `409 Conflict … Realm docvault already exists` | The realm exists but this workspace has no state for it | Delete the realm and re-seed, or `terraform import`. The local realm is disposable; the cloud one is not |
 
 ## Local lab
 

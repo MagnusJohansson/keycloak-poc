@@ -15,6 +15,15 @@ REALM_DIR    := infra/terraform/20-realm
 KEYCLOAK_AZURE_DIR := infra/terraform/10-keycloak-azure
 APPS_AZURE_DIR     := infra/terraform/30-azure
 LOCAL_VARS   := -var-file=$(CURDIR)/infra/environments/local/realm.tfvars
+AZURE_VARS   := -var-file=$(CURDIR)/infra/environments/azure/realm.tfvars
+
+# 20-realm is ONE module applied to MORE THAN ONE Keycloak, so each target picks
+# a Terraform workspace first. Without this both environments share
+# terraform.tfstate: seeding Azure silently overwrites the local realm's state,
+# leaving the local realm untracked and the cloud realm un-destroyable.
+# Workspaces keep the two in terraform.tfstate.d/<name>/ and need no remote backend.
+WS_LOCAL     := $(TF) workspace select -or-create local
+WS_AZURE     := $(TF) workspace select -or-create azure
 
 .PHONY: help
 help: ## Show this help
@@ -48,22 +57,22 @@ logs: ## Tail Keycloak logs
 # --- Realm ------------------------------------------------------------------
 .PHONY: seed
 seed: ## Apply the DocVault realm to the local Keycloak
-	cd $(REALM_DIR) && $(TF) init -backend=false -input=false >/dev/null
+	cd $(REALM_DIR) && $(TF) init -backend=false -input=false >/dev/null && $(WS_LOCAL)
 	cd $(REALM_DIR) && $(TF) apply -auto-approve -input=false $(LOCAL_VARS)
 	@echo
 	@$(MAKE) --no-print-directory show-secrets
 
 .PHONY: plan
 plan: ## Show what applying the realm would change
-	cd $(REALM_DIR) && $(TF) plan -input=false $(LOCAL_VARS)
+	cd $(REALM_DIR) && $(WS_LOCAL) && $(TF) plan -input=false $(LOCAL_VARS)
 
 .PHONY: unseed
 unseed: ## Destroy the realm (leaves Keycloak running)
-	cd $(REALM_DIR) && $(TF) destroy -auto-approve -input=false $(LOCAL_VARS)
+	cd $(REALM_DIR) && $(WS_LOCAL) && $(TF) destroy -auto-approve -input=false $(LOCAL_VARS)
 
 .PHONY: show-secrets
 show-secrets: ## Print the generated client secrets and demo logins
-	@cd $(REALM_DIR) && \
+	@cd $(REALM_DIR) && $(WS_LOCAL) >/dev/null && \
 	echo "Issuer:  $$($(TF) output -raw issuer)" && \
 	echo "Worker client secret: $$($(TF) output -raw worker_client_secret)" && \
 	echo "Demo users: alice / bob / carol / dave   password: DocVaultLab!2026"
@@ -134,8 +143,14 @@ azure-apply: ## Deploy Keycloak into your Azure subscription, then write realm.t
 
 .PHONY: seed-azure
 seed-azure: ## Apply the SAME realm module to your Azure Keycloak
-	cd $(REALM_DIR) && $(TF) init && $(TF) apply \
-		-var-file=$(CURDIR)/infra/environments/azure/realm.tfvars
+	cd $(REALM_DIR) && $(TF) init && $(WS_AZURE)
+	cd $(REALM_DIR) && $(TF) apply $(AZURE_VARS)
+
+.PHONY: azure-secrets
+azure-secrets: ## Print the Azure realm's issuer and generated client secrets
+	@cd $(REALM_DIR) && $(WS_AZURE) >/dev/null && \
+	echo "Issuer:  $$($(TF) output -raw issuer)" && \
+	echo "Worker client secret: $$($(TF) output -raw worker_client_secret)"
 
 .PHONY: azure-destroy
 azure-destroy: ## Tear down the Azure Keycloak deployment

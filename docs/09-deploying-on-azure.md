@@ -56,6 +56,11 @@ make seed-azure      # the SAME realm module you ran against Docker
 make apps-plan       # then deploy your applications (30-azure)
 ```
 
+> **`20-realm` uses Terraform workspaces**, because the same module is applied to two different
+> Keycloaks. `make seed` selects `local`, `make seed-azure` selects `azure`, and their states live
+> separately under `terraform.tfstate.d/`. If you run the module by hand, select the workspace
+> first — otherwise the two environments overwrite each other's state.
+
 `azure-apply` writes `infra/environments/azure/realm.tfvars` for you,
 so no secret is transcribed by hand. Retrieve the bootstrap admin password with:
 

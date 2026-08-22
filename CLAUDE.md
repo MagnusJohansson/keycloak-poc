@@ -111,6 +111,15 @@ Every one of these cost real debugging time and is now load-bearing. Do not "sim
   Never hardcode that salt.
 - Keycloak *fetches* `sectorIdentifierUri` at mapper-creation time (chicken-and-egg with the API).
 
+**One module, two environments (`20-realm`):**
+
+- `20-realm` is applied to BOTH the local Docker Keycloak and Azure, so every target selects a
+  **Terraform workspace** first (`local` / `azure`). Without that they share one
+  `terraform.tfstate`: seeding Azure silently overwrites the local realm's state, leaving the local
+  realm untracked and the cloud realm impossible to destroy. This actually happened.
+- Anything reading `terraform output` (`show-secrets`, `azure-secrets`) is workspace-sensitive too.
+- Never add a target that touches `$(REALM_DIR)` without a `$(WS_LOCAL)` or `$(WS_AZURE)` first.
+
 **Keycloak on Azure (`10-keycloak-azure`):**
 
 - Postgres HA is **unavailable on the Burstable tier**; a `precondition` catches the bad
@@ -176,10 +185,13 @@ re-plan; 27 API + 30 desktop-auth .NET tests (including forged `alg:none`, wrong
 wrong-audience, wrong-realm and expired tokens); 7 Playwright tests in a real browser; React/Vue
 build; Flutter analyzes clean.
 
-**Not executed:** `10-keycloak-azure` and `30-azure` have never been applied — that needs an Azure
-subscription. `10-keycloak-azure` got as far as a read-only `terraform plan` succeeding against
-real Azure APIs (20 resources), which validates SKUs, subnet delegations and private DNS, but
-nothing is runtime-proven. uc2 (Entra SSO) is documented from real schemas but unrun. OTP
+**`10-keycloak-azure` has been applied for real** (Azure, swedencentral) and works: Keycloak came
+up on Container Apps behind HTTPS, `20-realm` applied all 71 resources to it, discovery returns the
+public FQDN as `iss` (so `KC_HOSTNAME` + `KC_PROXY_HEADERS` are right), `acr_values_supported`
+includes `silver`, and a `client_credentials` token carries `aud: docvault-api` plus the
+service-account role. Both environments re-plan clean.
+
+**Not executed:** `30-azure` — still only validated and planned, never applied. uc2 (Entra SSO) is documented from real schemas but unrun. OTP
 *enrolment* is not automated; the e2e test asserts the challenge is issued, which is the part that
 regresses silently.
 
