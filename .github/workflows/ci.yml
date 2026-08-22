@@ -82,7 +82,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        module: [10-platform, 15-selfhosted-keycloak, 20-realm, 30-azure]
+        module: [10-keycloak-azure, 20-realm, 30-azure]
     steps:
       - uses: actions/checkout@v4
       - uses: hashicorp/setup-terraform@v3

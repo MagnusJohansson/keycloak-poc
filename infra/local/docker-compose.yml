@@ -35,7 +35,7 @@ services:
     # Pinned to the same version as infra/terraform/10-keycloak-azure, so local
     # and cloud behave identically. Keep the two in step.
     image: ${KEYCLOAK_IMAGE:-quay.io/keycloak/keycloak:26.6.3}
-    command: ["start-dev", "--import-realm"]
+    command: ["start-dev"]
     depends_on:
       postgres:
         condition: service_healthy
@@ -62,8 +62,17 @@ services:
       - "8080:8080"   # public / auth endpoints
       - "9000:9000"   # management: health + metrics (keep internal in production)
     volumes:
-      # Seeds a realm on first boot IF one has been exported. Optional - the
-      # canonical path is `make seed` (Terraform). See tools/export-realm.sh.
+      # Mounted read-only for reference, but NOT auto-imported: the command above
+      # deliberately omits --import-realm.
+      #
+      # Auto-importing fights Terraform. Keycloak would create the realm on boot,
+      # and `make seed` would then fail with
+      #   409 Conflict {"errorMessage":"Realm docvault already exists"}
+      # because Terraform has no state for a realm it did not create. Terraform is
+      # the source of truth, so it must be the thing that creates the realm.
+      #
+      # To import this export by hand instead, use the admin console or
+      # `kc.sh import`, and skip `make seed`.
       - ./realm-export:/opt/keycloak/data/import:ro
     healthcheck:
       # The Keycloak image ships no curl or wget, so probe with bash's /dev/tcp.
