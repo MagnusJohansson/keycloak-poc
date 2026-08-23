@@ -121,7 +121,9 @@ make seed-azure                        # Keycloak on Azure, same module
 make plan                              # diff without applying
 ```
 
-68 resources. Two ordering rules the module encodes for you:
+Around 74 resources — `terraform -chdir=infra/terraform/20-realm state list | wc -l`
+is the authoritative count, since it grows as clients are added. Two ordering rules
+the module encodes for you:
 
 - **Authentication executions must be created in order.** Keycloak assigns
   priority by creation sequence, and Terraform parallelises by default, so

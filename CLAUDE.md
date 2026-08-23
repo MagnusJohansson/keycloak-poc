@@ -276,13 +276,13 @@ Every one of these cost real debugging time and is now load-bearing. Do not "sim
 
 ## Verification status
 
-Proven against real software: 71 Terraform resources applied to Keycloak 26.6.3 with a clean
+Proven against real software: 74 Terraform resources applied to Keycloak 26.6.3 with a clean
 re-plan; 27 API + 45 desktop-auth .NET tests (including forged `alg:none`, wrong-key,
 wrong-audience, wrong-realm and expired tokens); 7 Playwright tests in a real browser; 7 Flutter
 tests; React/Vue build; Flutter analyzes clean.
 
 **`10-keycloak-azure` has been applied for real** (Azure, swedencentral) and works: Keycloak came
-up on Container Apps behind HTTPS, `20-realm` applied all 71 resources to it, discovery returns the
+up on Container Apps behind HTTPS, `20-realm` applied all 74 resources to it, discovery returns the
 public FQDN as `iss` (so `KC_HOSTNAME` + `KC_PROXY_HEADERS` are right), `acr_values_supported`
 includes `silver`, and a `client_credentials` token carries `aud: docvault-api` plus the
 service-account role. Both environments re-plan clean.

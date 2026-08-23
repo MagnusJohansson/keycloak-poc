@@ -89,10 +89,18 @@ api: ## Run the .NET API on :5001
 
 .PHONY: web
 web: ## Run the React SPA on :5173
+	@# Without .env the app throws at import time and renders a BLANK page - the
+	@# message only reaches the browser console, so it reads as "the lab is broken".
+	@test -f apps/web-react/.env || { \
+	  cp apps/web-react/.env.example apps/web-react/.env; \
+	  echo "Created apps/web-react/.env from .env.example (local lab defaults)."; }
 	cd apps/web-react && npm run dev
 
 .PHONY: web-vue
 web-vue: ## Run the Vue SPA on :5174
+	@test -f apps/web-vue/.env || { \
+	  cp apps/web-vue/.env.example apps/web-vue/.env; \
+	  echo "Created apps/web-vue/.env from .env.example (local lab defaults)."; }
 	cd apps/web-vue && npm run dev
 
 .PHONY: worker

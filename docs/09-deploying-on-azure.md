@@ -144,7 +144,9 @@ wrong and every OIDC client will fail later.
 make seed-azure      # the SAME module that seeds your local Keycloak
 ```
 
-**Verify** — 71 resources, and the two settings that fail silently when missing:
+**Verify** — the same resource count as your local realm (they are the same module;
+compare with `terraform -chdir=infra/terraform/20-realm state list | wc -l` in each
+workspace), and the two settings that fail silently when missing:
 
 ```bash
 curl -s "$ISS/.well-known/openid-configuration" | jq -r '.acr_values_supported'
@@ -495,6 +497,6 @@ make seed         # local Docker Keycloak
 make seed-azure   # Keycloak on Azure
 ```
 
-Same module. Same 71 resources. Same realm. Only a URL and a credential differ —
+Same module. Same resources. Same realm. Only a URL and a credential differ —
 which is why the free local lab is a faithful rehearsal for the cloud one rather
 than a simplified toy.

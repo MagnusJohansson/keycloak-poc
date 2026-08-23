@@ -71,12 +71,18 @@ for the entire lab, including the full test suite.
 ## Quickstart
 
 ```bash
-cp .env.example .env
 make up      # Keycloak + Postgres + Mailpit  (~30s)
 make seed    # apply the DocVault realm via Terraform
 make api     # .NET 10 API on :5001
 make web     # React SPA on :5173   (in another shell)
 ```
+
+`make web` creates `apps/web-react/.env` from its `.example` on first run — the SPA
+reads `VITE_*` variables and throws at import time without them, which shows up as a
+blank page rather than an error.
+
+The root `.env.example` is a separate thing, for the shell tools (`make token`,
+`tools/*.sh`) rather than the apps. Copy it if you use them: `cp .env.example .env`.
 
 Sign in as **alice** / `DocVaultLab!2026`. `make help` lists everything.
 
@@ -103,9 +109,16 @@ about $40/month; `make azure-destroy` removes everything. Pick your region with
 simulator / Android emulator / Azure), the API (local or Azure), Electron, the
 worker, and the React SPA. Tasks cover `lab: up + seed` and the Vite dev server.
 
+The Android target also runs `make android-reverse` first, which points the
+emulator's own `localhost` at your machine. That is not a convenience: Keycloak
+derives the token issuer from the request host, so reaching it as `10.0.2.2`
+mints tokens the API rejects. Running Flutter from the command line? Run
+`make android-reverse` yourself after starting the emulator.
+
 The Azure variants read files you create and that are gitignored
-(`config/azure.json`, `appsettings.Azure.json`), so no deployment URL is
-committed. Copy the matching `.example` to get started.
+(`config/azure.json`, `appsettings.Azure.json`, `apps/desktop-electron/config.json`,
+`apps/web-react/.env`), so no deployment URL is committed. Copy the matching
+`.example` to get started.
 
 ## What it demonstrates
 
@@ -149,7 +162,7 @@ make seed         # local Docker Keycloak
 make seed-azure   # Keycloak on Azure
 ```
 
-Same 68 resources, same realm; only a URL and a credential differ. Two
+Same 74 resources, same realm; only a URL and a credential differ. Two
 consequences worth having:
 
 - **The local lab is faithful.** If it stops being so, `make seed` fails
@@ -164,7 +177,7 @@ rather than asserted.
 
 Built and checked against real software, not just written down:
 
-- 71 Terraform resources applied to Keycloak 26.6.3, with a clean re-plan;
+- 74 Terraform resources applied to Keycloak 26.6.3, with a clean re-plan;
   `acr_values_supported`, the audience mapper and service-account roles confirmed
   in a real token.
 - .NET 10 API: 27 tests pass, including forged `alg:none`, wrong-key,
@@ -179,8 +192,8 @@ Built and checked against real software, not just written down:
   not merely planned.
 - 7 Playwright tests pass in a real browser against real Keycloak.
 - React and Vue build; Flutter analyzes clean and its tests pass.
-- The Azure module plans cleanly against real Azure APIs (20 resources), but has
-  not been applied.
+- The Flutter client has been driven end-to-end on an Android emulator against the
+  local lab, and React against the full Azure stack (cloud Keycloak *and* cloud API).
 
 ## Licence
 
