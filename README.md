@@ -160,8 +160,10 @@ Built and checked against real software, not just written down:
 - .NET 10 API: 27 tests pass, including forged `alg:none`, wrong-key,
   wrong-audience, wrong-realm and expired tokens, and 403-vs-401 for an
   authenticated-but-unauthorized caller.
-- Desktop auth library: 30 tests pass on macOS/Linux. The WinUI XAML shell is
-  compiled by the `windows-latest` CI job; it has not been run end-to-end.
+- Desktop auth library: 45 tests pass on macOS/Linux. The WinUI shell is compiled
+  by the `windows-latest` CI job and has been run end-to-end on Windows against
+  the Azure deployment — system-browser sign-in, correct issuer/audience/roles in
+  the token, tenant-scoped documents returned.
 - 7 Playwright tests pass in a real browser against real Keycloak.
 - React and Vue build; Flutter analyzes clean and its tests pass.
 - The Azure module plans cleanly against real Azure APIs (20 resources), but has

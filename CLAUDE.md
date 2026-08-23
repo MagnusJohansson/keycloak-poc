@@ -245,6 +245,8 @@ content, so no browser client has been served from Azure. uc2 (Entra SSO) is doc
 *enrolment* is not automated; the e2e test asserts the challenge is issued, which is the part that
 regresses silently.
 
-The **WinUI 3 XAML shell has never been compiled or run on this machine** (macOS; WinUI needs
-Windows). The `windows-latest` CI job is what compiles it. No end-to-end desktop sign-in has been
-performed by anyone — the 30 library tests cover the logic, not the button wiring.
+The **WinUI 3 client has been run end-to-end on Windows against the Azure deployment**: sign-in
+through the system browser, a token with `iss` = the Azure issuer, `azp` = `docvault-winui`,
+`aud` = `docvault-api`, `resource_access` roles intact, and a tenant-scoped document list returned
+by the API. It still cannot be compiled or run on this machine (macOS); the `windows-latest` CI
+job compiles it, and the user verified the runtime behaviour.
