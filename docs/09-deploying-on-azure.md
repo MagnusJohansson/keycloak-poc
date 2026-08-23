@@ -263,8 +263,19 @@ The realm still trusts `localhost`. Point it at the real hostnames:
 terraform -chdir=infra/terraform/30-azure output api_url react_url vue_url
 ```
 
-Put those into `infra/environments/azure/realm.tfvars` as `api_origin`,
-`web_react_origin` and `web_vue_origin`, then:
+Put those into `infra/environments/azure/realm.tfvars`. The SPA origins are
+**lists**, so keep `localhost` alongside the deployed URL — otherwise registering
+the deployed site silently revokes the local front end you were using in Step 3:
+
+```hcl
+web_react_origins = ["https://<swa>.azurestaticapps.net", "http://localhost:5173"]
+web_vue_origins   = ["https://<swa-vue>.azurestaticapps.net", "http://localhost:5174"]
+
+# Singular, and it cannot be a list: the analytics client uses a pairwise subject
+# identifier, and Keycloak rejects such a client with redirect URIs spanning
+# multiple hosts unless a Sector Identifier URI is configured. See uc5.
+api_origin = "https://<api>.azurecontainerapps.io"
+```
 
 ```bash
 make seed-azure
@@ -325,6 +336,7 @@ reserved for 7 days.
 | Changing the region wants to destroy everything | Azure regions are immutable on most resources | Expected. Pick the region before the first apply |
 | `terraform apply -target=...` says *"No value for required variable"* | Terraform validates all variables even when targeting | Not needed here — the container app is `count`-guarded instead |
 | An unexpected third resource group named `ME_…` | Azure creates a platform-managed group for a VNet-integrated Container Apps environment | Expected. Leave it alone; it is deleted with the environment |
+| `invalid_input: … redirect URIs must not contain multiple host components` | The analytics client uses a pairwise subject identifier; Keycloak forbids multiple hosts without a Sector Identifier URI | `api_origin` is singular for that reason. See [uc5](use-cases/uc5-consent-and-privacy.md) |
 
 More in [11. Troubleshooting](11-troubleshooting.md).
 

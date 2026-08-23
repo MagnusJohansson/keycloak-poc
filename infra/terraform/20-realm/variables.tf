@@ -47,16 +47,35 @@ variable "realm_name" {
 }
 
 # --- Where the client apps live. Differs per environment, hence variables. ---
-variable "web_react_origin" {
-  type    = string
-  default = "http://localhost:5173"
+# --- Where the client apps live. Lists, not single values, on purpose.
+#
+# A realm usually has to trust more than one origin for the same app: the deployed
+# site AND http://localhost while you develop against it. With a single value,
+# pointing the realm at a deployed SPA silently revokes local development - which
+# is exactly the workflow docs/09-deploying-on-azure.md Step 3 recommends.
+variable "web_react_origins" {
+  type    = list(string)
+  default = ["http://localhost:5173"]
 }
 
-variable "web_vue_origin" {
-  type    = string
-  default = "http://localhost:5174"
+variable "web_vue_origins" {
+  type    = list(string)
+  default = ["http://localhost:5174"]
 }
 
+# SINGULAR, unlike the SPA origins above, and it cannot become a list.
+#
+# The only client using it is docvault-analytics, which carries a pairwise subject
+# identifier. Keycloak rejects a pairwise client whose redirect URIs span multiple
+# hosts unless a Sector Identifier URI is configured:
+#
+#   invalid_input: Without a configured Sector Identifier URI, client redirect
+#   URIs must not contain multiple host components.
+#
+# That is the constraint uc5 describes. Point it at whichever API this realm
+# actually serves; to support several, publish the sector identifier document
+# (the API exposes /analytics/sector-identifier) and set sectorIdentifierUri on
+# the mapper.
 variable "api_origin" {
   type    = string
   default = "http://localhost:5001"

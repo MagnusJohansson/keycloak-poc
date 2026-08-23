@@ -11,6 +11,10 @@ admin_client_id = "admin-cli"
 admin_username  = "admin"
 admin_password  = "REPLACE-from-key-vault"
 
-web_react_origin = "https://REPLACE.azurestaticapps.net"
-web_vue_origin   = "https://REPLACE-vue.azurestaticapps.net"
-api_origin       = "https://REPLACE.azurecontainerapps.io"
+# Lists: keep localhost alongside the deployed URL so you can still run the local
+# front end against this realm (Step 3 of the deployment guide).
+web_react_origins = ["https://REPLACE.azurestaticapps.net", "http://localhost:5173"]
+web_vue_origins   = ["https://REPLACE-vue.azurestaticapps.net", "http://localhost:5174"]
+# Singular: the analytics client uses a pairwise subject identifier, and Keycloak
+# rejects multiple hosts on such a client without a Sector Identifier URI.
+api_origin        = "https://REPLACE.azurecontainerapps.io"

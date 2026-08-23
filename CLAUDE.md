@@ -199,6 +199,11 @@ Every one of these cost real debugging time and is now load-bearing. Do not "sim
 - Desktop logging (`DesktopLogging`) writes to file + Debug + Console, and OidcClient's own
   diagnostics are routed into it, so the log contains the full authorize URL.
 
+- SPA origins in `20-realm` are **lists** (`web_react_origins`, `web_vue_origins`) so a realm can
+  trust the deployed site AND localhost. `api_origin` is deliberately **singular**: the analytics
+  client carries a pairwise `sub`, and Keycloak rejects such a client with redirect URIs spanning
+  multiple hosts unless a Sector Identifier URI is set. Do not "make it consistent".
+
 **Runtime:**
 
 - **`WWW-Authenticate` is not CORS-safelisted.** Without `.WithExposedHeaders("WWW-Authenticate")`

@@ -39,8 +39,8 @@ output "realm_tfvars" {
     admin_username  = "${var.admin_username}"
     admin_password  = "${random_password.admin.result}"
 
-    web_react_origin = "http://localhost:5173"
-    web_vue_origin   = "http://localhost:5174"
-    api_origin       = "http://localhost:5001"
+    web_react_origins = ["http://localhost:5173"]
+    web_vue_origins   = ["http://localhost:5174"]
+    api_origin        = "http://localhost:5001"
   EOT
 }

@@ -43,12 +43,12 @@ locals {
   # Every SPA needs the same shape of config, so express it once.
   spas = {
     "docvault-web-react" = {
-      name   = "DocVault Web (React)"
-      origin = var.web_react_origin
+      name    = "DocVault Web (React)"
+      origins = var.web_react_origins
     }
     "docvault-web-vue" = {
-      name   = "DocVault Web (Vue)"
-      origin = var.web_vue_origin
+      name    = "DocVault Web (Vue)"
+      origins = var.web_vue_origins
     }
   }
 }
@@ -71,14 +71,16 @@ resource "keycloak_openid_client" "spa" {
   # anyone; with it, only the client that generated the verifier can.
   pkce_code_challenge_method = "S256"
 
-  valid_redirect_uris = [
-    "${each.value.origin}/callback",
-    "${each.value.origin}/silent-renew.html", # hidden iframe for silent token renewal
-  ]
-  valid_post_logout_redirect_uris = [each.value.origin]
+  valid_redirect_uris = flatten([
+    for origin in each.value.origins : [
+      "${origin}/callback",
+      "${origin}/silent-renew.html", # hidden iframe for silent token renewal
+    ]
+  ])
+  valid_post_logout_redirect_uris = each.value.origins
 
   # CORS: the browser will not let the SPA read the token response otherwise.
-  web_origins = [each.value.origin]
+  web_origins = each.value.origins
 
   login_theme = "keycloak"
 }

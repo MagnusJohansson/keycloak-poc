@@ -5,9 +5,9 @@ admin_client_id = "admin-cli"
 admin_username  = "admin"
 admin_password  = "admin"
 
-web_react_origin = "http://localhost:5173"
-web_vue_origin   = "http://localhost:5174"
-api_origin       = "http://localhost:5001"
+web_react_origins = ["http://localhost:5173"]
+web_vue_origins   = ["http://localhost:5174"]
+api_origin        = "http://localhost:5001"
 
 smtp_host = "mailpit"
 smtp_port = "1025"
