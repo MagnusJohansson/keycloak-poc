@@ -84,6 +84,17 @@ The Keycloak admin console is at <http://localhost:8080/admin> (`admin`/`admin`)
 note it opens on the `master` realm, so switch to **`docvault`** to see the demo
 users and clients.
 
+## Deploying to Azure
+
+The whole lab also runs on Azure: Keycloak on Container Apps with a private
+Postgres, configured by the same Terraform that configures your local container.
+
+**→ [Step-by-step deployment guide](docs/09-deploying-on-azure.md)** — six steps,
+each with a verification command, plus costs and teardown.
+
+You can stop after step 3 and have cloud Keycloak driving your local apps for
+about $40/month; `make azure-destroy` removes everything.
+
 ## What it demonstrates
 
 | # | Scenario | Where |
