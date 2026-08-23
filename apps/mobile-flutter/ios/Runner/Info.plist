@@ -82,5 +82,26 @@
 			</array>
 		</dict>
 	</array>
+	<!-- Allows plain HTTP to the LOCAL lab only. Scoped to loopback and the
+	     Android-emulator host alias rather than NSAllowsArbitraryLoads, which
+	     would disable transport security for every host the app talks to.
+	     Not needed for the Azure deployment, which is HTTPS. Remove before
+	     shipping anything real. -->
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSExceptionDomains</key>
+		<dict>
+			<key>localhost</key>
+			<dict>
+				<key>NSExceptionAllowsInsecureHTTPLoads</key>
+				<true/>
+			</dict>
+			<key>10.0.2.2</key>
+			<dict>
+				<key>NSExceptionAllowsInsecureHTTPLoads</key>
+				<true/>
+			</dict>
+		</dict>
+	</dict>
 </dict>
 </plist>

@@ -92,11 +92,36 @@ realm roles plus *this API's* client roles, ignoring other clients' roles and th
 `default-roles-*` composite. Unit-tested in `test/widget_test.dart` — including
 the case that a role granted on a different client grants nothing here.
 
+## Configuration is compile-time
+
+`String.fromEnvironment` is resolved when the app is **built**, so a runtime
+environment variable does nothing. Values come from a JSON file:
+
+```bash
+flutter run --dart-define-from-file=config/local-ios.json   # iOS simulator
+flutter run --dart-define-from-file=config/local.json       # Android emulator
+flutter run --dart-define-from-file=config/azure.json       # your deployment
+```
+
+Changing a value needs a **rebuild**, not a restart. This differs from every other
+client here: the desktop apps read a file at startup and can be edited in place.
+
+## Cleartext HTTP for the local lab
+
+Both platforms block plain HTTP by default, so the local lab needs an exception -
+scoped to loopback and the emulator host alias, never opened globally:
+
+- iOS: `NSExceptionDomains` for `localhost` and `10.0.2.2`, **not** `NSAllowsArbitraryLoads`
+- Android: `network_security_config.xml` limited to the same two, **not** `usesCleartextTraffic="true"`
+
+Azure is HTTPS and needs neither, which makes it the easier target for mobile
+testing.
+
 ## Running
 
 ```bash
 cd apps/mobile-flutter
-flutter run --dart-define=ISSUER=http://10.0.2.2:8080/realms/docvault
+open -a Simulator && flutter run --dart-define-from-file=config/local-ios.json
 ```
 
 React Native ships the auth module (`src/auth.ts`) rather than a full app; its

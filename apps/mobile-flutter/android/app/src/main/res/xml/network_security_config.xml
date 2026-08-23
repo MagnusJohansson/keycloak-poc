@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Permits plain HTTP to the LOCAL lab only.
+
+  Deliberately NOT android:usesCleartextTraffic="true", which disables cleartext
+  protection for every host the app contacts. These two domains are the loopback
+  address and the alias an Android emulator uses to reach the host machine.
+
+  The Azure deployment is HTTPS and needs none of this.
+-->
+<network-security-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">localhost</domain>
+        <domain includeSubdomains="false">10.0.2.2</domain>
+    </domain-config>
+</network-security-config>

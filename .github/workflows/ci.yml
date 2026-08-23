@@ -59,7 +59,9 @@ jobs:
         working-directory: apps/mobile-flutter
       - run: flutter analyze
         working-directory: apps/mobile-flutter
-      - run: flutter test
+      # The config test asserts the --dart-define-from-file wiring works, so the
+      # defines have to be supplied here too.
+      - run: flutter test --dart-define-from-file=config/local.json
         working-directory: apps/mobile-flutter
 
   winui:

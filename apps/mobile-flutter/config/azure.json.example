@@ -1,0 +1,5 @@
+{
+  "ISSUER": "https://ca-keycloak.REPLACE.azurecontainerapps.io/realms/docvault",
+  "API_BASE_URL": "https://ca-docvault-api.REPLACE.azurecontainerapps.io",
+  "CLIENT_ID": "docvault-mobile"
+}
