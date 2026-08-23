@@ -1,4 +1,5 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
     <application
         android:networkSecurityConfig="@xml/network_security_config"
         android:label="docvault_mobile"
@@ -26,6 +27,33 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
+
+        <!--
+          Put AppAuth's activities in the SAME task as MainActivity.
+
+          Flutter's template sets android:taskAffinity="" on MainActivity (hardening
+          against task-affinity hijacking), but AppAuth's activities come from the
+          library manifest and inherit the default affinity - the package name. They
+          therefore land in a DIFFERENT task, and because
+          AuthorizationManagementActivity is launchMode="singleTask", the browser
+          redirect creates a fresh instance instead of resuming the one holding the
+          pending authorization request. AppAuth then logs:
+
+            W/AppAuth: No stored state - unable to handle response
+
+          and authorizeAndExchangeCode never returns - no error, no exception, the
+          Future simply never completes. Aligning the affinities fixes it while
+          keeping MainActivity's hardening.
+        -->
+        <activity
+            android:name="net.openid.appauth.AuthorizationManagementActivity"
+            android:taskAffinity=""
+            tools:node="merge" />
+        <activity
+            android:name="net.openid.appauth.RedirectUriReceiverActivity"
+            android:taskAffinity=""
+            tools:node="merge" />
+
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data

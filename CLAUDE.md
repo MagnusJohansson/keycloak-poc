@@ -188,6 +188,11 @@ Every one of these cost real debugging time and is now load-bearing. Do not "sim
   `FrontChannel.Extra` property, which does not exist in 7.x).
 - Unpackaged (`WindowsPackageType=None`), so `PasswordVault` is unavailable — tokens use DPAPI.
 
+- **AppAuth's activities must share MainActivity's `taskAffinity`.** Flutter's template sets
+  `taskAffinity=""` on MainActivity; AppAuth's inherit the package affinity, land in another task,
+  and the `singleTask` AuthorizationManagementActivity is recreated rather than resumed - so
+  sign-in hangs forever with only `W/AppAuth: No stored state` in logcat. The manifest overrides
+  both to `""`. Do not remove those overrides.
 - **Each mobile app has its own client AND its own URI scheme** (`docvault-flutter` /
   `io.docvault.flutter://`, `docvault-reactnative` / `io.docvault.rn://`). A custom scheme is
   claimed OS-wide, so two apps sharing one is ambiguous — Android resolves it

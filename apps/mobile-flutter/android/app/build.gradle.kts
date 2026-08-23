@@ -6,7 +6,7 @@ plugins {
 
 android {
     namespace = "io.docvault.docvault_mobile"
-    compileSdk = flutter.compileSdkVersion
+    compileSdk = 37 // flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
     compileOptions {

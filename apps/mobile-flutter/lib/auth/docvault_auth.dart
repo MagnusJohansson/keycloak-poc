@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter_appauth/flutter_appauth.dart';
@@ -51,7 +52,15 @@ class DocVaultAuth {
   /// read the user's credentials, cannot share the SSO session, and is rejected
   /// by most identity providers for exactly those reasons.
   Future<Map<String, dynamic>?> signIn() async {
-    final result = await _appAuth.authorizeAndExchangeCode(
+    // Bounded, because the failure mode here is a HANG, not an exception.
+    //
+    // If the redirect cannot be matched to the pending request - a task-affinity
+    // mismatch, a scheme registered wrongly, the activity being destroyed - AppAuth
+    // logs "No stored state - unable to handle response" to logcat and the Future
+    // simply never completes. Without a timeout the UI sits there with no error at
+    // all, which is a genuinely baffling thing to debug.
+    final result = await _appAuth
+        .authorizeAndExchangeCode(
       AuthorizationTokenRequest(
         clientId,
         redirectUri,
@@ -59,6 +68,14 @@ class DocVaultAuth {
         // moving from the local Keycloak to Azure changes only this one string.
         discoveryUrl: '$issuer/.well-known/openid-configuration',
         scopes: const ['openid', 'profile', 'email'],
+      ),
+    )
+        .timeout(
+      const Duration(minutes: 5),
+      onTimeout: () => throw TimeoutException(
+        'Sign-in did not complete. If the browser returned but nothing happened, '
+        'check logcat for "No stored state - unable to handle response" - that means '
+        'the redirect could not be matched to the pending request.',
       ),
     );
 

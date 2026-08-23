@@ -94,6 +94,44 @@ host alias** rather than opened globally:
 
 Neither is needed for Azure. Remove both before shipping anything real.
 
+## Troubleshooting
+
+### Sign-in hangs after entering the password — no error, no toast
+
+Check logcat for:
+
+```
+W/AppAuth: No stored state - unable to handle response
+```
+
+That means the browser redirect came back but AppAuth could not match it to the
+pending authorization request, so `authorizeAndExchangeCode` never completes. It
+throws nothing, which is why the UI just sits there.
+
+On Android the usual cause is a **task-affinity mismatch**. Flutter's template
+sets `android:taskAffinity=""` on `MainActivity`, while AppAuth's activities come
+from the library manifest and inherit the package-name affinity — so they end up
+in a different task, and `AuthorizationManagementActivity` (`launchMode="singleTask"`)
+is recreated rather than resumed, losing the stored state.
+
+The manifest here overrides both AppAuth activities to `android:taskAffinity=""`
+so all three share a task. Verify with the merged manifest after a build:
+
+```bash
+grep -A2 'AuthorizationManagementActivity'   build/app/intermediates/merged_manifest/debug/*/AndroidManifest.xml
+```
+
+Other causes worth ruling out:
+
+- **Developer options → "Don't keep activities"** destroys the activity while the
+  browser is in front. Check with
+  `adb shell settings get global always_finish_activities` — `1` means it is on.
+- The scheme in `AndroidManifest` / `Info.plist` not matching the redirect URI, or
+  not matching what the Keycloak client registers.
+
+`signIn()` now times out after five minutes with an explanatory message rather
+than hanging indefinitely.
+
 ## Redirect URI
 
 `io.docvault.flutter://oauth/callback`, registered natively on both platforms:
