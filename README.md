@@ -93,7 +93,9 @@ Postgres, configured by the same Terraform that configures your local container.
 each with a verification command, plus costs and teardown.
 
 You can stop after step 3 and have cloud Keycloak driving your local apps for
-about $40/month; `make azure-destroy` removes everything.
+about $40/month; `make azure-destroy` removes everything. Pick your region with
+`export TF_VAR_location=<region>` before the first apply — it defaults to
+`swedencentral`.
 
 ## What it demonstrates
 

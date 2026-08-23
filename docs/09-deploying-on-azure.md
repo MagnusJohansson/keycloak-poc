@@ -13,6 +13,9 @@ You can stop after **Step 3** and have a fully working cloud Keycloak driving
 your local applications, for about $40/month. Steps 4–6 deploy the applications
 too.
 
+Everything defaults to `swedencentral`; see [Choosing a region](#choosing-a-region)
+to put it somewhere closer to you — worth doing **before** the first apply.
+
 ---
 
 ## Prerequisites
@@ -66,6 +69,54 @@ Steps 1–3 build the left column. Steps 4–6 build the right.
 > environment for.
 
 ---
+
+## Choosing a region
+
+Everything defaults to **`swedencentral`**. Set your own once, before the first
+apply — it applies to every module and every `make` target:
+
+```bash
+export TF_VAR_location=westeurope     # or eastus2, australiaeast, ...
+```
+
+`TF_VAR_<name>` is Terraform's own convention, so this needs no flags and no
+files, and it keeps both modules consistent — which matters, because Keycloak and
+your API validating tokens across regions is a needless round trip.
+
+To make it stick, put it in a gitignored `terraform.tfvars` in each module
+instead (there is a `terraform.tfvars.example` in both to copy).
+
+> **Set this before you deploy.** Azure regions are immutable on almost every
+> resource, so changing it later forces Terraform to *destroy and recreate*
+> everything — including the database. `terraform plan` will say
+> `# forces replacement`; believe it.
+
+### Static Web Apps need a second setting
+
+Static Web Apps exist in only five regions, so they have their own variable,
+defaulting to `westeurope`:
+
+```bash
+export TF_VAR_static_web_app_location=eastus2   # if you are not in Europe
+```
+
+Valid values: `centralus`, `eastus2`, `westus2`, `westeurope`, `eastasia`.
+This costs nothing in latency — static content is served from a global CDN, so
+the region only decides where the build and metadata service lives.
+
+### Checking a region has what you need
+
+```bash
+az provider show -n Microsoft.App --query \
+  "resourceTypes[?resourceType=='managedEnvironments'].locations[]" -o tsv
+az provider show -n Microsoft.DBforPostgreSQL --query \
+  "resourceTypes[?resourceType=='flexibleServers'].locations[]" -o tsv
+az provider show -n Microsoft.Web --query \
+  "resourceTypes[?resourceType=='staticSites'].locations[]" -o tsv
+```
+
+Those print display names ("West Europe"); the Terraform value is the compact
+form (`westeurope`). `az account list-locations -o table` maps between them.
 
 ## Step 1 — Keycloak
 
@@ -270,7 +321,8 @@ reserved for 7 days.
 | HA fails at plan | Zone-redundant HA is unavailable on Burstable | Use a `GP_` SKU, or leave `postgres_zone_redundant = false` |
 | API 401s every request | Wrong `Keycloak__Authority`, or the audience mapper is missing | Compare `iss` in a real token against the API's configured authority |
 | Container app `ActivationFailed`, logs show *"RequireHttpsMetadata is false but the authority … is not loopback"* | The startup guard working as designed — `appsettings.json` ships `false` for the loopback default | The module sets `Keycloak__RequireHttpsMetadata=true`; if you deploy the image yourself, set it |
-| `LocationNotAvailableForResourceType … Microsoft.Web/staticSites` | Static Web Apps exist in only 5 regions | `static_web_app_location` defaults to `westeurope` and is separate from `location` |
+| `LocationNotAvailableForResourceType … Microsoft.Web/staticSites` | Static Web Apps exist in only 5 regions | Set `static_web_app_location` — see [Choosing a region](#choosing-a-region) |
+| Changing the region wants to destroy everything | Azure regions are immutable on most resources | Expected. Pick the region before the first apply |
 | `terraform apply -target=...` says *"No value for required variable"* | Terraform validates all variables even when targeting | Not needed here — the container app is `count`-guarded instead |
 | An unexpected third resource group named `ME_…` | Azure creates a platform-managed group for a VNet-integrated Container Apps environment | Expected. Leave it alone; it is deleted with the environment |
 

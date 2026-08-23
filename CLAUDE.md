@@ -129,6 +129,10 @@ Every one of these cost real debugging time and is now load-bearing. Do not "sim
   resource group (`ME_<env>_<rg>_<region>`) holding its load balancer and public IP. Expected, not
   drift — `managedBy` points at the environment, and it is deleted with it. Do not try to manage
   or remove it.
+- **Region is `TF_VAR_location`**, defaulting to `swedencentral`. It must be set before the first
+  apply: Azure regions are immutable on nearly every resource here, so changing it forces a full
+  destroy/recreate including the database. `static_web_app_location` is deliberately separate
+  because Static Web Apps exist in only five regions.
 - **Sentinel is opt-in** (`enable_sentinel`, default false) because it bills per GB analysed.
   Collection works without it — Container Apps streams Keycloak stdout to Log Analytics either
   way — so do not re-enable it by default "to make uc6 work".

@@ -1,0 +1,13 @@
+# Copy to terraform.tfvars (gitignored) to set these without flags.
+#
+# Alternatively, and covering both modules at once:
+#   export TF_VAR_location=westeurope
+
+location = "swedencentral"
+
+# Static Web Apps exist in only five regions, so this is deliberately separate
+# from `location`. Valid: centralus, eastus2, westus2, westeurope, eastasia.
+static_web_app_location = "westeurope"
+
+# Microsoft Sentinel bills per GB analysed, so it is off by default.
+# enable_sentinel = true

@@ -1,0 +1,11 @@
+# Copy to terraform.tfvars (gitignored) to set these without flags.
+#
+# Alternatively, and covering both modules at once:
+#   export TF_VAR_location=westeurope
+
+location = "swedencentral"
+
+# Bigger database for anything beyond a lab. Zone-redundant HA needs a GP_ SKU;
+# it is unavailable on Burstable and a precondition will tell you so at plan time.
+# postgres_sku            = "GP_Standard_D2ds_v5"
+# postgres_zone_redundant = true
