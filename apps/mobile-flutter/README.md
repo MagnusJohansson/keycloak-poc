@@ -48,6 +48,21 @@ reason the app "cannot reach Keycloak".
 > **Testing against Azure is simpler than against the local lab**: one HTTPS URL
 > that works from every device, and no cleartext-HTTP exceptions needed.
 
+## Running from VS Code
+
+Press **F5** and pick one of:
+
+- `Flutter — local lab (iOS simulator)`
+- `Flutter — local lab (Android emulator)`
+- `Flutter — Azure`
+
+Each passes the right `--dart-define-from-file` for you, which is the part that
+is easy to forget — and forgetting it silently gives you the built-in defaults
+rather than an error.
+
+`Flutter — Azure` needs `config/azure.json`; copy `config/azure.json.example`.
+That file is gitignored so your deployment URLs are not committed.
+
 ## Running
 
 ```bash

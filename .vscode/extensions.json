@@ -1,0 +1,9 @@
+{
+  "recommendations": [
+    "dart-code.flutter",
+    "ms-dotnettools.csdevkit",
+    "hashicorp.terraform",
+    "ms-azuretools.vscode-azurecontainerapps",
+    "ms-playwright.playwright"
+  ]
+}

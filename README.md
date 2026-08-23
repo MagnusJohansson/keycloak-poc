@@ -97,6 +97,16 @@ about $40/month; `make azure-destroy` removes everything. Pick your region with
 `export TF_VAR_location=<region>` before the first apply — it defaults to
 `swedencentral`.
 
+## Running from VS Code
+
+`.vscode/launch.json` has an F5 target for every runnable app — Flutter (iOS
+simulator / Android emulator / Azure), the API (local or Azure), Electron, the
+worker, and the React SPA. Tasks cover `lab: up + seed` and the Vite dev server.
+
+The Azure variants read files you create and that are gitignored
+(`config/azure.json`, `appsettings.Azure.json`), so no deployment URL is
+committed. Copy the matching `.example` to get started.
+
 ## What it demonstrates
 
 | # | Scenario | Where |

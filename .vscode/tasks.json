@@ -1,0 +1,35 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "build-api",
+      "type": "process",
+      "command": "dotnet",
+      "args": ["build", "${workspaceFolder}/apps/api-dotnet/DocVault.Api/DocVault.Api.csproj"],
+      "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "build-worker",
+      "type": "process",
+      "command": "dotnet",
+      "args": ["build", "${workspaceFolder}/apps/api-dotnet/DocVault.Worker/DocVault.Worker.csproj"],
+      "problemMatcher": "$msCompile"
+    },
+    {
+      // The lab has to be up and seeded before any client can sign in.
+      "label": "lab: up + seed",
+      "type": "shell",
+      "command": "make up && make seed",
+      "options": { "cwd": "${workspaceFolder}" },
+      "problemMatcher": []
+    },
+    {
+      "label": "web: React dev server",
+      "type": "shell",
+      "command": "npm run dev",
+      "options": { "cwd": "${workspaceFolder}/apps/web-react" },
+      "isBackground": true,
+      "problemMatcher": []
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "//": "Copy to appsettings.Azure.json (gitignored) and fill in your deployment. Selected by ASPNETCORE_ENVIRONMENT=Azure, which the 'API (Azure)' VS Code launch config sets.",
+
+  "Keycloak": {
+    "Authority": "https://ca-keycloak.REPLACE.azurecontainerapps.io/realms/docvault",
+    "Audience": "docvault-api",
+
+    "//RequireHttpsMetadata": "Must be true for a non-loopback authority - the API refuses to start otherwise, deliberately.",
+    "RequireHttpsMetadata": true
+  }
+}

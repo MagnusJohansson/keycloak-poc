@@ -1,0 +1,98 @@
+{
+  // F5 targets for every runnable app.
+  //
+  // Nothing here contains a deployment URL or a secret. The Azure variants read
+  // gitignored files you create yourself:
+  //   apps/mobile-flutter/config/azure.json      (copy config/azure.json.example)
+  //   apps/api-dotnet/DocVault.Api/appsettings.Azure.json  (copy the .example)
+  //   apps/desktop-electron/config.json          (edit in place)
+  "version": "0.2.0",
+  "configurations": [
+    {
+      // Flutter config is COMPILE-TIME, so the defines go to the tool rather than
+      // the app: toolArgs lands immediately after `flutter run`.
+      "name": "Flutter — local lab (iOS simulator)",
+      "type": "dart",
+      "request": "launch",
+      "program": "${workspaceFolder}/apps/mobile-flutter/lib/main.dart",
+      "cwd": "${workspaceFolder}/apps/mobile-flutter",
+      "toolArgs": ["--dart-define-from-file", "config/local-ios.json"]
+    },
+    {
+      // 10.0.2.2 is the emulator's alias for the host machine; localhost inside
+      // an emulator is the emulator itself.
+      "name": "Flutter — local lab (Android emulator)",
+      "type": "dart",
+      "request": "launch",
+      "program": "${workspaceFolder}/apps/mobile-flutter/lib/main.dart",
+      "cwd": "${workspaceFolder}/apps/mobile-flutter",
+      "toolArgs": ["--dart-define-from-file", "config/local.json"]
+    },
+    {
+      // HTTPS, so this one works from simulator, emulator and physical device
+      // alike, and needs no cleartext exceptions.
+      "name": "Flutter — Azure",
+      "type": "dart",
+      "request": "launch",
+      "program": "${workspaceFolder}/apps/mobile-flutter/lib/main.dart",
+      "cwd": "${workspaceFolder}/apps/mobile-flutter",
+      "toolArgs": ["--dart-define-from-file", "config/azure.json"]
+    },
+    {
+      "name": "API — local lab (:5001)",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build-api",
+      "program": "${workspaceFolder}/apps/api-dotnet/DocVault.Api/bin/Debug/net10.0/DocVault.Api.dll",
+      "cwd": "${workspaceFolder}/apps/api-dotnet/DocVault.Api",
+      "env": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "ASPNETCORE_URLS": "http://localhost:5001"
+      }
+    },
+    {
+      // Selected by ASPNETCORE_ENVIRONMENT, which loads appsettings.Azure.json.
+      // That file is gitignored, which keeps deployment URLs out of this one.
+      "name": "API — Azure Keycloak (:5001)",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build-api",
+      "program": "${workspaceFolder}/apps/api-dotnet/DocVault.Api/bin/Debug/net10.0/DocVault.Api.dll",
+      "cwd": "${workspaceFolder}/apps/api-dotnet/DocVault.Api",
+      "env": {
+        "ASPNETCORE_ENVIRONMENT": "Azure",
+        "ASPNETCORE_URLS": "http://localhost:5001"
+      }
+    },
+    {
+      // Debugs the MAIN process, which is where the tokens live. Retarget by
+      // editing apps/desktop-electron/config.json.
+      "name": "Electron — main process",
+      "type": "node",
+      "request": "launch",
+      "cwd": "${workspaceFolder}/apps/desktop-electron",
+      "runtimeExecutable": "${workspaceFolder}/apps/desktop-electron/node_modules/.bin/electron",
+      "runtimeArgs": ["."],
+      "console": "integratedTerminal",
+      "outputCapture": "std"
+    },
+    {
+      // Attaches to a Vite dev server you have already started (`make web`, or
+      // the "web: React dev server" task).
+      "name": "React — attach to :5173",
+      "type": "chrome",
+      "request": "launch",
+      "url": "http://localhost:5173",
+      "webRoot": "${workspaceFolder}/apps/web-react"
+    },
+    {
+      "name": "Worker — client_credentials daemon",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build-worker",
+      "program": "${workspaceFolder}/apps/api-dotnet/DocVault.Worker/bin/Debug/net10.0/DocVault.Worker.dll",
+      "cwd": "${workspaceFolder}/apps/api-dotnet/DocVault.Worker",
+      "console": "integratedTerminal"
+    }
+  ]
+}
