@@ -154,16 +154,19 @@ rather than asserted.
 
 Built and checked against real software, not just written down:
 
-- 68 Terraform resources applied to Keycloak 26.6.3, with a clean re-plan;
+- 71 Terraform resources applied to Keycloak 26.6.3, with a clean re-plan;
   `acr_values_supported`, the audience mapper and service-account roles confirmed
   in a real token.
 - .NET 10 API: 27 tests pass, including forged `alg:none`, wrong-key,
   wrong-audience, wrong-realm and expired tokens, and 403-vs-401 for an
   authenticated-but-unauthorized caller.
-- Desktop auth library: 45 tests pass on macOS/Linux. The WinUI shell is compiled
-  by the `windows-latest` CI job and has been run end-to-end on Windows against
-  the Azure deployment — system-browser sign-in, correct issuer/audience/roles in
-  the token, tenant-scoped documents returned.
+- Desktop auth library: 45 tests pass on macOS/Linux. **Both desktop clients have
+  been run end-to-end against the Azure deployment** — WinUI 3 on Windows and
+  Electron on macOS — with system-browser sign-in, correct issuer, audience and
+  roles in the token, and tenant-scoped documents returned. The WinUI shell is
+  also compiled by the `windows-latest` CI job.
+- Keycloak on Azure and the API on Container Apps are both applied and running,
+  not merely planned.
 - 7 Playwright tests pass in a real browser against real Keycloak.
 - React and Vue build; Flutter analyzes clean and its tests pass.
 - The Azure module plans cleanly against real Azure APIs (20 resources), but has

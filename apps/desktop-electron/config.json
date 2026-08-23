@@ -1,9 +1,9 @@
 {
   "//": "Edit this file to point the app at your Keycloak. Every value can also be overridden with a DOCVAULT_-prefixed environment variable, e.g. DOCVAULT_ISSUER.",
 
-  "issuer": "http://localhost:8080/realms/docvault",
-  "apiBaseUrl": "http://localhost:5001",
-
+  "issuer": "https://<your-keycloak-host>/realms/docvault",
+  "apiBaseUrl": "https://<your-api-host>",
+  
   "//clientId": "Must match a client registered in the realm - see infra/terraform/20-realm/clients.tf. NOT the same client as the React app.",
   "clientId": "docvault-desktop",
 

@@ -230,7 +230,7 @@ Every one of these cost real debugging time and is now load-bearing. Do not "sim
 ## Verification status
 
 Proven against real software: 71 Terraform resources applied to Keycloak 26.6.3 with a clean
-re-plan; 27 API + 30 desktop-auth .NET tests (including forged `alg:none`, wrong-key,
+re-plan; 27 API + 45 desktop-auth .NET tests (including forged `alg:none`, wrong-key,
 wrong-audience, wrong-realm and expired tokens); 7 Playwright tests in a real browser; React/Vue
 build; Flutter analyzes clean.
 
@@ -254,3 +254,8 @@ through the system browser, a token with `iss` = the Azure issuer, `azp` = `docv
 `aud` = `docvault-api`, `resource_access` roles intact, and a tenant-scoped document list returned
 by the API. It still cannot be compiled or run on this machine (macOS); the `windows-latest` CI
 job compiles it, and the user verified the runtime behaviour.
+
+**The Electron client has also been run end-to-end against Azure** — `azp = docvault-desktop`,
+`groups = ["/acme/engineering"]`, tenant-scoped documents returned. Both desktop clients are
+therefore exercised, with distinct `azp` values confirming they are genuinely separate Keycloak
+clients rather than sharing one.
