@@ -60,7 +60,7 @@ module environment-specific defeats the point.
 |---|---|---|
 | `10-keycloak-azure` | `azurerm` | Keycloak itself on Azure: Container Apps + private Postgres + Key Vault |
 | `20-realm` | `keycloak/keycloak` | **the realm — source of truth** |
-| `30-azure` | `azurerm` | your apps: Container Apps, Static Web Apps, Sentinel |
+| `30-azure` | `azurerm` | your apps: Container Apps, Static Web Apps, Log Analytics (Sentinel opt-in) |
 
 Apply order for cloud: `10-keycloak-azure` → `20-realm` → `30-azure`.
 
@@ -129,6 +129,9 @@ Every one of these cost real debugging time and is now load-bearing. Do not "sim
   resource group (`ME_<env>_<rg>_<region>`) holding its load balancer and public IP. Expected, not
   drift — `managedBy` points at the environment, and it is deleted with it. Do not try to manage
   or remove it.
+- **Sentinel is opt-in** (`enable_sentinel`, default false) because it bills per GB analysed.
+  Collection works without it — Container Apps streams Keycloak stdout to Log Analytics either
+  way — so do not re-enable it by default "to make uc6 work".
 - **Static Web Apps exist in only 5 regions** (`centralus`, `eastus2`, `westus2`, `westeurope`,
   `eastasia`). Hence `static_web_app_location`, separate from `location`.
 - Azure server-side-adds three things Terraform would otherwise delete every plan:

@@ -21,6 +21,23 @@ variable "container_image" {
   description = "Fully qualified image for the API, e.g. myacr.azurecr.io/docvault-api:1.0.0"
 }
 
+variable "enable_sentinel" {
+  type        = bool
+  default     = false
+  description = <<-EOT
+    Onboard the Log Analytics workspace to Microsoft Sentinel.
+
+    OFF by default because Sentinel bills per GB analysed, which makes it the
+    least predictable line in this deployment - a lab someone copies should not
+    quietly start metered billing. A new workspace is free for 31 days.
+
+    Everything else works without it: Container Apps already streams Keycloak's
+    stdout into Log Analytics, so the events are collected and queryable either
+    way. Sentinel adds the SIEM layer on top - analytics rules, incidents,
+    hunting. Turn it on to follow use-case 6 properly.
+  EOT
+}
+
 variable "static_web_app_location" {
   type        = string
   default     = "westeurope"

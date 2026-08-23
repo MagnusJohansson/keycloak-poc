@@ -21,8 +21,8 @@ output "vue_url" {
   value = "https://${azurerm_static_web_app.vue.default_host_name}"
 }
 
-output "sentinel_workspace_id" {
-  description = "Workspace collecting Keycloak events and app telemetry (use-case 6)."
+output "log_analytics_workspace_id" {
+  description = "Workspace collecting Keycloak events and app telemetry. Onboarded to Sentinel only when enable_sentinel = true (use-case 6)."
   value       = azurerm_log_analytics_workspace.lab.workspace_id
 }
 

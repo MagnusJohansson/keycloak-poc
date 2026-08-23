@@ -61,9 +61,19 @@ to Sentinel:
 
 ```hcl
 resource "azurerm_sentinel_log_analytics_workspace_onboarding" "lab" {
+  count        = var.enable_sentinel ? 1 : 0
   workspace_id = azurerm_log_analytics_workspace.lab.id
 }
 ```
+
+> **Sentinel is off by default** — it bills per GB analysed, so a lab you clone
+> should not start metered billing unasked. Enable it with
+> `-var="enable_sentinel=true"`.
+>
+> The collection half works regardless: Container Apps streams Keycloak's stdout
+> into Log Analytics, so you can run every KQL query below against the workspace
+> without Sentinel. What Sentinel adds is the SIEM layer on top — analytics
+> rules, incidents and hunting.
 
 So no extra component is required to get events into Sentinel — only a parser,
 since they arrive as log lines rather than structured rows.

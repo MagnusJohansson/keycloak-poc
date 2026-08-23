@@ -19,8 +19,14 @@ resource "azurerm_log_analytics_workspace" "lab" {
 # Turns the workspace into a SIEM. Container Apps streams Keycloak's stdout -
 # including the events emitted by its jboss-logging listener - into Log
 # Analytics, so realm security events land beside your application telemetry and
-# can be correlated. See docs/use-cases/uc6-audit-siem-sentinel.md.
+# can be correlated either way. Sentinel adds analytics rules, incidents and
+# hunting on top. See docs/use-cases/uc6-audit-siem-sentinel.md.
+#
+# Opt-in: Sentinel bills per GB analysed, and a lab someone clones should not
+# start metered billing without being asked. -var="enable_sentinel=true".
 resource "azurerm_sentinel_log_analytics_workspace_onboarding" "lab" {
+  count = var.enable_sentinel ? 1 : 0
+
   workspace_id = azurerm_log_analytics_workspace.lab.id
 }
 

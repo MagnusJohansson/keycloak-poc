@@ -41,7 +41,7 @@ rg-docvault-keycloak                       rg-docvault-lab
 │   │   └── Container App: Keycloak        ├── Static Web Apps x2  (React, Vue)
 │   └── snet-postgres        /24           ├── Key Vault
 │       └── Postgres 16  (no public IP)    ├── Log Analytics + App Insights
-├── Private DNS zone                       └── Microsoft Sentinel
+├── Private DNS zone                       └── (Microsoft Sentinel - opt-in)
 ├── Key Vault  (admin + DB passwords)
 ├── Managed identity
 └── Log Analytics
@@ -235,11 +235,20 @@ make seed-azure
 | API container app (0.5 vCPU / 1 GiB) | ~$11 |
 | Key Vault, VNet, DNS, identities | ~$1 |
 | Static Web Apps ×2 | Free tier |
-| **Microsoft Sentinel** | **per GB ingested** — free for 31 days on a new workspace |
+| **Microsoft Sentinel** | **off by default.** Per GB analysed when enabled; free for 31 days on a new workspace |
 
-Roughly **$40/month** after Steps 1–3, **$55–60** after Step 5. About **$1.30–2/day**,
-so a few days of experimenting is small — but Sentinel is the least predictable
-line, and it is only there for [uc6](use-cases/uc6-audit-siem-sentinel.md).
+Roughly **$40/month** after Steps 1–3, **$55–60** after Step 5 — about **$1.30–2/day**,
+so a few days of experimenting is small.
+
+Sentinel is **opt-in** because it bills per GB analysed and is the least
+predictable line here. Keycloak's events reach Log Analytics either way, so
+everything is collected and queryable without it; Sentinel adds the SIEM layer.
+To follow [uc6](use-cases/uc6-audit-siem-sentinel.md) properly:
+
+```bash
+terraform apply -var="enable_sentinel=true" \
+  -var="keycloak_issuer=..." -var="container_image=..."
+```
 
 ```bash
 make azure-destroy                              # Keycloak (rg-docvault-keycloak)
