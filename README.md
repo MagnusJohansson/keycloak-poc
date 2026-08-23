@@ -10,6 +10,23 @@ and applied unchanged to either a local Docker Keycloak or an Azure deployment �
 so the free local lab is a faithful rehearsal for the cloud one, not a
 simplified toy.
 
+
+```mermaid
+flowchart LR
+  accTitle: One Terraform module, two Keycloaks
+  accDescr: The 20-realm Terraform module is applied by make seed to a local Docker Keycloak and by make seed-azure to Keycloak on Azure Container Apps. The same client apps sign in against either one by swapping a single URL.
+
+  TF["<b>infra/terraform/20-realm</b><br/>clients · roles · groups<br/>mappers · auth flows"]
+  L["<b>Local Docker Keycloak</b><br/>localhost:8080<br/><i>free, no account</i>"]
+  A["<b>Keycloak on Azure</b><br/>Container Apps<br/>+ private Postgres"]
+  APPS["React · Vue · Flutter · React Native<br/>Electron · WinUI 3 · .NET API"]
+
+  TF == "make seed" ==> L
+  TF == "make seed-azure" ==> A
+  APPS -. "same clients,<br/>same tokens" .-> L
+  APPS -. "swap one URL" .-> A
+```
+
 ## Prerequisites
 
 For the local lab — everything in the Quickstart below:
@@ -90,10 +107,79 @@ The Keycloak admin console is at <http://localhost:8080/admin> (`admin`/`admin`)
 note it opens on the `master` realm, so switch to **`docvault`** to see the demo
 users and clients.
 
+## How a sign-in actually flows
+
+Every client here does the same thing — authorization code + PKCE through a real
+browser, then a bearer token the API validates itself. No client ever sees a
+password, and the API never calls Keycloak to check a request.
+
+```mermaid
+sequenceDiagram
+  accTitle: Authorization code flow with PKCE, then an API call
+  accDescr: The user signs in through the client, which redirects to Keycloak using the authorization code flow with PKCE. Keycloak returns a code, the client exchanges it for an access token carrying roles and groups, and the API validates that token against Keycloak's published keys before returning only the caller's tenant documents.
+
+  actor U as alice
+  participant C as Client
+  participant K as Keycloak
+  participant A as DocVault API
+
+  U->>C: Sign in
+  C->>K: /auth — code flow + PKCE (S256)
+  K->>U: Login form (+ OTP when stepping up)
+  U->>K: Credentials
+  K-->>C: Authorization code
+  C->>K: /token — code + code_verifier
+  K-->>C: Access token: roles, groups, aud=docvault-api
+  C->>A: GET /documents (Bearer)
+  A->>K: Fetch JWKS (cached)
+  A->>A: Validate signature, iss, aud, exp
+  A-->>C: Only this user's tenant documents
+```
+
+The two steps that fail *silently* when misconfigured are both visible here: the
+audience mapper (`aud=docvault-api`) and the roles/groups claims. Without them
+sign-in still succeeds and every API call returns 401 or 403.
+
 ## Deploying to Azure
 
 The whole lab also runs on Azure: Keycloak on Container Apps with a private
 Postgres, configured by the same Terraform that configures your local container.
+
+
+```mermaid
+flowchart TB
+  accTitle: Azure deployment topology
+  accDescr: Two resource groups. rg-docvault-keycloak holds Keycloak on Container Apps with a private Postgres Flexible Server, Key Vault and its own Log Analytics workspace. rg-docvault-lab holds the DocVault API container app, a container registry it pulls from with a managed identity, and a second Log Analytics workspace. Clients reach both over HTTPS, and the API validates tokens against Keycloak's published keys.
+
+  Client(["Browser · mobile · desktop"])
+
+  subgraph kc["rg-docvault-keycloak &nbsp;·&nbsp; 10-keycloak-azure"]
+    direction LR
+    KCAPP["<b>Keycloak</b><br/>Container App"]
+    PG[("Postgres Flexible Server<br/><i>private, delegated subnet</i>")]
+    KV["Key Vault<br/><i>admin + DB secrets</i>"]
+    LAW1["Log Analytics"]
+  end
+
+  subgraph lab["rg-docvault-lab &nbsp;·&nbsp; 30-azure"]
+    direction LR
+    API["<b>DocVault API</b><br/>Container App"]
+    ACR["Container Registry"]
+    LAW2["Log Analytics<br/><i>Sentinel opt-in</i>"]
+  end
+
+  Client -- HTTPS --> KCAPP
+  Client -- "HTTPS + Bearer" --> API
+  API -. "JWKS — validate tokens" .-> KCAPP
+  KCAPP --- PG
+  KCAPP -. "managed identity" .-> KV
+  KCAPP --> LAW1
+  ACR -. "AcrPull, no password" .-> API
+  API --> LAW2
+```
+
+Azure adds a third, platform-managed resource group (`ME_...`) for the VNet-integrated
+Container Apps environment's load balancer. That is expected, not drift.
 
 **→ [Step-by-step deployment guide](docs/09-deploying-on-azure.md)** — six steps,
 each with a verification command, plus costs and teardown.

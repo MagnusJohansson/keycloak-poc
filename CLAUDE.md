@@ -280,6 +280,11 @@ Every one of these cost real debugging time and is now load-bearing. Do not "sim
 - Cross-tenant reads return **404, not 403** — a 403 confirms the resource exists.
 - Comments explain *why*, especially for the traps above. Several exist solely to stop a future
   reader "fixing" something into breakage.
+- **Diagrams are Mermaid in the Markdown**, not exported images: GitHub renders them natively,
+  they diff, and they follow the reader's light/dark theme. A picture that must be re-exported by
+  hand drifts exactly like the resource counts did. Validate before committing — invalid syntax
+  renders as an error box on GitHub:
+  `npx -y @mermaid-js/mermaid-cli@11 -i d.mmd -o d.svg`
 
 ## Verification status
 
