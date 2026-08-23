@@ -52,6 +52,11 @@ BundleArtifacts/
 
 # --- node ---
 node_modules/
+# This repo installs with npm (see .github/workflows/ci.yml). pnpm leaves these
+# behind if you use it locally; committing one project's pnpm lockfile while CI
+# runs npm is worse than having none.
+pnpm-lock.yaml
+pnpm-workspace.yaml
 dist/
 .vite/
 playwright-report/
