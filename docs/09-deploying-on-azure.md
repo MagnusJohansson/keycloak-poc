@@ -346,11 +346,17 @@ terraform apply -var="enable_sentinel=true" \
 ```
 
 ```bash
-make azure-destroy                              # Keycloak (rg-docvault-keycloak)
-terraform -chdir=infra/terraform/30-azure destroy   # the apps (rg-docvault-lab)
+make azure-destroy     # realm, then apps, then Keycloak - in that order
 ```
 
-Both remove their whole resource group, including the Azure-managed `ME_…` group,
+The order is not cosmetic. The realm lives *inside* Keycloak, so it is destroyed
+first, while Keycloak is still running; otherwise `20-realm`'s `azure` workspace is
+left holding state for objects that no longer exist, and the next `make seed-azure`
+fails with `409 Realm docvault already exists`.
+
+To keep your applications and remove only Keycloak, use `make azure-destroy-keycloak`.
+
+This removes both resource groups, including the Azure-managed `ME_…` group,
 which is deleted with the environment that owns it. The Key Vaults are created with
 `purge_soft_delete_on_destroy`, so the names are released rather than left
 reserved for 7 days.

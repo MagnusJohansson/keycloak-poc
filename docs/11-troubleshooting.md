@@ -92,6 +92,7 @@ issuer rather than widening what the API trusts — an API should validate exact
 | Realm changes silently reverted | Someone edited the admin console | `make plan` should be empty; treat drift as a bug |
 | After seeding Azure, `make plan` wants to recreate the whole local realm | Wrong Terraform workspace — both environments would otherwise share one state | `terraform workspace select local` (the make targets do this for you) |
 | `409 Conflict … Realm docvault already exists` | The realm exists but this workspace has no state for it | Delete the realm and re-seed, or `terraform import`. The local realm is disposable; the cloud one is not |
+| `terraform destroy` leaves a resource group behind: "contains resources not managed by Terraform" | Application Insights auto-creates a **Failure Anomalies** smart detector alert rule that Terraform never knew about, and the provider's default guard then refuses to delete the group | Both Azure modules now set `prevent_deletion_if_contains_resources = false`, which is safe because each creates the group it deletes. On an older checkout: `az resource delete --ids $(az resource list -g <rg> --query "[0].id" -o tsv)` then re-run destroy |
 
 ## Local lab
 

@@ -31,6 +31,12 @@ terraform {
 
 provider "azurerm" {
   features {
+    resource_group {
+      # See the note in 30-azure: an unmanaged resource in the group (Azure adds
+      # some by itself) otherwise blocks `terraform destroy` from removing it.
+      # Safe because this module creates the resource group it deletes.
+      prevent_deletion_if_contains_resources = false
+    }
     key_vault {
       # Lab convenience: let `terraform destroy` actually remove the vault
       # instead of leaving a soft-deleted name that blocks re-creation.

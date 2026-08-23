@@ -161,7 +161,24 @@ azure-secrets: ## Print the Azure realm's issuer and generated client secrets
 	echo "Worker client secret: $$($(TF) output -raw worker_client_secret)"
 
 .PHONY: azure-destroy
-azure-destroy: ## Tear down the Azure Keycloak deployment
+azure-destroy: ## Tear down EVERYTHING deployed to Azure (realm, apps, Keycloak)
+	@# Order matters. The realm lives INSIDE Keycloak, so it must be destroyed
+	@# while Keycloak is still running - otherwise 20-realm's azure workspace is
+	@# left holding state for objects that no longer exist, and the next
+	@# `make seed-azure` fails with "409 Realm docvault already exists" or tries
+	@# to delete resources it can no longer reach.
+	@#
+	@# This target used to destroy only 10-keycloak-azure, silently leaving
+	@# rg-docvault-lab (API container app, ACR, Static Web Apps, Log Analytics)
+	@# running and billing. Keep all three steps.
+	-cd $(REALM_DIR) && $(TF) init && $(WS_AZURE) && $(TF) destroy $(AZURE_VARS)
+	-cd $(APPS_AZURE_DIR) && $(TF) init && $(TF) destroy
+	cd $(KEYCLOAK_AZURE_DIR) && $(TF) init && $(TF) destroy
+	@echo
+	@echo "Confirm nothing is left:  az group list --query \"[?starts_with(name,'rg-docvault')].name\" -o tsv"
+
+.PHONY: azure-destroy-keycloak
+azure-destroy-keycloak: ## Tear down ONLY Keycloak (10-keycloak-azure), leaving your apps
 	cd $(KEYCLOAK_AZURE_DIR) && $(TF) init && $(TF) destroy
 
 .PHONY: apps-plan

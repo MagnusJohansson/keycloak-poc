@@ -152,6 +152,16 @@ Every one of these cost real debugging time and is now load-bearing. Do not "sim
 - The container app is `count`-guarded on `container_image` so the registry can be created and
   populated first. `-target` does **not** solve this — Terraform still requires every variable
   when targeting.
+- **`terraform destroy` does not remove a resource group that holds anything Terraform did not
+  create**, and Application Insights adds a "Failure Anomalies" smart detector rule by itself. The
+  destroy then exits *successfully* while leaving the group and its bill behind. Both Azure modules
+  set `prevent_deletion_if_contains_resources = false`; safe only because each creates the group it
+  deletes. Do not copy that into a module targeting a pre-existing group.
+- **`make azure-destroy` must tear down all three layers** — realm, then `30-azure`, then
+  `10-keycloak-azure` — in that order. It once destroyed only Keycloak, silently leaving
+  `rg-docvault-lab` running. The realm goes first because it lives *inside* Keycloak: destroy the
+  server first and `20-realm`'s azure workspace is left holding state for objects that no longer
+  exist.
 
 **Keycloak on Azure (`10-keycloak-azure`):**
 
