@@ -125,6 +125,10 @@ Every one of these cost real debugging time and is now load-bearing. Do not "sim
 - The API's startup guard refuses a non-loopback authority over plain HTTP, so `30-azure` MUST set
   `Keycloak__RequireHttpsMetadata=true`. `appsettings.json` ships `false` for the loopback default;
   without the override the container exits with `ActivationFailed`.
+- A VNet-integrated Container Apps environment makes Azure create a third, platform-managed
+  resource group (`ME_<env>_<rg>_<region>`) holding its load balancer and public IP. Expected, not
+  drift — `managedBy` points at the environment, and it is deleted with it. Do not try to manage
+  or remove it.
 - **Static Web Apps exist in only 5 regions** (`centralus`, `eastus2`, `westus2`, `westeurope`,
   `eastasia`). Hence `static_web_app_location`, separate from `location`.
 - Azure server-side-adds three things Terraform would otherwise delete every plan:

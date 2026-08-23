@@ -49,6 +49,22 @@ rg-docvault-keycloak                       rg-docvault-lab
 
 Steps 1–3 build the left column. Steps 4–6 build the right.
 
+> **You will end up with three resource groups, not two.** Azure adds a third,
+> named like `ME_cae-keycloak_rg-docvault-keycloak_swedencentral`, containing a
+> load balancer and a public IP.
+>
+> That is expected. Deploying a Container Apps environment **into your own VNet**
+> makes Azure create a platform-managed resource group for the environment's
+> infrastructure; its `managedBy` is the environment itself. Do not modify or
+> delete it — it is removed automatically when the environment is deleted.
+>
+> Only `cae-keycloak` has one, because only it is VNet-integrated. `cae-docvault`
+> in `rg-docvault-lab` is not, so it has no managed group.
+>
+> The name *can* be set via `infrastructure_resource_group_name`, but only on an
+> environment that declares a workload profile — not worth replacing a working
+> environment for.
+
 ---
 
 ## Step 1 — Keycloak
@@ -230,7 +246,8 @@ make azure-destroy                              # Keycloak (rg-docvault-keycloak
 terraform -chdir=infra/terraform/30-azure destroy   # the apps (rg-docvault-lab)
 ```
 
-Both remove their whole resource group. The Key Vaults are created with
+Both remove their whole resource group, including the Azure-managed `ME_…` group,
+which is deleted with the environment that owns it. The Key Vaults are created with
 `purge_soft_delete_on_destroy`, so the names are released rather than left
 reserved for 7 days.
 
@@ -246,6 +263,7 @@ reserved for 7 days.
 | Container app `ActivationFailed`, logs show *"RequireHttpsMetadata is false but the authority … is not loopback"* | The startup guard working as designed — `appsettings.json` ships `false` for the loopback default | The module sets `Keycloak__RequireHttpsMetadata=true`; if you deploy the image yourself, set it |
 | `LocationNotAvailableForResourceType … Microsoft.Web/staticSites` | Static Web Apps exist in only 5 regions | `static_web_app_location` defaults to `westeurope` and is separate from `location` |
 | `terraform apply -target=...` says *"No value for required variable"* | Terraform validates all variables even when targeting | Not needed here — the container app is `count`-guarded instead |
+| An unexpected third resource group named `ME_…` | Azure creates a platform-managed group for a VNet-integrated Container Apps environment | Expected. Leave it alone; it is deleted with the environment |
 
 More in [11. Troubleshooting](11-troubleshooting.md).
 
