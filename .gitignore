@@ -16,9 +16,39 @@
 crash.log
 
 # --- dotnet ---
-bin/
-obj/
+[Bb]in/
+[Oo]bj/
 *.user
+
+# --- visual studio ---
+# .vs/ holds per-developer editor state and a SQLite index; it is regenerated on
+# open and is pure noise in history.
+.vs/
+*.suo
+*.userosscache
+*.sln.docstates
+*.rsuser
+
+# --- winui / msix packaging ---
+# XAML code generation output, rebuilt every compile.
+Generated Files/
+
+# MSIX build output - large, and reproducible from source.
+AppPackages/
+BundleArtifacts/
+*.appx
+*.appxbundle
+*.appxupload
+*.msix
+*.msixbundle
+*.msixupload
+
+# Visual Studio silently generates <AppName>_TemporaryKey.pfx when you enable MSIX
+# packaging. It is a PRIVATE KEY. Never commit one - in a public repo it is a
+# credential leak, and even in a private one it is a signing key in history that
+# cannot be un-published. Same for strong-name keys.
+*.pfx
+*.snk
 
 # --- node ---
 node_modules/

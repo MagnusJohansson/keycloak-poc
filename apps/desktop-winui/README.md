@@ -65,6 +65,20 @@ dotnet run --project apps/desktop-winui/DocVault.WinUI
 **Windows only.** The XAML will not compile on macOS or Linux; the `winui` CI job
 builds it on `windows-latest`.
 
+## Working in Visual Studio
+
+Visual Studio generates several things that must not be committed; `.gitignore`
+covers them, but two are worth knowing about:
+
+- **`<AppName>_TemporaryKey.pfx`** — created automatically the moment you enable
+  MSIX packaging. It is a **private signing key**. Ignored here, but if you ever
+  see one appear in `git status`, do not commit it: a key in git history cannot be
+  un-published.
+- **`.vs/`** — per-developer editor state and a SQLite index, regenerated on open.
+
+Also ignored: `Generated Files/` (XAML codegen), `AppPackages/` and
+`BundleArtifacts/` (MSIX output, large and reproducible).
+
 ## Redirect URI
 
 The app listens on `http://127.0.0.1:<ephemeral>/callback`, which is why the
