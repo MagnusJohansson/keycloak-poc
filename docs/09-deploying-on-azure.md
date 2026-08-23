@@ -137,29 +137,30 @@ cd tests/e2e-playwright && npx playwright test
 
 ---
 
-## Step 4 — The container registry and API image
+## Step 4 — The registry and the API image
 
-The container app references an image that must already exist, so the registry is
-created first.
+The container app cannot be created before the image it runs exists, so this is
+two applies. The first creates everything *except* the app:
 
 ```bash
 cd infra/terraform/30-azure
 terraform init
-terraform apply -target=azurerm_container_registry.acr
+terraform apply            # no variables needed yet
 ```
 
-`-target` is normally a smell; a registry that must be populated before anything
-references it is the legitimate exception, and you do it once.
+> The container app is guarded by `count = var.container_image != null ? 1 : 0`,
+> which is why no `-target` is needed. `-target` would not have worked anyway:
+> Terraform still requires every variable when targeting.
+
+Then build and push. `az acr build` builds **in Azure**, so you need neither a
+local Docker daemon nor to cross-build `linux/amd64` from an Apple Silicon Mac:
 
 ```bash
 ACR=$(terraform output -raw acr_name)
 az acr build --registry "$ACR" --image docvault-api:1.0.0 ../../../apps/api-dotnet
 ```
 
-`az acr build` builds **in Azure** — no local Docker daemon, and no cross-building
-`linux/amd64` from an Apple Silicon Mac.
-
-## Step 5 — The applications
+## Step 5 — The API
 
 ```bash
 terraform apply \
@@ -171,8 +172,20 @@ terraform apply \
 
 ```bash
 API=$(terraform output -raw api_url)
-curl -s "$API/health"                              # {"status":"ok"}
+curl -s "$API/health"                                       # {"status":"ok"}
 curl -s -o /dev/null -w '%{http_code}\n' "$API/documents"   # 401 - deny by default
+```
+
+Then prove the whole chain — a token from Azure Keycloak, accepted by the
+Azure-deployed API:
+
+```bash
+ISS=$(terraform -chdir=../10-keycloak-azure output -raw issuer)
+SECRET=$(terraform -chdir=../20-realm output -raw worker_client_secret)
+TOK=$(curl -s -X POST "$ISS/protocol/openid-connect/token" \
+  -d client_id=docvault-worker -d "client_secret=$SECRET" \
+  -d grant_type=client_credentials | jq -r .access_token)
+curl -s -H "Authorization: Bearer $TOK" "$API/me" | jq '{username, roles, issuer}'
 ```
 
 ## Step 6 — Tell Keycloak about the deployed URLs
@@ -230,6 +243,9 @@ reserved for 7 days.
 | `terraform apply` wants to recreate the local realm | Wrong workspace | The make targets select `local`/`azure`; by hand, `terraform workspace select azure` |
 | HA fails at plan | Zone-redundant HA is unavailable on Burstable | Use a `GP_` SKU, or leave `postgres_zone_redundant = false` |
 | API 401s every request | Wrong `Keycloak__Authority`, or the audience mapper is missing | Compare `iss` in a real token against the API's configured authority |
+| Container app `ActivationFailed`, logs show *"RequireHttpsMetadata is false but the authority … is not loopback"* | The startup guard working as designed — `appsettings.json` ships `false` for the loopback default | The module sets `Keycloak__RequireHttpsMetadata=true`; if you deploy the image yourself, set it |
+| `LocationNotAvailableForResourceType … Microsoft.Web/staticSites` | Static Web Apps exist in only 5 regions | `static_web_app_location` defaults to `westeurope` and is separate from `location` |
+| `terraform apply -target=...` says *"No value for required variable"* | Terraform validates all variables even when targeting | Not needed here — the container app is `count`-guarded instead |
 
 More in [11. Troubleshooting](11-troubleshooting.md).
 

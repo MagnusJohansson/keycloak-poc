@@ -99,9 +99,24 @@ resource "azurerm_container_app_environment" "lab" {
   location                   = azurerm_resource_group.lab.location
   log_analytics_workspace_id = azurerm_log_analytics_workspace.lab.id
   tags                       = var.tags
+
+  lifecycle {
+    # Azure materialises the default "Consumption" workload profile server-side.
+    # Terraform did not declare it, so every plan would offer to delete it.
+    ignore_changes = [workload_profile]
+  }
 }
 
+# Created only once container_image is supplied.
+#
+# This is what removes the chicken-and-egg: the registry must exist and hold an
+# image before anything can reference it, so the first apply creates everything
+# EXCEPT this, you push, then a second apply adds it. No `-target` needed - and
+# `-target` would not have worked anyway, since Terraform still requires every
+# variable when targeting.
 resource "azurerm_container_app" "api" {
+  count = var.container_image != null ? 1 : 0
+
   name                         = "ca-docvault-api"
   resource_group_name          = azurerm_resource_group.lab.name
   container_app_environment_id = azurerm_container_app_environment.lab.id
@@ -148,6 +163,17 @@ resource "azurerm_container_app" "api" {
         name  = "Keycloak__Authority"
         value = var.keycloak_issuer
       }
+
+      # appsettings.json ships RequireHttpsMetadata = false, which is correct for
+      # the loopback default but must be overridden here. The API has a startup
+      # guard that REFUSES to run with a non-loopback authority over plain HTTP -
+      # so without this the container exits immediately with ActivationFailed.
+      # That is the guard working, not a bug: fetching signing keys unencrypted
+      # from a remote host would let an attacker mint valid tokens.
+      env {
+        name  = "Keycloak__RequireHttpsMetadata"
+        value = "true"
+      }
       env {
         name  = "Keycloak__Audience"
         value = "docvault-api"
@@ -172,22 +198,34 @@ resource "azurerm_container_app" "api" {
   # The pull grant must exist before the first revision starts, or it fails to
   # pull and the apply reports a confusing timeout instead of a permissions error.
   depends_on = [azurerm_role_assignment.api_acr_pull]
+
+  lifecycle {
+    # Azure sets this to "Consumption" itself; see the environment above.
+    ignore_changes = [workload_profile_name]
+
+    precondition {
+      condition     = var.keycloak_issuer != null
+      error_message = "keycloak_issuer must be set when container_image is. Without it the API has no authority to validate tokens against and fails at startup."
+    }
+  }
 }
 
 # --- The SPAs ---------------------------------------------------------------
 resource "azurerm_static_web_app" "react" {
   name                = "swa-docvault-react"
   resource_group_name = azurerm_resource_group.lab.name
-  location            = azurerm_resource_group.lab.location
-  sku_tier            = "Free"
-  sku_size            = "Free"
-  tags                = var.tags
+
+  # NOT azurerm_resource_group.lab.location - see the variable's comment.
+  location = var.static_web_app_location
+  sku_tier = "Free"
+  sku_size = "Free"
+  tags     = var.tags
 }
 
 resource "azurerm_static_web_app" "vue" {
   name                = "swa-docvault-vue"
   resource_group_name = azurerm_resource_group.lab.name
-  location            = azurerm_resource_group.lab.location
+  location            = var.static_web_app_location
   sku_tier            = "Free"
   sku_size            = "Free"
   tags                = var.tags

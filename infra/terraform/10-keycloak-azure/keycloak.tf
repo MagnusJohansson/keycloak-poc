@@ -21,6 +21,12 @@ resource "azurerm_container_app_environment" "kc" {
   infrastructure_subnet_id = azurerm_subnet.container_apps.id
 
   tags = var.tags
+
+  lifecycle {
+    # Azure materialises the default "Consumption" workload profile server-side.
+    # Terraform did not declare it, so every plan would offer to delete it.
+    ignore_changes = [workload_profile]
+  }
 }
 
 locals {
@@ -198,4 +204,9 @@ resource "azurerm_container_app" "keycloak" {
     azurerm_role_assignment.keycloak_kv_user,
     azurerm_postgresql_flexible_server_database.keycloak,
   ]
+
+  lifecycle {
+    # Azure sets this to "Consumption" itself; see the environment above.
+    ignore_changes = [workload_profile_name]
+  }
 }

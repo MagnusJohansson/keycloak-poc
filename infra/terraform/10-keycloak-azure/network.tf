@@ -52,6 +52,13 @@ resource "azurerm_subnet" "postgres" {
       actions = ["Microsoft.Network/virtualNetworks/subnets/join/action"]
     }
   }
+
+  lifecycle {
+    # Azure adds Microsoft.Storage to a Postgres-delegated subnet by itself.
+    # Without this every subsequent plan proposes removing it - a perpetual diff
+    # that trains people to ignore `terraform plan` output.
+    ignore_changes = [service_endpoints]
+  }
 }
 
 # Resolves the server's FQDN to its private address inside the VNet. Without

@@ -9,7 +9,7 @@ output "acr_name" {
 
 output "api_url" {
   description = "Feed into the SPAs' VITE_API_BASE_URL, and into 20-realm's api_origin."
-  value       = "https://${azurerm_container_app.api.ingress[0].fqdn}"
+  value       = try("https://${azurerm_container_app.api[0].ingress[0].fqdn}", null)
 }
 
 output "react_url" {

@@ -120,6 +120,20 @@ Every one of these cost real debugging time and is now load-bearing. Do not "sim
 - Anything reading `terraform output` (`show-secrets`, `azure-secrets`) is workspace-sensitive too.
 - Never add a target that touches `$(REALM_DIR)` without a `$(WS_LOCAL)` or `$(WS_AZURE)` first.
 
+**Deploying to Azure — found by actually applying it:**
+
+- The API's startup guard refuses a non-loopback authority over plain HTTP, so `30-azure` MUST set
+  `Keycloak__RequireHttpsMetadata=true`. `appsettings.json` ships `false` for the loopback default;
+  without the override the container exits with `ActivationFailed`.
+- **Static Web Apps exist in only 5 regions** (`centralus`, `eastus2`, `westus2`, `westeurope`,
+  `eastasia`). Hence `static_web_app_location`, separate from `location`.
+- Azure server-side-adds three things Terraform would otherwise delete every plan:
+  `service_endpoints` on the Postgres-delegated subnet, and the `Consumption` workload profile on
+  both container apps and their environments. All are `ignore_changes`.
+- The container app is `count`-guarded on `container_image` so the registry can be created and
+  populated first. `-target` does **not** solve this — Terraform still requires every variable
+  when targeting.
+
 **Keycloak on Azure (`10-keycloak-azure`):**
 
 - Postgres HA is **unavailable on the Burstable tier**; a `precondition` catches the bad
@@ -191,7 +205,12 @@ public FQDN as `iss` (so `KC_HOSTNAME` + `KC_PROXY_HEADERS` are right), `acr_val
 includes `silver`, and a `client_credentials` token carries `aud: docvault-api` plus the
 service-account role. Both environments re-plan clean.
 
-**Not executed:** `30-azure` — still only validated and planned, never applied. uc2 (Entra SSO) is documented from real schemas but unrun. OTP
+**`30-azure` has also been applied for real.** The API runs on Container Apps, pulling from an
+ACR via managed identity (AcrPull, no registry password), and accepts tokens issued by the Azure
+Keycloak. Both Azure modules and the realm re-plan clean.
+
+**Not executed:** the Static Web Apps are provisioned but empty — Terraform does not upload SPA
+content, so no browser client has been served from Azure. uc2 (Entra SSO) is documented from real schemas but unrun. OTP
 *enrolment* is not automated; the e2e test asserts the challenge is issued, which is the part that
 regresses silently.
 
