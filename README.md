@@ -5,10 +5,13 @@ open-source identity and access management server. It covers running Keycloak,
 configuring a realm as code, deploying to Azure, and integrating it with web,
 mobile, desktop and backend clients.
 
-**The whole lab runs locally, for free.** The realm is defined once in Terraform
-and applied unchanged to either a local Docker Keycloak or an Azure deployment —
-so the free local lab is a faithful rehearsal for the cloud one, not a
-simplified toy.
+**The local lab runs on your machine, for free** — Docker, .NET and Node, no cloud
+account. The realm is defined once in Terraform and applied unchanged to either
+that local Keycloak or an Azure deployment, so the free local lab is a faithful
+rehearsal for the cloud one rather than a simplified toy.
+
+Deploying to Azure is optional and does need a subscription; it costs roughly
+$40/month while it is running, and `make azure-destroy` removes all of it.
 
 
 ```mermaid
@@ -82,8 +85,10 @@ Only for the parts you actually try:
 > untested. If `dotnet build` alone fails, install Visual Studio 2022 with the
 > **Windows application development** workload, which is the documented path.
 
-Nothing here needs a paid account. Docker, .NET, Node and Terraform are enough
-for the entire lab, including the full test suite.
+Docker, .NET, Node and Terraform are enough for the local lab and the full test
+suite — no account, paid or otherwise. Only the optional Azure deployment
+(Steps 1–6 of the [deployment guide](docs/09-deploying-on-azure.md)) needs a
+subscription.
 
 ## Quickstart
 
