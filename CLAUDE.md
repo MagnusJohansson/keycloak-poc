@@ -243,6 +243,13 @@ Every one of these cost real debugging time and is now load-bearing. Do not "sim
   combination for non-loopback authorities.
 - React: redirect off `/callback` via `<Navigate>`; `history.replaceState` does not notify React
   Router, which parks the user on "Completing sign in…" forever.
+- **`oidcConfig.ts` throws during module evaluation**, before `createRoot().render()`, so React
+  never mounts and an `<ErrorBoundary>` cannot help — the page is simply blank and the reason
+  reaches only the console. `index.html` carries a classic-script `error`/`unhandledrejection`
+  listener that paints the message into `#root`. It is deliberately scoped to **boot**
+  (`root.childElementCount > 0` → bail): a later silent-renew rejection must not wipe a running
+  app. Styles there are inline because `index.css` is imported by `main.tsx` and is never
+  reached on that path.
 - Docker Hub rate-limits anonymous pulls (429). Image refs default to quay.io and a GCR mirror,
   overridable via `POSTGRES_IMAGE` / `KEYCLOAK_IMAGE` / `MAILPIT_IMAGE`.
 - **Vite reads `.env` only at startup**, and the dev server uses `strictPort`. A stale process

@@ -4,7 +4,80 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>web-react</title>
+    <title>DocVault</title>
+    <script>
+      /*
+        Renders start-up failures into the page instead of leaving it blank.
+
+        src/auth/oidcConfig.ts throws while the module graph is being EVALUATED -
+        main.tsx imports it before createRoot().render() ever runs. React never
+        mounts, so an <ErrorBoundary> cannot help: there is no tree to catch in.
+        Without this, a missing or malformed .env is a white page whose only
+        explanation is in the browser console.
+
+        This must be a classic script in <head> so the listeners are registered
+        before the module script is evaluated. Styles are inline because
+        index.css is imported by main.tsx too, and on this failure path that
+        import is never reached.
+      */
+      (function () {
+        var shown = false;
+
+        function render(message) {
+          if (shown) return;
+          var root = document.getElementById('root');
+          if (!root) return;
+
+          // BOOT failures only. Once React has mounted, #root has children, and a
+          // later rejection - oidc-client-ts silent renew is the likely one - must
+          // NOT blow the running app away and replace it with this panel.
+          if (root.childElementCount > 0) return;
+
+          shown = true;
+
+          root.setAttribute(
+            'style',
+            'margin:3rem auto;max-width:44rem;padding:1.5rem;' +
+              'font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;' +
+              'background:#171a21;color:#e6e8ec;border:1px solid #e5534b;border-radius:8px',
+          );
+
+          var h = document.createElement('h1');
+          h.textContent = 'DocVault failed to start';
+          h.setAttribute('style', 'margin:0 0 .75rem;font-size:1.25rem;color:#e5534b');
+
+          // textContent, not innerHTML: the message is untrusted input.
+          var pre = document.createElement('pre');
+          pre.textContent = message;
+          pre.setAttribute(
+            'style',
+            'white-space:pre-wrap;word-break:break-word;margin:0 0 1rem;' +
+              'padding:.75rem;background:#0f1115;border-radius:6px;font-size:.85rem',
+          );
+
+          var hint = document.createElement('p');
+          hint.setAttribute('style', 'margin:0;color:#949aa6;font-size:.9rem;line-height:1.5');
+          hint.textContent =
+            'If that mentions VITE_, this app has no configuration. Copy ' +
+            'apps/web-react/.env.example to apps/web-react/.env, or run `make web`, ' +
+            'which creates it for you. Changing .env needs a dev-server restart.';
+
+          root.replaceChildren(h, pre, hint);
+        }
+
+        // Module evaluation errors surface as a window 'error' event.
+        window.addEventListener('error', function (e) {
+          render((e.error && e.error.message) || e.message || String(e));
+          // Not prevented: the console should still get the full stack.
+        });
+
+        // Dynamic imports and async start-up reject rather than throw.
+        window.addEventListener('unhandledrejection', function (e) {
+          var r = e.reason;
+          render((r && r.message) || String(r));
+        });
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
