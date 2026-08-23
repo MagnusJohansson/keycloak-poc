@@ -8,8 +8,8 @@ A runnable proof-of-concept lab for **[Keycloak](https://www.keycloak.org/)**, t
 identity and access management server — OIDC, OAuth 2.0, SAML, MFA, RBAC, federation, audit.
 
 > This repo briefly targeted *Skycloak*, a managed-Keycloak SaaS, before being refocused on
-> open-source Keycloak. Every vendor reference was removed, so any `skycloak`/`skyvault`
-> identifier you find is a leftover and should be cleaned.
+> open-source Keycloak. The rename is complete — no `skycloak`/`skyvault` identifiers remain
+> outside this note. Treat any that reappear as a mistake.
 
 ## Commands
 
@@ -18,7 +18,7 @@ make up          # Keycloak + Postgres + Mailpit (~30s, waits for readiness)
 make seed        # apply the DocVault realm via Terraform, then print secrets
 make api         # .NET 10 API on :5001
 make web         # React SPA on :5173      (separate shell)
-make test        # 27 .NET tests - no Docker, no network, no cloud account
+make test        # 72 .NET tests (27 API + 45 desktop-auth) - no Docker, network or cloud
 make e2e         # 7 Playwright tests - REQUIRES up + seed + api + web running
 make plan        # realm diff; should be EMPTY on an unchanged realm
 make token       # mint a real token and decode its claims
@@ -32,13 +32,17 @@ make down        # stop (keeps data)   /   make clean = also wipe volume + tfsta
 ```bash
 dotnet test apps/api-dotnet/DocVault.slnx --filter "FullyQualifiedName~Rejects_an_expired_token"
 cd tests/e2e-playwright && npx playwright test --grep "tenant isolation"
-cd apps/mobile-flutter && flutter test
+cd apps/mobile-flutter && flutter test --dart-define-from-file=config/local.json
 ```
 
-The solution is `DocVault.slnx` (new format) — there is no `.sln`.
+There are **two** solutions, both `.slnx` (new format) — there is no `.sln`:
+`apps/api-dotnet/DocVault.slnx` and `apps/desktop-winui/DocVault.Desktop.slnx`. See the WinUI
+traps for why they must stay separate.
 
-**Terraform is not on PATH on this machine.** The Makefile assumes it is. Either install it or run
-the binary directly; every module needs `terraform init -backend=false` before `validate`.
+Terraform is on PATH (v1.15.8, Homebrew). Every module needs `terraform init -backend=false`
+before `validate`.
+
+**Mobile:** `make android-reverse` before running the Flutter app on Android — see the issuer trap.
 
 ## Architecture
 
@@ -110,6 +114,10 @@ Every one of these cost real debugging time and is now load-bearing. Do not "sim
 - Keycloak generates `pairwiseSubAlgorithmSalt` itself → perpetual drift without `ignore_changes`.
   Never hardcode that salt.
 - Keycloak *fetches* `sectorIdentifierUri` at mapper-creation time (chicken-and-egg with the API).
+- SPA origins in `20-realm` are **lists** (`web_react_origins`, `web_vue_origins`) so a realm can
+  trust the deployed site AND localhost. `api_origin` is deliberately **singular**: the analytics
+  client carries a pairwise `sub`, and Keycloak rejects such a client with redirect URIs spanning
+  multiple hosts unless a Sector Identifier URI is set. Do not "make it consistent".
 
 **One module, two environments (`20-realm`):**
 
@@ -161,7 +169,7 @@ Every one of these cost real debugging time and is now load-bearing. Do not "sim
 - `start`, never `start-dev`: dev mode disables hostname and HTTPS checks and will run happily in
   production while silently weakening both.
 
-**WinUI 3 desktop (`apps/desktop-winui`):**
+**Desktop clients (`apps/desktop-winui`, `apps/desktop-electron`):**
 
 - Configuration is `DocVault.WinUI/appsettings.json` (copied next to the exe), overridable with
   `DOCVAULT_`-prefixed environment variables. The file is primary because a GUI app launched from
@@ -170,7 +178,6 @@ Every one of these cost real debugging time and is now load-bearing. Do not "sim
 - `Uri.TryCreate(x, UriKind.Absolute)` returns true for `localhost:8080/...`, parsing `localhost`
   as the scheme. `DesktopSettings.Validate` therefore also checks the scheme is http/https — do
   not "simplify" that away.
-
 - The OIDC logic is a plain `net10.0` library (`DocVault.Desktop.Auth`) *on purpose* — WinUI XAML
   compiles only on Windows, so keeping the logic out of the shell is what makes it testable on
   Linux/macOS and in the normal CI job. Do not move logic into the XAML code-behind.
@@ -187,17 +194,6 @@ Every one of these cost real debugging time and is now load-bearing. Do not "sim
 - `LoginRequest.FrontChannelExtraParameters` is the real API for `acr_values`/`prompt` (not a
   `FrontChannel.Extra` property, which does not exist in 7.x).
 - Unpackaged (`WindowsPackageType=None`), so `PasswordVault` is unavailable — tokens use DPAPI.
-
-- **AppAuth's activities must share MainActivity's `taskAffinity`.** Flutter's template sets
-  `taskAffinity=""` on MainActivity; AppAuth's inherit the package affinity, land in another task,
-  and the `singleTask` AuthorizationManagementActivity is recreated rather than resumed - so
-  sign-in hangs forever with only `W/AppAuth: No stored state` in logcat. The manifest overrides
-  both to `""`. Do not remove those overrides.
-- **Each mobile app has its own client AND its own URI scheme** (`docvault-flutter` /
-  `io.docvault.flutter://`, `docvault-reactnative` / `io.docvault.rn://`). A custom scheme is
-  claimed OS-wide, so two apps sharing one is ambiguous — Android resolves it
-  non-deterministically, iOS favours the last installed — and a redirect can reach the wrong app.
-  Do not re-merge them.
 - **Keycloak wildcards only work at the END of a redirect URI.** `http://127.0.0.1:*/callback` is
   matched literally and every authorization request fails with `invalid_request`. Both desktop
   clients register `http://127.0.0.1/*`, which works because Keycloak ignores the port for a
@@ -209,10 +205,29 @@ Every one of these cost real debugging time and is now load-bearing. Do not "sim
 - Desktop logging (`DesktopLogging`) writes to file + Debug + Console, and OidcClient's own
   diagnostics are routed into it, so the log contains the full authorize URL.
 
-- SPA origins in `20-realm` are **lists** (`web_react_origins`, `web_vue_origins`) so a realm can
-  trust the deployed site AND localhost. `api_origin` is deliberately **singular**: the analytics
-  client carries a pairwise `sub`, and Keycloak rejects such a client with redirect URIs spanning
-  multiple hosts unless a Sector Identifier URI is set. Do not "make it consistent".
+**Mobile clients (`apps/mobile-flutter`, `apps/mobile-react-native`):**
+
+- **Do NOT set `android:taskAffinity=""` on MainActivity.** An empty affinity means "no affinity to
+  *any* task", **not** "shared affinity" — so each activity starts its own task. Flutter's template
+  ships it; with it, AppAuth's `RedirectUriReceiverActivity` and the `singleTask`
+  `AuthorizationManagementActivity` land in separate tasks, the latter is recreated rather than
+  resumed, and sign-in hangs forever with only `W/AppAuth: No stored state` in logcat.
+  The fix is to **remove** the attribute so all three share the default package affinity.
+  Confirmed with `dumpsys activity activities`: tasks #58/#59/#60 before, one task after.
+  (An earlier fix here set `""` on AppAuth's activities *too*, which by the same logic guaranteed
+  the split — the manifest comment records this so it is not reintroduced.)
+- **`flutter_appauth` rejects plain HTTP itself**, before Android's cleartext policy or iOS ATS is
+  ever consulted: `java.lang.IllegalArgumentException: only https connections are permitted`. The
+  network-security-config and `NSExceptionDomains` entries are necessary but **not sufficient**.
+  `allowInsecureConnections` is derived from whether the issuer is `http` — never hardcode it true.
+- **Each mobile app has its own client AND its own URI scheme** (`docvault-flutter` /
+  `io.docvault.flutter://`, `docvault-reactnative` / `io.docvault.rn://`). A custom scheme is
+  claimed OS-wide, so two apps sharing one is ambiguous — Android resolves it
+  non-deterministically, iOS favours the last installed — and a redirect can reach the wrong app.
+  Do not re-merge them.
+- Flutter config is **compile-time** (`String.fromEnvironment` resolves at build), so changing a
+  value needs a rebuild, not a hot restart. One `config/local.json` serves simulator *and* emulator
+  — see the issuer trap for why there is no `local-ios.json`.
 
 **Runtime:**
 
@@ -227,6 +242,9 @@ Every one of these cost real debugging time and is now load-bearing. Do not "sim
   Router, which parks the user on "Completing sign in…" forever.
 - Docker Hub rate-limits anonymous pulls (429). Image refs default to quay.io and a GCR mirror,
   overridable via `POSTGRES_IMAGE` / `KEYCLOAK_IMAGE` / `MAILPIT_IMAGE`.
+- **Vite reads `.env` only at startup**, and the dev server uses `strictPort`. A stale process
+  therefore keeps serving the old values and makes a config change look like it did nothing —
+  kill and restart rather than assuming the edit was wrong. This has burned time twice.
 - **The issuer is derived from the request host.** `KC_HOSTNAME` is unset in the lab, so the same
   realm mints `iss: http://10.0.2.2:8080/...` when reached at `10.0.2.2` and `http://localhost:8080/...`
   when reached at `localhost`. An API trusts exactly one. Two consequences:
@@ -257,8 +275,8 @@ Every one of these cost real debugging time and is now load-bearing. Do not "sim
 
 Proven against real software: 71 Terraform resources applied to Keycloak 26.6.3 with a clean
 re-plan; 27 API + 45 desktop-auth .NET tests (including forged `alg:none`, wrong-key,
-wrong-audience, wrong-realm and expired tokens); 7 Playwright tests in a real browser; React/Vue
-build; Flutter analyzes clean.
+wrong-audience, wrong-realm and expired tokens); 7 Playwright tests in a real browser; 7 Flutter
+tests; React/Vue build; Flutter analyzes clean.
 
 **`10-keycloak-azure` has been applied for real** (Azure, swedencentral) and works: Keycloak came
 up on Container Apps behind HTTPS, `20-realm` applied all 71 resources to it, discovery returns the
@@ -270,6 +288,9 @@ service-account role. Both environments re-plan clean.
 ACR via managed identity (AcrPull, no registry password), and accepts tokens issued by the Azure
 Keycloak. Both Azure modules and the realm re-plan clean.
 
+**Not verified:** the Flutter client against *Azure* (only the local lab was driven on the
+emulator), and the iOS simulator path at all. React Native ships an auth module, not a runnable app.
+
 **Not executed:** the Static Web Apps are provisioned but empty — Terraform does not upload SPA
 content, so no browser client has been served from Azure. uc2 (Entra SSO) is documented from real schemas but unrun. OTP
 *enrolment* is not automated; the e2e test asserts the challenge is issued, which is the part that
@@ -280,6 +301,18 @@ through the system browser, a token with `iss` = the Azure issuer, `azp` = `docv
 `aud` = `docvault-api`, `resource_access` roles intact, and a tenant-scoped document list returned
 by the API. It still cannot be compiled or run on this machine (macOS); the `windows-latest` CI
 job compiles it, and the user verified the runtime behaviour.
+
+**The Flutter client has been run end-to-end on an Android emulator against the local lab** —
+driven through `adb` (`input tap`/`input text`, `screencap`, `dumpsys activity activities`) rather
+than assumed. Signed in as `alice`, token carried `iss = http://localhost:8080/realms/docvault`,
+`aud: [docvault-api, account]`, `azp = docvault-flutter`, roles intact, documents rendered, and
+**zero** JWT validation failures in the API log. This is what caught both Android traps above; each
+earlier attempt to fix them by reasoning from the manifest alone was wrong.
+
+**React has been verified against the full Azure stack** (Azure Keycloak *and* Azure API) with an
+ad-hoc Playwright run asserting the `/documents` call returns 200 from `ca-docvault-api` and never
+touches `localhost:5001` — the assertion matters, because a passing "documents loaded" check alone
+does not prove *which* API served them.
 
 **The Electron client has also been run end-to-end against Azure** — `azp = docvault-desktop`,
 `groups = ["/acme/engineering"]`, tenant-scoped documents returned. Both desktop clients are
