@@ -89,6 +89,42 @@ DOCVAULT_ISSUER=http://localhost:8080/realms/docvault npm start
 - **Keep the CSP.** `index.html` sets `default-src 'self'`; no remote content, no
   inline eval.
 
+### Configuring the Electron client
+
+Settings live in **`apps/desktop-electron/config.json`**:
+
+```jsonc
+{
+  "issuer":     "http://localhost:8080/realms/docvault",   // must include /realms/<realm>
+  "apiBaseUrl": "http://localhost:5001",
+  "clientId":   "docvault-desktop",
+  "stepUpAcr":  "silver"
+}
+```
+
+Overridable with `DOCVAULT_ISSUER`, `DOCVAULT_API_URL`, `DOCVAULT_CLIENT_ID`.
+
+> **It cannot share the React app's `.env`**, for three reasons: Vite only exposes
+> `VITE_`-prefixed variables to the browser bundle and Electron's main process
+> never reads `.env` at all; the names differ; and the two use **different
+> Keycloak clients** (`docvault-desktop` vs `docvault-web-react`), so a shared
+> `clientId` would be wrong for one of them.
+>
+> Separate clients is deliberate — it is what lets you revoke, scope and audit the
+> desktop app independently of the SPA.
+
+To point it at Azure, edit `config.json` or:
+
+```bash
+DOCVAULT_ISSUER="https://<your-keycloak>/realms/docvault" \
+DOCVAULT_API_URL="https://<your-api>" \
+  npm start
+```
+
+Settings are validated at startup, so a missing scheme or an issuer pointing at
+the host root fails immediately rather than as an opaque browser error. The app
+logs issuer, clientId, apiBaseUrl and the full authorize URL to the terminal.
+
 ## WinUI 3 / .NET 10
 
 **Yes, WinUI 3 works with Keycloak** — it is an ordinary OAuth 2.0 public client.

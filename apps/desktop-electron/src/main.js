@@ -19,9 +19,18 @@ const crypto = require('node:crypto');
  *     cannot exfiltrate credentials.
  */
 
-const ISSUER = process.env.DOCVAULT_ISSUER ?? 'http://localhost:8080/realms/docvault';
-const CLIENT_ID = process.env.DOCVAULT_CLIENT_ID ?? 'docvault-desktop';
-const API_BASE_URL = process.env.DOCVAULT_API_URL ?? 'http://localhost:5001';
+// config.json beside the app, overridable with DOCVAULT_* environment variables.
+// See src/config.js - and note this app cannot share the React app's .env.
+const { loadConfig } = require('./config');
+
+const config = loadConfig();
+const { issuer: ISSUER, clientId: CLIENT_ID, apiBaseUrl: API_BASE_URL, scope: SCOPE } = config;
+
+// The three values behind almost every sign-in failure, logged before anything is
+// attempted. Visible in the terminal you launched from, and in the packaged app's log.
+console.log(`[docvault] issuer      ${ISSUER}`);
+console.log(`[docvault] clientId    ${CLIENT_ID}`);
+console.log(`[docvault] apiBaseUrl  ${API_BASE_URL}`);
 
 /** Held in main-process memory only. Never sent to the renderer. */
 let tokens = null;
@@ -114,7 +123,7 @@ async function authenticate(acrValues) {
       authUrl.searchParams.set('client_id', CLIENT_ID);
       authUrl.searchParams.set('response_type', 'code');
       authUrl.searchParams.set('redirect_uri', redirectUri);
-      authUrl.searchParams.set('scope', 'openid profile email');
+      authUrl.searchParams.set('scope', SCOPE);
       authUrl.searchParams.set('state', state);
       authUrl.searchParams.set('code_challenge', challenge);
       authUrl.searchParams.set('code_challenge_method', 'S256');
@@ -123,6 +132,10 @@ async function authenticate(acrValues) {
         authUrl.searchParams.set('acr_values', acrValues);
         authUrl.searchParams.set('prompt', 'login');
       }
+
+      // Paste this into a browser and the provider will say what it objects to.
+      console.log(`[docvault] opening system browser: ${authUrl}`);
+      console.log(`[docvault] listening on ${redirectUri}`);
 
       // The system browser, not a BrowserWindow. This is the whole point.
       shell.openExternal(authUrl.toString());
@@ -145,7 +158,7 @@ ipcMain.handle('auth:signIn', async () => {
 });
 
 ipcMain.handle('auth:stepUp', async () => {
-  await authenticate('silver');
+  await authenticate(config.stepUpAcr);
   return decodeClaims(tokens.access_token);
 });
 

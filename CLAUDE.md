@@ -192,6 +192,10 @@ Every one of these cost real debugging time and is now load-bearing. Do not "sim
   matched literally and every authorization request fails with `invalid_request`. Both desktop
   clients register `http://127.0.0.1/*`, which works because Keycloak ignores the port for a
   loopback host (RFC 8252). Verified empirically against a real Keycloak — do not "tidy" it back.
+- Both desktop clients configure from a **file** (`config.json` for Electron,
+  `appsettings.json` for WinUI) with `DOCVAULT_*` env overrides. They cannot share the React
+  app's `.env`: Vite only exposes `VITE_*`, Electron never reads `.env`, and they use different
+  Keycloak clients.
 - Desktop logging (`DesktopLogging`) writes to file + Debug + Console, and OidcClient's own
   diagnostics are routed into it, so the log contains the full authorize URL.
 
