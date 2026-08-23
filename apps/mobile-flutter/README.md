@@ -18,9 +18,11 @@ flutter run --dart-define-from-file=config/azure.json
 
 | File | For |
 |---|---|
-| `config/local.json` | Android emulator → local lab (`10.0.2.2`) |
-| `config/local-ios.json` | iOS simulator → local lab (`localhost`) |
+| `config/local.json` | the local lab, from **either** simulator or emulator |
 | `config/azure.json.example` | copy to `config/azure.json` and fill in your URLs |
+
+There is deliberately only one local file. See below for why Android does not get
+its own.
 
 **Changing a value requires a rebuild**, not just a restart.
 
@@ -31,19 +33,49 @@ flutter run --dart-define-from-file=config/local.json \
             --dart-define=CLIENT_ID=some-other-client
 ```
 
-## Which host address?
+## Which host address? — and why Android needs `adb reverse`
 
-The lab runs on your machine, which is not `localhost` from inside a device:
+The lab runs on your machine, which is not `localhost` from inside a device. The
+obvious fix is the emulator's host alias, `10.0.2.2`. **Do not use it here.**
+
+Keycloak derives the `iss` claim from the host in the request, and it is not
+configured with a fixed hostname in this lab:
+
+```console
+$ curl -s localhost:8080/realms/docvault/.well-known/openid-configuration | jq -r .issuer
+http://localhost:8080/realms/docvault
+
+$ curl -s -H 'Host: 10.0.2.2:8080' localhost:8080/.../openid-configuration | jq -r .issuer
+http://10.0.2.2:8080/realms/docvault
+```
+
+An API validates against exactly **one** issuer. Sign in via `10.0.2.2` and you get
+a perfectly valid token that the API rejects — sign-in succeeds, then every call
+returns 401. The API log says:
+
+```
+IDX10205: Issuer validation failed.
+Issuer: 'http://10.0.2.2:8080/realms/docvault'.
+Did not match: validationParameters.ValidIssuer: 'http://localhost:8080/realms/docvault'
+```
+
+The fix is to give the device the *same* name rather than to widen what the API
+trusts — forward the device's own `localhost` to the host machine:
+
+```bash
+make android-reverse     # adb reverse tcp:8080 tcp:8080 && adb reverse tcp:5001 tcp:5001
+```
+
+Now every target uses one address:
 
 | Target | Use |
 |---|---|
-| Android emulator | `http://10.0.2.2:8080` — the emulator's alias for the host |
-| iOS simulator | `http://localhost:8080` — the simulator shares the host network |
-| Physical device | `http://<your-LAN-ip>:8080`, on the same network |
-| Azure | the HTTPS URL — works identically from all three |
+| iOS simulator | `http://localhost:8080` — shares the host network |
+| Android emulator/device | `http://localhost:8080`, after `make android-reverse` |
+| Azure | the HTTPS URL — works everywhere, no forwarding |
 
-`localhost` inside an Android emulator is the emulator itself. That is the usual
-reason the app "cannot reach Keycloak".
+> `adb reverse` is cleared when the emulator or the adb server restarts, so re-run it
+> after either. The VS Code launch config does this automatically on every F5.
 
 > **Testing against Azure is simpler than against the local lab**: one HTTPS URL
 > that works from every device, and no cleartext-HTTP exceptions needed.
@@ -68,10 +100,11 @@ That file is gitignored so your deployment URLs are not committed.
 ```bash
 # iOS simulator, local lab
 open -a Simulator
-flutter run --dart-define-from-file=config/local-ios.json
+flutter run --dart-define-from-file=config/local.json
 
-# Android emulator, local lab
+# Android emulator, local lab - note the reverse tunnels
 flutter emulators --launch Pixel_10
+make -C ../.. android-reverse
 flutter run --dart-define-from-file=config/local.json
 
 # either, against Azure

@@ -159,3 +159,13 @@ azure-destroy: ## Tear down the Azure Keycloak deployment
 .PHONY: apps-plan
 apps-plan: ## Plan the Azure resources that host your apps (30-azure)
 	cd $(APPS_AZURE_DIR) && $(TF) init && $(TF) plan
+
+.PHONY: android-reverse
+android-reverse: ## Map localhost on a connected Android device/emulator to this machine
+	@# Keycloak derives `iss` from the request host, and the API trusts exactly one
+	@# issuer. Reaching Keycloak as 10.0.2.2 therefore mints tokens the API rejects
+	@# with IDX10205. Forwarding the device's own localhost keeps the issuer identical.
+	@# adb clears these when the emulator or the adb server restarts.
+	adb reverse tcp:8080 tcp:8080
+	adb reverse tcp:5001 tcp:5001
+	@adb reverse --list

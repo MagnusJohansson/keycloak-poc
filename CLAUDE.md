@@ -227,6 +227,17 @@ Every one of these cost real debugging time and is now load-bearing. Do not "sim
   Router, which parks the user on "Completing sign in…" forever.
 - Docker Hub rate-limits anonymous pulls (429). Image refs default to quay.io and a GCR mirror,
   overridable via `POSTGRES_IMAGE` / `KEYCLOAK_IMAGE` / `MAILPIT_IMAGE`.
+- **The issuer is derived from the request host.** `KC_HOSTNAME` is unset in the lab, so the same
+  realm mints `iss: http://10.0.2.2:8080/...` when reached at `10.0.2.2` and `http://localhost:8080/...`
+  when reached at `localhost`. An API trusts exactly one. Two consequences:
+  - Android must use `make android-reverse` (forwards the device's own localhost to the host)
+    rather than the `10.0.2.2` alias. `config/local.json` is shared with iOS for this reason;
+    there is no `local-ios.json`.
+  - A client's authority and its API base URL **must move to Azure together**. Half-migrating is
+    the single easiest mistake here, because sign-in still succeeds — Keycloak does not know
+    which API you will call — so it only surfaces as a bare 401 at the first request.
+
+  Both fail with `IDX10205`. Fix by matching the issuer, never by adding valid issuers.
 
 ## Conventions
 

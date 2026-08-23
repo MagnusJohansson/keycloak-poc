@@ -16,14 +16,20 @@
       "request": "launch",
       "program": "${workspaceFolder}/apps/mobile-flutter/lib/main.dart",
       "cwd": "${workspaceFolder}/apps/mobile-flutter",
-      "toolArgs": ["--dart-define-from-file", "config/local-ios.json"]
+      "toolArgs": ["--dart-define-from-file", "config/local.json"]
     },
     {
-      // 10.0.2.2 is the emulator's alias for the host machine; localhost inside
-      // an emulator is the emulator itself.
+      // Uses the SAME config as iOS, deliberately. The tempting alternative -
+      // pointing the emulator at 10.0.2.2 (its alias for the host) - changes the
+      // issuer, because Keycloak derives `iss` from the request host. The API
+      // trusts exactly one issuer, so 10.0.2.2 tokens 401 with IDX10205.
+      //
+      // preLaunchTask maps localhost ON THE DEVICE to the host machine instead, so
+      // the emulator sees the identical issuer the API validates.
       "name": "Flutter — local lab (Android emulator)",
       "type": "dart",
       "request": "launch",
+      "preLaunchTask": "android: adb reverse (localhost -> host)",
       "program": "${workspaceFolder}/apps/mobile-flutter/lib/main.dart",
       "cwd": "${workspaceFolder}/apps/mobile-flutter",
       "toolArgs": ["--dart-define-from-file", "config/local.json"]

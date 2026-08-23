@@ -16,6 +16,17 @@
       "problemMatcher": "$msCompile"
     },
     {
+      // Forwards two host ports onto the DEVICE's own localhost, so the emulator
+      // reaches Keycloak and the API at the same names the API validates tokens
+      // against. Cleared whenever the emulator or the adb server restarts, which
+      // is why it runs before every launch rather than once during setup.
+      "label": "android: adb reverse (localhost -> host)",
+      "type": "shell",
+      "command": "adb reverse tcp:8080 tcp:8080 && adb reverse tcp:5001 tcp:5001 && adb reverse --list",
+      "problemMatcher": [],
+      "presentation": { "reveal": "silent", "panel": "shared" }
+    },
+    {
       // The lab has to be up and seeded before any client can sign in.
       "label": "lab: up + seed",
       "type": "shell",

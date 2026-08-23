@@ -255,6 +255,37 @@ TOK=$(curl -s -X POST "$ISS/protocol/openid-connect/token" \
 curl -s -H "Authorization: Bearer $TOK" "$API/me" | jq '{username, roles, issuer}'
 ```
 
+### Repoint your front ends at the deployed API
+
+There are now **two** APIs: the one from Step 3 on `localhost:5001` and this one.
+Whichever a client calls must trust the same issuer the client signed in against.
+
+```bash
+# apps/web-react/.env  - move BOTH values together
+VITE_OIDC_AUTHORITY=$ISS
+VITE_API_BASE_URL=$API
+```
+
+Vite reads `.env` only at **startup**, so restart the dev server; with `strictPort`
+a stale process will otherwise keep serving the old value and look like the change
+did nothing.
+
+The deployed API already allows `http://localhost:5173` and `:5174` in CORS, so the
+local dev servers work against it unchanged.
+
+> **Mixing the two is the most common thing to get wrong here**, because sign-in
+> still succeeds — Keycloak neither knows nor cares which API you call. The break
+> shows up only at the first API call, as a bare 401. Confirm it from the API log:
+>
+> ```
+> IDX10205: Issuer validation failed.
+> Issuer: 'https://ca-keycloak.../realms/docvault'.
+> Did not match: validationParameters.ValidIssuer: 'http://localhost:8080/realms/docvault'
+> ```
+>
+> The same applies to every other client: `config/azure.json` (Flutter),
+> `.env` (Electron), `appsettings.json` (WinUI).
+
 ## Step 6 — Tell Keycloak about the deployed URLs
 
 The realm still trusts `localhost`. Point it at the real hostnames:

@@ -17,6 +17,36 @@ make token          # decode a real token: aud, resource_access, exp, acr
 | 401 on **every** request, including valid ones | `Authority` unreachable, so JWKS never loads | `curl $AUTHORITY/.well-known/openid-configuration` |
 | `The MetadataAddress or Authority must use HTTPS` | Not in Development, `RequireHttpsMetadata` defaulted to true | Set `Keycloak:RequireHttpsMetadata=false` — only valid for a loopback authority |
 
+### `IDX10205` in practice — sign-in works, then everything 401s
+
+The giveaway is that **login succeeds**. Keycloak neither knows nor cares which API
+you go on to call, so an issuer mismatch cannot surface until the first API request.
+Two ways to get there, both seen in this lab:
+
+**1. Client on Azure, API on localhost (or the reverse).** Moving
+`VITE_OIDC_AUTHORITY` to the cloud without moving `VITE_API_BASE_URL` leaves an
+Azure-issued token being presented to an API that trusts local Keycloak.
+
+```
+Issuer: 'https://ca-keycloak.../realms/docvault'
+Did not match: validationParameters.ValidIssuer: 'http://localhost:8080/realms/docvault'
+```
+
+Fix: move both, and restart the dev server — Vite reads `.env` only at startup.
+
+**2. An Android emulator reaching the lab via `10.0.2.2`.** Keycloak derives `iss`
+from the **request host** and has no fixed hostname configured here, so the same
+realm mints a different issuer depending on how you reached it:
+
+```console
+$ curl -s -H 'Host: 10.0.2.2:8080' localhost:8080/realms/docvault/.well-known/openid-configuration | jq -r .issuer
+http://10.0.2.2:8080/realms/docvault
+```
+
+Fix: `make android-reverse`, and use `localhost` in `config/local.json`. Match the
+issuer rather than widening what the API trusts — an API should validate exactly one.
+
+
 ## 403 Forbidden
 
 | Symptom | Cause | Fix |

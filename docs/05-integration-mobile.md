@@ -104,9 +104,8 @@ the case that a role granted on a different client grants nothing here.
 environment variable does nothing. Values come from a JSON file:
 
 ```bash
-flutter run --dart-define-from-file=config/local-ios.json   # iOS simulator
-flutter run --dart-define-from-file=config/local.json       # Android emulator
-flutter run --dart-define-from-file=config/azure.json       # your deployment
+flutter run --dart-define-from-file=config/local.json    # the local lab, any target
+flutter run --dart-define-from-file=config/azure.json    # your deployment
 ```
 
 Changing a value needs a **rebuild**, not a restart. This differs from every other
@@ -127,8 +126,21 @@ testing.
 
 ```bash
 cd apps/mobile-flutter
-open -a Simulator && flutter run --dart-define-from-file=config/local-ios.json
+open -a Simulator && flutter run --dart-define-from-file=config/local.json
 ```
+
+On Android, forward the ports first so the emulator sees the same `localhost` the
+API validates tokens against:
+
+```bash
+make android-reverse
+flutter run --dart-define-from-file=config/local.json
+```
+
+**Do not point the emulator at `10.0.2.2` instead.** Keycloak takes `iss` from the
+request host, so that mints tokens carrying a different issuer than the API trusts:
+sign-in succeeds and then every API call returns 401 (`IDX10205`). Matching the
+issuer beats widening what the API accepts.
 
 React Native ships the auth module (`src/auth.ts`) rather than a full app; its
 README has the scaffolding steps.

@@ -1,5 +1,0 @@
-{
-  "ISSUER": "http://localhost:8080/realms/docvault",
-  "API_BASE_URL": "http://localhost:5001",
-  "CLIENT_ID": "docvault-flutter"
-}
