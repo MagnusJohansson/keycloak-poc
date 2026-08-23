@@ -202,6 +202,9 @@ Every one of these cost real debugging time and is now load-bearing. Do not "sim
   `appsettings.json` for WinUI) with `DOCVAULT_*` env overrides. They cannot share the React
   app's `.env`: Vite only exposes `VITE_*`, Electron never reads `.env`, and they use different
   Keycloak clients.
+- Electron's `config.json` is **gitignored**; ship `config.json.example`. It was committed with a
+  live deployment's hostnames once and had to be purged from history before the repo went public.
+  A missing `config.json` is fine — the app falls back to the local lab.
 - Desktop logging (`DesktopLogging`) writes to file + Debug + Console, and OidcClient's own
   diagnostics are routed into it, so the log contains the full authorize URL.
 

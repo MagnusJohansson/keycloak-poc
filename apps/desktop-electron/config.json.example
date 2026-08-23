@@ -1,9 +1,11 @@
 {
-  "//": "Edit this file to point the app at your Keycloak. Every value can also be overridden with a DOCVAULT_-prefixed environment variable, e.g. DOCVAULT_ISSUER.",
+  "//": "Copy to config.json and edit. config.json is gitignored so your deployment URLs stay out of the repo. Every value can also be overridden with a DOCVAULT_-prefixed environment variable, e.g. DOCVAULT_ISSUER.",
+
+  "//defaults": "Omitting config.json entirely is fine - the app falls back to the local Docker lab (http://localhost:8080 / http://localhost:5001).",
 
   "issuer": "https://<your-keycloak-host>/realms/docvault",
   "apiBaseUrl": "https://<your-api-host>",
-  
+
   "//clientId": "Must match a client registered in the realm - see infra/terraform/20-realm/clients.tf. NOT the same client as the React app.",
   "clientId": "docvault-desktop",
 

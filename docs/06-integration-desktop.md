@@ -91,7 +91,14 @@ DOCVAULT_ISSUER=http://localhost:8080/realms/docvault npm start
 
 ### Configuring the Electron client
 
-Settings live in **`apps/desktop-electron/config.json`**:
+Settings live in **`apps/desktop-electron/config.json`**, which is gitignored so your
+deployment URLs are not committed — copy the template first:
+
+```bash
+cp apps/desktop-electron/config.json.example apps/desktop-electron/config.json
+```
+
+Omitting the file entirely is fine: the app falls back to the local Docker lab.
 
 ```jsonc
 {

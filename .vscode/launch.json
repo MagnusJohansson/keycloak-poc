@@ -5,7 +5,7 @@
   // gitignored files you create yourself:
   //   apps/mobile-flutter/config/azure.json      (copy config/azure.json.example)
   //   apps/api-dotnet/DocVault.Api/appsettings.Azure.json  (copy the .example)
-  //   apps/desktop-electron/config.json          (edit in place)
+  //   apps/desktop-electron/config.json          (copy config.json.example)
   "version": "0.2.0",
   "configurations": [
     {

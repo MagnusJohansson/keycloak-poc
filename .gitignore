@@ -74,3 +74,8 @@ build/
 # --- misc ---
 .DS_Store
 *.log
+
+# Electron desktop config - holds real deployment URLs, like every other client's
+# local config (apps/web-react/.env, apps/mobile-flutter/config/azure.json).
+# Ship config.json.example instead; a missing config.json falls back to the local lab.
+apps/desktop-electron/config.json
