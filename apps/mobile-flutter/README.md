@@ -108,18 +108,35 @@ That means the browser redirect came back but AppAuth could not match it to the
 pending authorization request, so `authorizeAndExchangeCode` never completes. It
 throws nothing, which is why the UI just sits there.
 
-On Android the usual cause is a **task-affinity mismatch**. Flutter's template
-sets `android:taskAffinity=""` on `MainActivity`, while AppAuth's activities come
-from the library manifest and inherit the package-name affinity — so they end up
-in a different task, and `AuthorizationManagementActivity` (`launchMode="singleTask"`)
-is recreated rather than resumed, losing the stored state.
+On Android the cause is a **task-affinity mismatch**. Flutter's template sets
+`android:taskAffinity=""` on `MainActivity`. An empty affinity means "no affinity
+to any task", so that activity starts its own — while AppAuth's activities, which
+inherit the default package-name affinity, get theirs. All three end up in
+separate tasks, so the redirect cannot resume the `singleTask`
+`AuthorizationManagementActivity` holding the pending request.
 
-The manifest here overrides both AppAuth activities to `android:taskAffinity=""`
-so all three share a task. Verify with the merged manifest after a build:
+**The fix is to remove `android:taskAffinity=""` from `MainActivity`**, which this
+manifest does, so all three share the default affinity.
+
+Setting `""` on AppAuth's activities as well does *not* work: an empty affinity is
+not a *shared* affinity. Confirmed on an emulator — `dumpsys activity activities`
+showed tasks #58, #59 and #60 for the three activities; after the fix they share
+one task with `numActivities=2`:
 
 ```bash
-grep -A2 'AuthorizationManagementActivity'   build/app/intermediates/merged_manifest/debug/*/AndroidManifest.xml
+adb shell dumpsys activity activities | grep -E "Task\{.*docvault"
 ```
+
+### `IllegalArgumentException: only https connections are permitted`
+
+AppAuth rejects plain HTTP in its `DefaultConnectionBuilder`, **before** Android's
+cleartext policy is ever consulted — so the ATS and network-security-config
+exceptions are necessary but not sufficient for the local lab.
+
+`DocVaultAuth` therefore passes `allowInsecureConnections: true` when, and only
+when, the issuer is `http`. A real HTTPS deployment can never silently accept an
+unencrypted discovery document, which would let an attacker serve their own
+signing keys.
 
 Other causes worth ruling out:
 

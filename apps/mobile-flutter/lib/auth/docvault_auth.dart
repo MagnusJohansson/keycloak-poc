@@ -32,6 +32,18 @@ class DocVaultAuth {
 
   final FlutterAppAuth _appAuth = const FlutterAppAuth();
 
+  /// True when the issuer is plain HTTP, i.e. the local lab.
+  ///
+  /// AppAuth refuses non-HTTPS outright with
+  ///   java.lang.IllegalArgumentException: only https connections are permitted
+  /// thrown from its DefaultConnectionBuilder - BEFORE Android's cleartext policy
+  /// is consulted, so the ATS and network-security-config exceptions are necessary
+  /// but not sufficient on their own.
+  ///
+  /// Scoped to http so a real deployment can never silently accept an unencrypted
+  /// discovery document, which would let an attacker serve their own signing keys.
+  bool get _allowInsecure => Uri.parse(issuer).scheme == 'http';
+
   // iOS: Keychain, with first_unlock accessibility so a background token
   //      refresh still works after the device has been unlocked once.
   // Android: the default AndroidOptions in flutter_secure_storage 11 already
@@ -68,6 +80,7 @@ class DocVaultAuth {
         // moving from the local Keycloak to Azure changes only this one string.
         discoveryUrl: '$issuer/.well-known/openid-configuration',
         scopes: const ['openid', 'profile', 'email'],
+        allowInsecureConnections: _allowInsecure,
       ),
     )
         .timeout(
@@ -97,6 +110,7 @@ class DocVaultAuth {
         scopes: const ['openid', 'profile', 'email'],
         promptValues: const ['login'],
         additionalParameters: {'acr_values': acr},
+        allowInsecureConnections: _allowInsecure,
       ),
     );
 
@@ -124,6 +138,7 @@ class DocVaultAuth {
         discoveryUrl: '$issuer/.well-known/openid-configuration',
         refreshToken: refreshToken,
         grantType: 'refresh_token',
+        allowInsecureConnections: _allowInsecure,
       ));
       await _persist(result);
       return result.accessToken;
