@@ -1,5 +1,6 @@
 using Duende.IdentityModel.Client;
 using Duende.IdentityModel.OidcClient;
+using Microsoft.Extensions.Logging;
 
 namespace DocVault.Desktop.Auth;
 
@@ -36,12 +37,21 @@ public sealed class KeycloakDesktopClient
     private readonly ITokenStore _store;
     private readonly OidcClient _client;
     private readonly LoopbackBrowser _browser;
+    private readonly ILogger<KeycloakDesktopClient> _log;
 
-    public KeycloakDesktopClient(DesktopAuthOptions options, ITokenStore store)
+    public KeycloakDesktopClient(DesktopAuthOptions options, ITokenStore store, ILoggerFactory? loggerFactory = null)
     {
         _options = options;
         _store = store;
-        _browser = new LoopbackBrowser();
+        _log = (loggerFactory ?? Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance)
+            .CreateLogger<KeycloakDesktopClient>();
+        _browser = new LoopbackBrowser(loggerFactory: loggerFactory);
+
+        // The three values behind almost every sign-in failure. Logged before
+        // anything is attempted, so a failed run says what it was trying to do.
+        _log.LogInformation("Authority   {Authority}", options.Authority);
+        _log.LogInformation("ClientId    {ClientId}", options.ClientId);
+        _log.LogInformation("RedirectUri {RedirectUri}", _browser.RedirectUri);
 
         _client = new OidcClient(new OidcClientOptions
         {
@@ -55,6 +65,10 @@ public sealed class KeycloakDesktopClient
 
             Scope = options.Scope,
             Browser = _browser,
+
+            // Hands OidcClient's own diagnostics to the same sinks - including the
+            // full authorize URL and any protocol error the provider returns.
+            LoggerFactory = loggerFactory ?? Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance,
 
             Policy = new Policy
             {
@@ -168,8 +182,16 @@ public sealed class KeycloakDesktopClient
     {
         if (result.IsError)
         {
-            throw new InvalidOperationException(result.Error);
+            // `invalid_request` here is very often the provider rejecting the
+            // redirect URI, so log the one we sent alongside the error.
+            _log.LogError(
+                "Login failed: {Error} — {Description}. RedirectUri was {RedirectUri}",
+                result.Error, result.ErrorDescription ?? "(no description)", _browser.RedirectUri);
+            throw new InvalidOperationException(
+                $"{result.Error}: {result.ErrorDescription ?? "(no description)"}");
         }
+
+        _log.LogInformation("Signed in; access token expires {Expiry:HH:mm:ss}", result.AccessTokenExpiration);
 
         var tokens = new StoredTokens(result.AccessToken, result.RefreshToken, result.AccessTokenExpiration);
         _store.Save(tokens);

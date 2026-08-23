@@ -2,6 +2,8 @@ using System.Diagnostics;
 using System.Net;
 using System.Text;
 using Duende.IdentityModel.OidcClient.Browser;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace DocVault.Desktop.Auth;
 
@@ -25,8 +27,13 @@ namespace DocVault.Desktop.Auth;
 public sealed class LoopbackBrowser : IBrowser
 {
     private readonly int _timeoutSeconds;
+    private readonly ILogger<LoopbackBrowser> _log;
 
-    public LoopbackBrowser(int timeoutSeconds = 300) => _timeoutSeconds = timeoutSeconds;
+    public LoopbackBrowser(int timeoutSeconds = 300, ILoggerFactory? loggerFactory = null)
+    {
+        _timeoutSeconds = timeoutSeconds;
+        _log = (loggerFactory ?? NullLoggerFactory.Instance).CreateLogger<LoopbackBrowser>();
+    }
 
     /// <summary>The redirect URI this browser will listen on, fixed for the instance's lifetime.</summary>
     public string RedirectUri { get; } = $"http://127.0.0.1:{GetFreePort()}/callback";
@@ -48,6 +55,11 @@ public sealed class LoopbackBrowser : IBrowser
         {
             return Failure(BrowserResultType.UnknownError, $"Could not listen on {RedirectUri}: {ex.Message}");
         }
+
+        // THE most useful line in the log: paste it into a browser to see exactly
+        // what the provider objects to.
+        _log.LogInformation("Opening system browser: {StartUrl}", options.StartUrl);
+        _log.LogInformation("Listening for the redirect on {RedirectUri}", RedirectUri);
 
         OpenSystemBrowser(options.StartUrl);
 
@@ -79,6 +91,10 @@ public sealed class LoopbackBrowser : IBrowser
         // The authorization response arrives as the query string. OidcClient parses and
         // validates it (including the state and PKCE verifier) — this only transports it.
         var response = context.Request.Url?.Query ?? string.Empty;
+
+        // Query only - never the tokens, which arrive later on the back channel.
+        _log.LogInformation("Redirect received: {Response}",
+            response.Contains("error=", StringComparison.Ordinal) ? response : "(authorization code received)");
 
         await WriteClosingPageAsync(context.Response).ConfigureAwait(false);
 

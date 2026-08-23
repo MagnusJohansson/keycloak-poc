@@ -104,6 +104,43 @@ covers them, but two are worth knowing about:
 Also ignored: `Generated Files/` (XAML codegen), `AppPackages/` and
 `BundleArtifacts/` (MSIX output, large and reproducible).
 
+## Logging and diagnostics
+
+Every run writes to three places at once, because a GUI app has no console and
+the interesting failures happen in a browser round-trip you cannot step through:
+
+| Sink | Where |
+|---|---|
+| **File** | `%LOCALAPPDATA%\DocVault\logs\docvault-<timestamp>.log` — one per run, 20 kept |
+| **Debug** | Visual Studio **Output** window |
+| **Console** | stdout, if you launched it from a terminal |
+
+The app shows the current log path in its status bar at startup, and appends it
+to any error message.
+
+Duende's own OIDC diagnostics go to the same sinks, so the log contains the full
+authorize URL. That is usually the fastest way to diagnose a sign-in failure —
+paste it into a browser and the provider will tell you what it objects to:
+
+```
+10:47:02.113 INF KeycloakDesktopClient  Authority   http://localhost:8080/realms/docvault
+10:47:02.115 INF KeycloakDesktopClient  ClientId    docvault-winui
+10:47:02.115 INF KeycloakDesktopClient  RedirectUri http://127.0.0.1:51234/callback
+10:47:02.230 INF LoopbackBrowser        Opening system browser: http://localhost:8080/realms/...
+```
+
+### `invalid_request` at sign-in
+
+Nearly always the provider rejecting the **redirect URI**, not a client bug. The
+log prints the exact URI the app listened on; compare it with the client's
+registered `valid_redirect_uris`.
+
+> A trap worth knowing: Keycloak only honours a wildcard at the **end** of a
+> redirect URI. `http://127.0.0.1:*/callback` looks reasonable and never matches —
+> the `*` is compared literally. Use `http://127.0.0.1/*`, which works because
+> Keycloak applies RFC 8252 loopback handling and ignores the port for a loopback
+> host. See `infra/terraform/20-realm/clients.tf`.
+
 ## Redirect URI
 
 The app listens on `http://127.0.0.1:<ephemeral>/callback`, which is why the

@@ -35,6 +35,7 @@ make token          # decode a real token: aud, resource_access, exp, acr
 | CORS error on the token call | `web_origins` not set on the client | Set it — separate from redirect URIs |
 | SPA shows `TypeError: Failed to fetch` after signing in | The API is not on the port the SPA calls (`:5001`) — nothing is listening, so the browser cannot even reach it to be refused | Check the API's "Now listening on" line. Everything in the repo assumes `:5001`; use `make api`, or set `VITE_API_BASE_URL` to wherever it actually is |
 | Mobile sign-in never returns | Custom scheme not registered natively | Android `manifestPlaceholders`, iOS `CFBundleURLTypes` |
+| Desktop sign-in fails with `invalid_request` | The registered redirect URI does not match. Keycloak honours a wildcard only at the **end** of a URI, so `http://127.0.0.1:*/callback` never matches — the `*` is literal | Register `http://127.0.0.1/*`; Keycloak's RFC 8252 loopback handling ignores the port |
 | Mobile cannot reach Keycloak | `localhost` inside an emulator is the emulator | Android emulator: `10.0.2.2` |
 | Silent renew fails, user logged out | Third-party cookies blocked | Custom domain sharing a site with the app, or a BFF |
 | Step-up challenge invisible to the SPA; user sees a bare 403 | `WWW-Authenticate` is **not** CORS-safelisted, so a cross-origin SPA cannot read it | Add `.WithExposedHeaders("WWW-Authenticate")` to the CORS policy |

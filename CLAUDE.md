@@ -188,6 +188,13 @@ Every one of these cost real debugging time and is now load-bearing. Do not "sim
   `FrontChannel.Extra` property, which does not exist in 7.x).
 - Unpackaged (`WindowsPackageType=None`), so `PasswordVault` is unavailable — tokens use DPAPI.
 
+- **Keycloak wildcards only work at the END of a redirect URI.** `http://127.0.0.1:*/callback` is
+  matched literally and every authorization request fails with `invalid_request`. Both desktop
+  clients register `http://127.0.0.1/*`, which works because Keycloak ignores the port for a
+  loopback host (RFC 8252). Verified empirically against a real Keycloak — do not "tidy" it back.
+- Desktop logging (`DesktopLogging`) writes to file + Debug + Console, and OidcClient's own
+  diagnostics are routed into it, so the log contains the full authorize URL.
+
 **Runtime:**
 
 - **`WWW-Authenticate` is not CORS-safelisted.** Without `.WithExposedHeaders("WWW-Authenticate")`

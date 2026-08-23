@@ -118,8 +118,16 @@ resource "keycloak_openid_client" "desktop" {
   direct_access_grants_enabled = false
   pkce_code_challenge_method   = "S256"
 
-  valid_redirect_uris             = ["http://127.0.0.1:*/callback"]
-  valid_post_logout_redirect_uris = ["http://127.0.0.1:*/logout"]
+  # NOT "http://127.0.0.1:*/callback". Keycloak only honours a wildcard at the END
+  # of a redirect URI, so a `*` in the port position is matched literally and every
+  # authorization request is rejected with `invalid_request` - which looks like a
+  # client bug and is not one.
+  #
+  # "http://127.0.0.1/*" is the form that works: Keycloak applies RFC 8252 loopback
+  # handling, ignoring the port for a loopback host, and the trailing wildcard
+  # covers the path.
+  valid_redirect_uris             = ["http://127.0.0.1/*"]
+  valid_post_logout_redirect_uris = ["http://127.0.0.1/*"]
 }
 
 # --- Desktop (WinUI 3 / .NET 10) --------------------------------------------
@@ -141,8 +149,10 @@ resource "keycloak_openid_client" "winui" {
   direct_access_grants_enabled = false
   pkce_code_challenge_method   = "S256"
 
-  valid_redirect_uris             = ["http://127.0.0.1:*/callback"]
-  valid_post_logout_redirect_uris = ["http://127.0.0.1:*/callback"]
+  # See the note on the Electron client above: a wildcard is only honoured at the
+  # END of the URI, so the port cannot be wildcarded.
+  valid_redirect_uris             = ["http://127.0.0.1/*"]
+  valid_post_logout_redirect_uris = ["http://127.0.0.1/*"]
 }
 
 # --- Machine-to-machine worker ---------------------------------------------

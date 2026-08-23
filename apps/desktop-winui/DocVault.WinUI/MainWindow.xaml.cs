@@ -1,5 +1,6 @@
 using System.Text.Json;
 using DocVault.Desktop.Auth;
+using Microsoft.Extensions.Logging;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 
@@ -13,10 +14,17 @@ public sealed partial class MainWindow : Window
 {
     private readonly KeycloakDesktopClient _auth;
     private readonly DocVaultApiClient _api;
+    private readonly ILoggerFactory _loggerFactory;
+    private readonly ILogger<MainWindow> _log;
 
     public MainWindow()
     {
         InitializeComponent();
+
+        // Goes to %LOCALAPPDATA%\DocVault\logs, the Visual Studio Output window,
+        // and stdout. A GUI app has no console, so the file is the one that survives.
+        _loggerFactory = DesktopLogging.Create();
+        _log = _loggerFactory.CreateLogger<MainWindow>();
 
         // appsettings.json next to the executable, overridable with DOCVAULT_* environment
         // variables. Loading and validation live in DocVault.Desktop.Auth so they can be
@@ -25,9 +33,13 @@ public sealed partial class MainWindow : Window
 
         // DPAPI keeps tokens encrypted at rest under the current Windows account, so closing the
         // app does not mean signing in again.
-        _auth = new KeycloakDesktopClient(settings.ToAuthOptions(), new DpapiTokenStore());
-
+        _auth = new KeycloakDesktopClient(settings.ToAuthOptions(), new DpapiTokenStore(), _loggerFactory);
         _api = new DocVaultApiClient(new HttpClient { BaseAddress = new Uri(settings.ApiBaseUrl) });
+
+        _log.LogInformation("ApiBaseUrl  {ApiBaseUrl}", settings.ApiBaseUrl);
+
+        // Tell the user where the log is, so a bug report can include it.
+        Report(InfoBarSeverity.Informational, $"Log: {DesktopLogging.CurrentLogFile}");
     }
 
     private async void OnSignIn(object sender, RoutedEventArgs e) =>
@@ -125,7 +137,8 @@ public sealed partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            Report(InfoBarSeverity.Error, ex.Message);
+            _log.LogError(ex, "Action failed");
+            Report(InfoBarSeverity.Error, $"{ex.Message}  —  see {DesktopLogging.CurrentLogFile}");
         }
     }
 
