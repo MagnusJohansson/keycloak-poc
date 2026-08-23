@@ -69,6 +69,69 @@ az keyvault secret show --vault-name <vault> \
   --name keycloak-bootstrap-admin-password --query value -o tsv
 ```
 
+## Deploying your applications (`30-azure`)
+
+This module needs an image to exist before it can create the container app that
+runs it — a bootstrap order worth doing deliberately.
+
+**1. Create the registry only.**
+
+```bash
+cd infra/terraform/30-azure
+terraform init
+terraform apply -target=azurerm_container_registry.acr
+```
+
+`-target` is normally a smell, but a registry that must be populated before the
+rest of the deployment references it is the legitimate case for it. You do this
+once.
+
+**2. Build and push the API image.**
+
+```bash
+ACR=$(terraform output -raw acr_name)
+az acr build --registry "$ACR" --image docvault-api:1.0.0 ../../../apps/api-dotnet
+```
+
+`az acr build` builds **in Azure**, so you need neither a local Docker daemon nor
+to worry about building `linux/amd64` from an Apple Silicon Mac.
+
+**3. Apply the rest.**
+
+```bash
+terraform apply \
+  -var="keycloak_issuer=$(terraform -chdir=../10-keycloak-azure output -raw issuer)" \
+  -var="container_image=$(terraform output -raw acr_login_server)/docvault-api:1.0.0"
+```
+
+**4. Let Keycloak accept the deployed front ends.** The realm still registers
+`localhost` redirect URIs, so re-run `20-realm` with the real URLs:
+
+```bash
+terraform -chdir=../30-azure output api_url react_url    # note these
+# edit infra/environments/azure/realm.tfvars, then:
+make seed-azure
+```
+
+### How the image is pulled
+
+No registry password anywhere. The container app authenticates as its
+user-assigned identity, which holds **AcrPull** on the registry:
+
+```hcl
+registry {
+  server   = azurerm_container_registry.acr.login_server
+  identity = azurerm_user_assigned_identity.api.id
+}
+```
+
+`admin_enabled = false` on the registry, deliberately: the admin user is a shared
+username/password that cannot be scoped or attributed to anyone.
+
+> **Static Web Apps are created empty.** Terraform provisions them but does not
+> upload content — deploy the built SPAs with the SWA CLI or GitHub Actions, and
+> remember to rebuild them with `VITE_OIDC_AUTHORITY` pointing at your Keycloak.
+
 ## What gets created (20 resources)
 
 ```

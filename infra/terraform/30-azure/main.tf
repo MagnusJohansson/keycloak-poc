@@ -61,6 +61,37 @@ resource "azurerm_role_assignment" "api_kv_reader" {
   principal_id         = azurerm_user_assigned_identity.api.principal_id
 }
 
+# --- Container registry -----------------------------------------------------
+# Holds the API image. Created here rather than by hand so the whole deployment
+# stays reproducible - but note the bootstrap order in
+# docs/09-deploying-on-azure.md: the registry must exist and hold the image
+# BEFORE the container app referencing it is created.
+resource "azurerm_container_registry" "acr" {
+  name                = "acrdocvault${random_string.suffix.result}"
+  resource_group_name = azurerm_resource_group.lab.name
+  location            = azurerm_resource_group.lab.location
+  sku                 = "Basic"
+
+  # No admin user. It is a shared username/password that cannot be scoped or
+  # attributed to anyone; the managed identity below replaces it entirely.
+  admin_enabled = false
+
+  tags = var.tags
+}
+
+resource "random_string" "suffix" {
+  length  = 6
+  special = false
+  upper   = false
+}
+
+# AcrPull, not Contributor: the app only ever reads images.
+resource "azurerm_role_assignment" "api_acr_pull" {
+  scope                = azurerm_container_registry.acr.id
+  role_definition_name = "AcrPull"
+  principal_id         = azurerm_user_assigned_identity.api.principal_id
+}
+
 # --- The API ----------------------------------------------------------------
 resource "azurerm_container_app_environment" "lab" {
   name                       = "cae-docvault"
@@ -80,6 +111,14 @@ resource "azurerm_container_app" "api" {
   identity {
     type         = "UserAssigned"
     identity_ids = [azurerm_user_assigned_identity.api.id]
+  }
+
+  # Without this the app cannot authenticate to a private registry and the
+  # revision fails with an image-pull error. `identity` points at the
+  # user-assigned identity granted AcrPull above - no registry password anywhere.
+  registry {
+    server   = azurerm_container_registry.acr.login_server
+    identity = azurerm_user_assigned_identity.api.id
   }
 
   ingress {
@@ -129,6 +168,10 @@ resource "azurerm_container_app" "api" {
       }
     }
   }
+
+  # The pull grant must exist before the first revision starts, or it fails to
+  # pull and the apply reports a confusing timeout instead of a permissions error.
+  depends_on = [azurerm_role_assignment.api_acr_pull]
 }
 
 # --- The SPAs ---------------------------------------------------------------

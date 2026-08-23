@@ -1,3 +1,12 @@
+output "acr_login_server" {
+  description = "Push the API image here: az acr build --registry <name> --image docvault-api:<tag> apps/api-dotnet"
+  value       = azurerm_container_registry.acr.login_server
+}
+
+output "acr_name" {
+  value = azurerm_container_registry.acr.name
+}
+
 output "api_url" {
   description = "Feed into the SPAs' VITE_API_BASE_URL, and into 20-realm's api_origin."
   value       = "https://${azurerm_container_app.api.ingress[0].fqdn}"
