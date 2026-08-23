@@ -163,6 +163,14 @@ Every one of these cost real debugging time and is now load-bearing. Do not "sim
 
 **WinUI 3 desktop (`apps/desktop-winui`):**
 
+- Configuration is `DocVault.WinUI/appsettings.json` (copied next to the exe), overridable with
+  `DOCVAULT_`-prefixed environment variables. The file is primary because a GUI app launched from
+  the Start menu has nowhere to pick up env vars. Loading and validation live in
+  `DesktopSettings` in the **library**, so they are tested without Windows.
+- `Uri.TryCreate(x, UriKind.Absolute)` returns true for `localhost:8080/...`, parsing `localhost`
+  as the scheme. `DesktopSettings.Validate` therefore also checks the scheme is http/https — do
+  not "simplify" that away.
+
 - The OIDC logic is a plain `net10.0` library (`DocVault.Desktop.Auth`) *on purpose* — WinUI XAML
   compiles only on Windows, so keeping the logic out of the shell is what makes it testable on
   Linux/macOS and in the normal CI job. Do not move logic into the XAML code-behind.

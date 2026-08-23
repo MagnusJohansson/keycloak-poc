@@ -11,13 +11,6 @@ namespace DocVault.WinUI;
 /// </summary>
 public sealed partial class MainWindow : Window
 {
-    // Overridable so the same build can target the local lab or an Azure deployment.
-    private static readonly string Authority =
-        Environment.GetEnvironmentVariable("DOCVAULT_AUTHORITY") ?? "http://localhost:8080/realms/docvault";
-
-    private static readonly string ApiBaseUrl =
-        Environment.GetEnvironmentVariable("DOCVAULT_API_URL") ?? "http://localhost:5001";
-
     private readonly KeycloakDesktopClient _auth;
     private readonly DocVaultApiClient _api;
 
@@ -25,13 +18,16 @@ public sealed partial class MainWindow : Window
     {
         InitializeComponent();
 
+        // appsettings.json next to the executable, overridable with DOCVAULT_* environment
+        // variables. Loading and validation live in DocVault.Desktop.Auth so they can be
+        // unit-tested without Windows.
+        var settings = DesktopSettings.Load();
+
         // DPAPI keeps tokens encrypted at rest under the current Windows account, so closing the
         // app does not mean signing in again.
-        _auth = new KeycloakDesktopClient(
-            new DesktopAuthOptions { Authority = Authority },
-            new DpapiTokenStore());
+        _auth = new KeycloakDesktopClient(settings.ToAuthOptions(), new DpapiTokenStore());
 
-        _api = new DocVaultApiClient(new HttpClient { BaseAddress = new Uri(ApiBaseUrl) });
+        _api = new DocVaultApiClient(new HttpClient { BaseAddress = new Uri(settings.ApiBaseUrl) });
     }
 
     private async void OnSignIn(object sender, RoutedEventArgs e) =>

@@ -36,4 +36,12 @@
     <ProjectReference Include="..\DocVault.Desktop.Auth\DocVault.Desktop.Auth.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Copied next to the executable so DesktopSettings.Load() finds it, and so a
+         user can edit it after the fact without rebuilding. -->
+    <Content Include="appsettings.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
 </Project>

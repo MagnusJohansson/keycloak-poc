@@ -171,8 +171,33 @@ make seed                     # registers the docvault-winui client
 dotnet run --project apps/desktop-winui/DocVault.WinUI
 ```
 
-Override the target with `DOCVAULT_AUTHORITY` / `DOCVAULT_API_URL` to point at an
-Azure deployment.
+### Configuration
+
+Settings live in **`DocVault.WinUI/appsettings.json`**, copied next to the
+executable at build time:
+
+```jsonc
+{
+  "Authority":  "http://localhost:8080/realms/docvault",   // must include /realms/<realm>
+  "ApiBaseUrl": "http://localhost:5001",
+  "ClientId":   "docvault-winui",
+  "StepUpAcr":  "silver"
+}
+```
+
+Any value can be overridden with a `DOCVAULT_`-prefixed environment variable
+(`DOCVAULT_AUTHORITY`, `DOCVAULT_APIBASEURL`), which wins over the file.
+
+The file is the primary mechanism on purpose: a GUI app launched from the Start
+menu has nowhere to pick up environment variables. The override exists for CI and
+for running two instances against different realms.
+
+Loading and validation are in `DocVault.Desktop.Auth`, not the XAML project, so
+they are unit-tested on every platform. Validation catches the two slips that
+otherwise surface much later as opaque discovery errors: an authority missing its
+scheme, and one pointing at the host root rather than `/realms/<realm>`.
+
+Full detail in [apps/desktop-winui/README.md](../apps/desktop-winui/README.md).
 
 ### Two alternatives worth knowing
 
