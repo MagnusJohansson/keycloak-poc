@@ -14,8 +14,8 @@ locals {
   # Every client that obtains a token intended for the API.
   api_calling_clients = merge(
     { for k, v in keycloak_openid_client.spa : k => v.id },
+    { for k, v in keycloak_openid_client.mobile : k => v.id },
     {
-      "docvault-mobile"  = keycloak_openid_client.mobile.id
       "docvault-desktop" = keycloak_openid_client.desktop.id
       "docvault-winui"   = keycloak_openid_client.winui.id
       "docvault-worker"  = keycloak_openid_client.worker.id

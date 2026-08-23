@@ -86,12 +86,34 @@ resource "keycloak_openid_client" "spa" {
 }
 
 # --- Native mobile ----------------------------------------------------------
-# Redirects to a custom scheme handled by the OS. PKCE is doubly important here
-# because custom schemes can be claimed by other apps on the device.
+# One client per app, matching every other app here. Sharing a client would mean
+# the two could not be revoked, scoped or audited independently, and `azp` could
+# not tell you which app a token came from.
+#
+# They also get DIFFERENT URI schemes. A custom scheme is claimed OS-wide, so two
+# apps registering the same one is ambiguous - Android resolves it
+# non-deterministically, iOS generally favours the last installed - and an OAuth
+# redirect can be delivered to the wrong app. PKCE makes that non-exploitable,
+# but it still breaks sign-in.
+locals {
+  mobile_clients = {
+    "docvault-flutter" = {
+      name   = "DocVault Mobile (Flutter)"
+      scheme = var.flutter_redirect_scheme
+    }
+    "docvault-reactnative" = {
+      name   = "DocVault Mobile (React Native)"
+      scheme = var.react_native_redirect_scheme
+    }
+  }
+}
+
 resource "keycloak_openid_client" "mobile" {
+  for_each = local.mobile_clients
+
   realm_id  = keycloak_realm.docvault.id
-  client_id = "docvault-mobile"
-  name      = "DocVault Mobile (Flutter / React Native)"
+  client_id = each.key
+  name      = each.value.name
   enabled   = true
 
   access_type                  = "PUBLIC"
@@ -100,10 +122,10 @@ resource "keycloak_openid_client" "mobile" {
   pkce_code_challenge_method   = "S256"
 
   valid_redirect_uris = [
-    "${var.mobile_redirect_scheme}://oauth/callback",
-    "${var.mobile_redirect_scheme}://oauth/logout",
+    "${each.value.scheme}://oauth/callback",
+    "${each.value.scheme}://oauth/logout",
   ]
-  valid_post_logout_redirect_uris = ["${var.mobile_redirect_scheme}://oauth/logout"]
+  valid_post_logout_redirect_uris = ["${each.value.scheme}://oauth/logout"]
 }
 
 # --- Desktop (Electron) -----------------------------------------------------

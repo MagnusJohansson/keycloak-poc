@@ -81,10 +81,21 @@ variable "api_origin" {
   default = "http://localhost:5001"
 }
 
-variable "mobile_redirect_scheme" {
+# One scheme PER APP, not one shared between them.
+#
+# A custom URI scheme is claimed OS-wide. Two apps registering the same one is
+# ambiguous: Android picks non-deterministically and iOS generally gives it to
+# whichever was installed last, so an OAuth redirect can land in the wrong app.
+variable "flutter_redirect_scheme" {
   type        = string
-  default     = "io.docvault.app"
-  description = "Custom URI scheme for the Flutter / React Native apps."
+  default     = "io.docvault.flutter"
+  description = "Custom URI scheme for the Flutter app."
+}
+
+variable "react_native_redirect_scheme" {
+  type        = string
+  default     = "io.docvault.rn"
+  description = "Custom URI scheme for the React Native app."
 }
 
 variable "seed_user_password" {

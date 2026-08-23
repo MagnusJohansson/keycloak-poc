@@ -39,7 +39,7 @@ completes, and nothing routes back.
 **Android** — `android/app/build.gradle.kts`:
 
 ```kotlin
-manifestPlaceholders["appAuthRedirectScheme"] = "io.docvault.app"
+manifestPlaceholders["appAuthRedirectScheme"] = "io.docvault.flutter"
 ```
 
 **iOS** — `ios/Runner/Info.plist`:
@@ -48,15 +48,21 @@ manifestPlaceholders["appAuthRedirectScheme"] = "io.docvault.app"
 <key>CFBundleURLTypes</key>
 <array><dict>
   <key>CFBundleURLSchemes</key>
-  <array><string>io.docvault.app</string></array>
+  <array><string>io.docvault.flutter</string></array>
 </dict></array>
 ```
 
-Both must match `docvault-mobile`'s registered redirect URI in
+Both must match `docvault-flutter`'s registered redirect URI in
 `infra/terraform/20-realm/clients.tf`.
 
-> A custom scheme can be claimed by *another* app on the device. That is exactly
-> why PKCE is non-negotiable here: an intercepted authorization code is useless
+> **The two mobile apps use different schemes on purpose** —
+> `io.docvault.flutter://` and `io.docvault.rn://` — with a Keycloak client each.
+> A custom scheme is claimed OS-wide, so two apps registering the same one is
+> ambiguous: Android resolves it non-deterministically and iOS generally favours
+> whichever was installed last, so a redirect can reach the wrong app.
+>
+> More generally, a custom scheme can be claimed by *another* app on the device
+> entirely. That is exactly why PKCE is non-negotiable here: an intercepted authorization code is useless
 > without the verifier. For production, prefer **App Links / Universal Links**,
 > which are cryptographically bound to a domain you control.
 

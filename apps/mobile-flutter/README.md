@@ -81,12 +81,20 @@ Neither is needed for Azure. Remove both before shipping anything real.
 
 ## Redirect URI
 
-`io.docvault.app://oauth/callback`, registered natively on both platforms:
+`io.docvault.flutter://oauth/callback`, registered natively on both platforms:
 
 - Android — `manifestPlaceholders["appAuthRedirectScheme"]` in `app/build.gradle.kts`
 - iOS — `CFBundleURLTypes` in `Info.plist`
 
-Both must match `docvault-mobile` in `infra/terraform/20-realm/clients.tf`. A
+Both must match `docvault-flutter` in `infra/terraform/20-realm/clients.tf`.
+
+The React Native app deliberately uses a **different** scheme (`io.docvault.rn`)
+and a different client. A custom scheme is claimed OS-wide, so two apps sharing
+one is ambiguous — Android resolves it non-deterministically, iOS generally
+favours whichever was installed last — and an OAuth redirect can be delivered to
+the wrong app.
+
+A
 custom scheme can be claimed by another app on the device, which is why PKCE is
 mandatory here; for production prefer App Links / Universal Links, which are
 cryptographically bound to a domain you control.

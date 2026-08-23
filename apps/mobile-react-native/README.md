@@ -11,7 +11,7 @@ on each platform. Miss it and sign-in silently never returns.
 
 ```gradle
 defaultConfig {
-    manifestPlaceholders = [appAuthRedirectScheme: 'io.docvault.app']
+    manifestPlaceholders = [appAuthRedirectScheme: 'io.docvault.rn']
 }
 ```
 
@@ -22,12 +22,12 @@ defaultConfig {
 <array>
   <dict>
     <key>CFBundleURLSchemes</key>
-    <array><string>io.docvault.app</string></array>
+    <array><string>io.docvault.rn</string></array>
   </dict>
 </array>
 ```
 
-Both must match the redirect URI registered on the `docvault-mobile` client in
+Both must match the redirect URI registered on the `docvault-reactnative` client in
 `infra/terraform/20-realm/clients.tf`.
 
 ## Reaching the local lab from a device

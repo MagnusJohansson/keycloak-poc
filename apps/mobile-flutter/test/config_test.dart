@@ -31,8 +31,9 @@ void main() {
   });
 
   test('client id matches a client registered in the realm', () {
-    // See infra/terraform/20-realm/clients.tf - the mobile client is shared by
-    // the Flutter and React Native apps, both of which use the same custom scheme.
-    expect(clientId, 'docvault-mobile');
+    // See infra/terraform/20-realm/clients.tf. Flutter and React Native have
+    // SEPARATE clients and separate URI schemes, so each can be revoked and
+    // audited on its own and neither can intercept the other's redirect.
+    expect(clientId, 'docvault-flutter');
   });
 }

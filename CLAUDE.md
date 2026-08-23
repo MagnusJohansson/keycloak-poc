@@ -188,6 +188,11 @@ Every one of these cost real debugging time and is now load-bearing. Do not "sim
   `FrontChannel.Extra` property, which does not exist in 7.x).
 - Unpackaged (`WindowsPackageType=None`), so `PasswordVault` is unavailable — tokens use DPAPI.
 
+- **Each mobile app has its own client AND its own URI scheme** (`docvault-flutter` /
+  `io.docvault.flutter://`, `docvault-reactnative` / `io.docvault.rn://`). A custom scheme is
+  claimed OS-wide, so two apps sharing one is ambiguous — Android resolves it
+  non-deterministically, iOS favours the last installed — and a redirect can reach the wrong app.
+  Do not re-merge them.
 - **Keycloak wildcards only work at the END of a redirect URI.** `http://127.0.0.1:*/callback` is
   matched literally and every authorization request fails with `invalid_request`. Both desktop
   clients register `http://127.0.0.1/*`, which works because Keycloak ignores the port for a

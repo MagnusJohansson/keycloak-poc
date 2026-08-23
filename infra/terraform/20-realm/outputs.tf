@@ -18,7 +18,8 @@ output "client_ids" {
     api       = keycloak_openid_client.api.client_id
     react     = keycloak_openid_client.spa["docvault-web-react"].client_id
     vue       = keycloak_openid_client.spa["docvault-web-vue"].client_id
-    mobile    = keycloak_openid_client.mobile.client_id
+    flutter   = keycloak_openid_client.mobile["docvault-flutter"].client_id
+    rn        = keycloak_openid_client.mobile["docvault-reactnative"].client_id
     desktop   = keycloak_openid_client.desktop.client_id
     winui     = keycloak_openid_client.winui.client_id
     worker    = keycloak_openid_client.worker.client_id

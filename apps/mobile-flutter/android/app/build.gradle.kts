@@ -20,8 +20,8 @@ android {
 
         // Consumed by flutter_appauth's manifest placeholder. Must match the
         // scheme in the redirect URI AND the redirect URI registered on the
-        // docvault-mobile client in infra/terraform/20-realm/clients.tf.
-        manifestPlaceholders["appAuthRedirectScheme"] = "io.docvault.app"
+        // docvault-flutter client in infra/terraform/20-realm/clients.tf.
+        manifestPlaceholders["appAuthRedirectScheme"] = "io.docvault.flutter"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion

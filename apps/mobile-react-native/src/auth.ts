@@ -11,15 +11,15 @@ import * as Keychain from 'react-native-keychain';
  *
  * Registering the scheme is a NATIVE change on both platforms, and forgetting it
  * is the usual reason sign-in appears to hang:
- *   android/app/build.gradle  ->  manifestPlaceholders = [appAuthRedirectScheme: 'io.docvault.app']
+ *   android/app/build.gradle  ->  manifestPlaceholders = [appAuthRedirectScheme: 'io.docvault.rn']
  *   ios/<App>/Info.plist      ->  CFBundleURLTypes / CFBundleURLSchemes
  */
 const config: AuthConfiguration = {
   // Everything else is discovered from /.well-known/openid-configuration, so
   // switching to the Azure deployment is a one-line change.
   issuer: process.env.DOCVAULT_ISSUER ?? 'http://10.0.2.2:8080/realms/docvault',
-  clientId: 'docvault-mobile',
-  redirectUrl: 'io.docvault.app://oauth/callback',
+  clientId: 'docvault-reactnative',
+  redirectUrl: 'io.docvault.rn://oauth/callback',
   scopes: ['openid', 'profile', 'email'],
 
   // Explicit, though the library defaults to true for public clients. Stated

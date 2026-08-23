@@ -16,8 +16,8 @@ import 'auth/docvault_auth.dart';
 /// localhost inside the emulator is the emulator itself.
 const issuer = String.fromEnvironment('ISSUER', defaultValue: 'http://10.0.2.2:8080/realms/docvault');
 const apiBaseUrl = String.fromEnvironment('API_BASE_URL', defaultValue: 'http://10.0.2.2:5001');
-const clientId = String.fromEnvironment('CLIENT_ID', defaultValue: 'docvault-mobile');
-const redirectUri = 'io.docvault.app://oauth/callback';
+const clientId = String.fromEnvironment('CLIENT_ID', defaultValue: 'docvault-flutter');
+const redirectUri = 'io.docvault.flutter://oauth/callback';
 
 void main() => runApp(const DocVaultApp());
 

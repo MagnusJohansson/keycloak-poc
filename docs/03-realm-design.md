@@ -27,7 +27,8 @@ realm: docvault
     ├── docvault-api               confidential, authz services, no login flows
     ├── docvault-web-react         public + PKCE
     ├── docvault-web-vue           public + PKCE
-    ├── docvault-mobile            public + PKCE, custom scheme
+    ├── docvault-flutter           public + PKCE, io.docvault.flutter://
+    ├── docvault-reactnative       public + PKCE, io.docvault.rn://
     ├── docvault-desktop           public + PKCE, loopback
     ├── docvault-worker            confidential, client_credentials
     └── docvault-analytics         confidential, consent, pairwise sub
