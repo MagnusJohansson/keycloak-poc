@@ -143,10 +143,14 @@ registered `valid_redirect_uris`.
 
 ## Redirect URI
 
-The app listens on `http://127.0.0.1:<ephemeral>/callback`, which is why the
-`docvault-winui` client registers `http://127.0.0.1:*/callback`. A wildcard port
-is explicitly permitted for native apps — a fixed port would collide with other
-software and prevent two instances.
+The app listens on `http://127.0.0.1:<ephemeral>/callback`, and the
+`docvault-winui` client registers `http://127.0.0.1/*` to match it. An ephemeral
+port is the RFC 8252 pattern for native apps — a fixed port would collide with
+other software and prevent two instances — and Keycloak ignores the port for a
+loopback host, so the registered value does not name one.
+
+Note the registered value is **not** `http://127.0.0.1:*/callback`; see the trap
+above for why that never matches.
 
 See [docs/06-integration-desktop.md](../../docs/06-integration-desktop.md) for the
 design notes, and how this compares with the Electron client.

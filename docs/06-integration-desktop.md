@@ -6,7 +6,7 @@ Two desktop clients, solving the same problem with different tools:
 |---|---|---|
 | Source | `apps/desktop-electron` | `apps/desktop-winui` |
 | PKCE | hand-rolled, ~80 lines of Node built-ins | `Duende.IdentityModel.OidcClient` (certified) |
-| Redirect | loopback `http://127.0.0.1:*/callback` | **identical** |
+| Redirect | loopback `http://127.0.0.1/*` (registered) | **identical** |
 | Browser | `shell.openExternal` | `Process.Start(UseShellExecute = true)` |
 | Token isolation | main process only, never the renderer | in-process; DPAPI-encrypted at rest |
 
@@ -28,9 +28,17 @@ server.listen(0, '127.0.0.1', () => {          // port 0 = OS picks a free one
 });
 ```
 
-The Keycloak client registers `http://127.0.0.1:*/callback` precisely so no port
-needs to be agreed in advance. Use `127.0.0.1`, not `localhost` — the latter can
-resolve to IPv6 `::1` and miss the listener.
+The Keycloak client registers `http://127.0.0.1/*`, so no port needs to be agreed
+in advance: Keycloak applies RFC 8252 loopback handling and ignores the port for a
+loopback host, while the trailing wildcard covers the path.
+
+**Do not register `http://127.0.0.1:*/callback`.** Keycloak honours a wildcard only
+at the *end* of a redirect URI, so a `*` in the port position is matched literally
+and every authorization request is rejected with `invalid_request` — which reads
+like a client bug and is not one. See the comment in `20-realm/clients.tf`.
+
+Use `127.0.0.1`, not `localhost` — the latter can resolve to IPv6 `::1` and miss
+the listener.
 
 ### 2. Tokens never enter the renderer
 

@@ -70,14 +70,21 @@ Both must match `docvault-flutter`'s registered redirect URI in
 
 | Target | Issuer |
 |---|---|
-| Android emulator | `http://10.0.2.2:8080/realms/docvault` |
 | iOS simulator | `http://localhost:8080/realms/docvault` |
-| Physical device | `http://<your-LAN-ip>:8080/realms/docvault` |
+| Android emulator | `http://localhost:8080/realms/docvault`, after `make android-reverse` |
+| Physical device | `http://localhost:8080/realms/docvault`, after `make android-reverse` over USB |
 
-`localhost` inside an Android emulator is the emulator itself — the most common
-reason the app "cannot reach Keycloak". Plain HTTP also needs an ATS exception on
-iOS and `usesCleartextTraffic` on Android; both are local-lab-only, since a
-Azure deployment is HTTPS.
+`localhost` inside an Android emulator is the emulator itself, which is why the
+forwarding is needed. The tempting shortcut — pointing the emulator at `10.0.2.2`,
+its alias for the host — **changes the issuer**, because Keycloak derives `iss`
+from the request host. The API trusts exactly one issuer, so sign-in then succeeds
+and every API call returns 401. Match the issuer instead of widening what the API
+accepts.
+
+Plain HTTP also needs an exception: `NSExceptionDomains` on iOS, and
+`network_security_config.xml` on Android — **not** `usesCleartextTraffic="true"`,
+which disables the protection for every host the app contacts. Both are
+local-lab-only; the Azure deployment is HTTPS and needs neither.
 
 ## Refresh handling
 
