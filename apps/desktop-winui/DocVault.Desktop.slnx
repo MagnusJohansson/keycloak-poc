@@ -1,5 +1,36 @@
 <Solution>
+  <!--
+    WinUI projects cannot be "Any CPU": the Windows App SDK ships native binaries,
+    so DocVault.WinUI declares <Platforms>x86;x64;ARM64</Platforms>. The two
+    library projects are ordinary AnyCPU .NET libraries.
+
+    Without the mapping below, Visual Studio creates an "Any CPU" solution
+    platform, finds no matching project configuration for DocVault.WinUI, and
+    reports:
+
+      The solution file specifies a project configuration for
+      DocVault.WinUI.csproj that does not exist for that project
+
+    The AnyCPU libraries need no mapping - they build as AnyCPU under every
+    solution platform.
+  -->
+  <Configurations>
+    <Platform Name="Any CPU" />
+    <Platform Name="x64" />
+    <Platform Name="x86" />
+    <Platform Name="ARM64" />
+  </Configurations>
+
   <Project Path="DocVault.Desktop.Auth/DocVault.Desktop.Auth.csproj" />
   <Project Path="DocVault.Desktop.Auth.Tests/DocVault.Desktop.Auth.Tests.csproj" />
-  <Project Path="DocVault.WinUI/DocVault.WinUI.csproj" />
+
+  <Project Path="DocVault.WinUI/DocVault.WinUI.csproj">
+    <!-- "Any CPU" maps to x64 rather than ARM64 on purpose: an x64 build runs on
+         ARM64 Windows under emulation, whereas an ARM64 build will not run on x64
+         at all. On an ARM64 machine, select the ARM64 platform for a native build. -->
+    <Platform Solution="*|Any CPU" Project="x64" />
+    <Platform Solution="*|x64" Project="x64" />
+    <Platform Solution="*|x86" Project="x86" />
+    <Platform Solution="*|ARM64" Project="ARM64" />
+  </Project>
 </Solution>

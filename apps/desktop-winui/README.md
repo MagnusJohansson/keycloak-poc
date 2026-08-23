@@ -67,6 +67,31 @@ builds it on `windows-latest`.
 
 ## Working in Visual Studio
 
+### Choosing a platform
+
+WinUI cannot build as **Any CPU** — the Windows App SDK ships native binaries, so
+`DocVault.WinUI` declares `x86;x64;ARM64`. The solution maps them explicitly:
+
+| Solution platform | DocVault.WinUI builds as |
+|---|---|
+| Any CPU | x64 |
+| x64 | x64 |
+| x86 | x86 |
+| **ARM64** | **ARM64** |
+
+On an ARM64 machine (Snapdragon, or Windows on Apple silicon) pick **ARM64** from
+the platform dropdown for a native build. The default maps to x64 because an x64
+build still runs on ARM64 under emulation, whereas an ARM64 build will not run on
+x64 at all.
+
+The two library projects are ordinary AnyCPU .NET libraries and need no mapping.
+
+> Without those mappings Visual Studio reports *"specifies a project configuration
+> for DocVault.WinUI.csproj that does not exist for that project"* — it invents an
+> Any CPU solution platform and finds nothing to map it to.
+
+
+
 Visual Studio generates several things that must not be committed; `.gitignore`
 covers them, but two are worth knowing about:
 

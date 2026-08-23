@@ -174,6 +174,11 @@ Every one of these cost real debugging time and is now load-bearing. Do not "sim
 - The OIDC logic is a plain `net10.0` library (`DocVault.Desktop.Auth`) *on purpose* — WinUI XAML
   compiles only on Windows, so keeping the logic out of the shell is what makes it testable on
   Linux/macOS and in the normal CI job. Do not move logic into the XAML code-behind.
+- `DocVault.Desktop.slnx` must keep its `<Configurations>` platform mappings. WinUI cannot be
+  Any CPU (the Windows App SDK ships native binaries), so the solution maps Any CPU/x64/x86/ARM64
+  onto the project's concrete platforms. Without them Visual Studio errors with "specifies a
+  project configuration ... that does not exist for that project". Any CPU maps to x64 on purpose:
+  x64 runs on ARM64 under emulation, ARM64 does not run on x64.
 - `DocVault.WinUI` must stay **out of `apps/api-dotnet/DocVault.slnx`** — that solution builds on
   ubuntu in CI and a Windows-only TFM breaks it. It lives in `apps/desktop-winui/DocVault.Desktop.slnx`.
 - `OidcClient` refuses plain-HTTP discovery by default; the local lab is HTTP on loopback, and the
