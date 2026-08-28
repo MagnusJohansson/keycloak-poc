@@ -1,3 +1,8 @@
+// DocVault - a Keycloak proof-of-concept lab.
+// Copyright (C) 2026 Magnus Johansson
+// SPDX-License-Identifier: GPL-3.0-or-later
+// See the LICENSE file for the full licence text.
+
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';

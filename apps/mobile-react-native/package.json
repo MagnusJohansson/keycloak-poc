@@ -2,6 +2,8 @@
   "name": "docvault-react-native",
   "version": "1.0.0",
   "private": true,
+  "author": "Magnus Johansson",
+  "license": "GPL-3.0-or-later",
   "scripts": {
     "android": "react-native run-android",
     "ios": "react-native run-ios",

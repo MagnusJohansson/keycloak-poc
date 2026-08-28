@@ -1,3 +1,8 @@
+# DocVault - a Keycloak proof-of-concept lab.
+# Copyright (C) 2026 Magnus Johansson
+# SPDX-License-Identifier: GPL-3.0-or-later
+# See the LICENSE file for the full licence text.
+
 # Runs entirely against Docker Keycloak: no cloud account, no secrets.
 # That is deliberate - a lab whose CI needs a paid subscription is a lab nobody
 # can contribute to.
@@ -8,6 +13,15 @@ on:
   pull_request:
 
 jobs:
+  license:
+    name: Licence headers
+    runs-on: ubuntu-latest
+    # No toolchain, no secrets - it is a grep. Runs first so an unmarked new
+    # source file fails in seconds rather than after the whole matrix.
+    steps:
+      - uses: actions/checkout@v4
+      - run: tools/license-header.sh --check
+
   api:
     name: .NET API
     runs-on: ubuntu-latest

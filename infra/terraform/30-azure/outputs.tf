@@ -1,3 +1,8 @@
+# DocVault - a Keycloak proof-of-concept lab.
+# Copyright (C) 2026 Magnus Johansson
+# SPDX-License-Identifier: GPL-3.0-or-later
+# See the LICENSE file for the full licence text.
+
 output "acr_login_server" {
   description = "Push the API image here: az acr build --registry <name> --image docvault-api:<tag> apps/api-dotnet"
   value       = azurerm_container_registry.acr.login_server

@@ -1,4 +1,9 @@
 #!/usr/bin/env bash
+# DocVault - a Keycloak proof-of-concept lab.
+# Copyright (C) 2026 Magnus Johansson
+# SPDX-License-Identifier: GPL-3.0-or-later
+# See the LICENSE file for the full licence text.
+
 # Mints a client_credentials token for the worker and pretty-prints its claims.
 #
 # The fastest way to answer "why is the API rejecting me?" - check `aud`,
