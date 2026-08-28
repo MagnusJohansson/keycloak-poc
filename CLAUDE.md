@@ -295,6 +295,16 @@ Every one of these cost real debugging time and is now load-bearing. Do not "sim
   hand drifts exactly like the resource counts did. Validate before committing — invalid syntax
   renders as an error box on GitHub:
   `npx -y @mermaid-js/mermaid-cli@11 -i d.mmd -o d.svg`
+- **The repo is GPL-3.0-or-later**, and every hand-written source file opens with a four-line
+  SPDX header (`Copyright (C) 2026 Magnus Johansson` + `SPDX-License-Identifier: GPL-3.0-or-later`).
+  `tools/license-header.sh` applies it and `--check` verifies it; the `license` job in `ci.yml`
+  fails a build whose new file is missing one. Scope is defined by the include/exclude lists at
+  the top of that script — JSON is excluded because it has no comment syntax, so those projects
+  carry `"license"` in `package.json` instead. Three insertion rules are load-bearing: the header
+  goes *after* a shebang, *after* `<!doctype html>`, and *after* an `<?xml?>` declaration, since
+  all three must remain the first bytes of their file. The script's body is wrapped in a `main()`
+  function on purpose — it rewrites itself, and prepending lines to a script bash is still reading
+  shifts its file offset and makes it execute garbage.
 
 ## Verification status
 

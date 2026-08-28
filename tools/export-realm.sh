@@ -1,4 +1,9 @@
 #!/usr/bin/env bash
+# DocVault - a Keycloak proof-of-concept lab.
+# Copyright (C) 2026 Magnus Johansson
+# SPDX-License-Identifier: GPL-3.0-or-later
+# See the LICENSE file for the full licence text.
+
 # Exports the running local realm to JSON.
 #
 # The export is a GENERATED artifact, committed only so the realm can be seeded

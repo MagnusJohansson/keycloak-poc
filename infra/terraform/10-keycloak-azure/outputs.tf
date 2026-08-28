@@ -1,3 +1,8 @@
+# DocVault - a Keycloak proof-of-concept lab.
+# Copyright (C) 2026 Magnus Johansson
+# SPDX-License-Identifier: GPL-3.0-or-later
+# See the LICENSE file for the full licence text.
+
 output "keycloak_url" {
   description = "Base URL. Feed into ../20-realm's `keycloak_url` - the same variable the local Docker URL goes into."
   value       = local.issuer_base

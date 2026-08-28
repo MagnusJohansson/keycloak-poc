@@ -1,3 +1,8 @@
+// DocVault - a Keycloak proof-of-concept lab.
+// Copyright (C) 2026 Magnus Johansson
+// SPDX-License-Identifier: GPL-3.0-or-later
+// See the LICENSE file for the full licence text.
+
 const { contextBridge, ipcRenderer } = require('electron');
 
 // The entire surface the renderer can reach. Note what is absent: any way to

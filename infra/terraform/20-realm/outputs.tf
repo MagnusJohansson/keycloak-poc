@@ -1,3 +1,8 @@
+# DocVault - a Keycloak proof-of-concept lab.
+# Copyright (C) 2026 Magnus Johansson
+# SPDX-License-Identifier: GPL-3.0-or-later
+# See the LICENSE file for the full licence text.
+
 # ---------------------------------------------------------------------------
 # Everything the apps need in order to talk to this realm.
 # `make show-secrets` renders these into .env files.

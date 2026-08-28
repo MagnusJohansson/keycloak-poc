@@ -1,3 +1,8 @@
+# DocVault - a Keycloak proof-of-concept lab.
+# Copyright (C) 2026 Magnus Johansson
+# SPDX-License-Identifier: GPL-3.0-or-later
+# See the LICENSE file for the full licence text.
+
 # Multi-stage: the runtime image carries no SDK and no source.
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src

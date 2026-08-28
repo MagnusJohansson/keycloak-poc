@@ -1,3 +1,8 @@
+# DocVault - a Keycloak proof-of-concept lab.
+# Copyright (C) 2026 Magnus Johansson
+# SPDX-License-Identifier: GPL-3.0-or-later
+# See the LICENSE file for the full licence text.
+
 variable "keycloak_url" {
   type        = string
   description = "Base URL of the Keycloak instance, no trailing slash. e.g. http://localhost:8080 or https://ca-keycloak.<region>.azurecontainerapps.io"

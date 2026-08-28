@@ -1,3 +1,8 @@
+# DocVault - a Keycloak proof-of-concept lab.
+# Copyright (C) 2026 Magnus Johansson
+# SPDX-License-Identifier: GPL-3.0-or-later
+# See the LICENSE file for the full licence text.
+
 # ---------------------------------------------------------------------------
 # DocVault - a Keycloak identity lab.
 #
@@ -128,6 +133,14 @@ e2e: ## Playwright browser tests (requires: make up, seed, api, web)
 .PHONY: token
 token: ## Mint a client_credentials token and decode it
 	./tools/decode-token.sh
+
+.PHONY: license-check
+license-check: ## Verify every source file carries the SPDX licence header
+	./tools/license-header.sh --check
+
+.PHONY: license-apply
+license-apply: ## Add the SPDX licence header wherever it is missing
+	./tools/license-header.sh
 
 # --- Azure ------------------------------------------------------------------
 # Two separate deployments, applied in order:

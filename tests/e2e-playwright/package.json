@@ -1,6 +1,8 @@
 {
   "name": "docvault-e2e",
   "private": true,
+  "author": "Magnus Johansson",
+  "license": "GPL-3.0-or-later",
   "scripts": { "test": "playwright test", "report": "playwright show-report" },
   "devDependencies": { "@playwright/test": "^1.50.0" }
 }

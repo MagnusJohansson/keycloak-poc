@@ -1,3 +1,8 @@
+// DocVault - a Keycloak proof-of-concept lab.
+// Copyright (C) 2026 Magnus Johansson
+// SPDX-License-Identifier: GPL-3.0-or-later
+// See the LICENSE file for the full licence text.
+
 import { authorize, refresh, type AuthConfiguration, type AuthorizeResult } from 'react-native-app-auth';
 import * as Keychain from 'react-native-keychain';
 

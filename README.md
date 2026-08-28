@@ -288,4 +288,7 @@ Built and checked against real software, not just written down:
 
 ## Licence
 
-MIT — see [LICENSE](LICENSE).
+GPL-3.0-or-later — see [LICENSE](LICENSE).
+
+Every hand-written source file carries a four-line SPDX header naming the copyright holder
+and the licence. `make license-check` verifies it, and CI fails on a file that is missing one.
