@@ -215,7 +215,7 @@ The Azure variants read files you create and that are gitignored
 
 | # | Scenario | Where |
 |---|---|---|
-| 1 | RBAC + per-document ownership via Keycloak Authorization Services | [uc1](docs/use-cases/uc1-rbac-document-sharing.md) |
+| 1 | RBAC + tenant isolation, with per-document ownership modelled in Authorization Services | [uc1](docs/use-cases/uc1-rbac-document-sharing.md) |
 | 2 | Enterprise SSO — Entra ID federated as an external OIDC IdP | [uc2](docs/use-cases/uc2-enterprise-sso-entra.md) |
 | 3 | Step-up MFA — `acr_values`, RFC 9470 challenge, conditional OTP | [uc3](docs/use-cases/uc3-step-up-mfa.md) |
 | 4 | Machine-to-machine — `client_credentials`, service accounts | [uc4](docs/use-cases/uc4-service-to-service.md) |
@@ -271,9 +271,10 @@ Built and checked against real software, not just written down:
 - 74 Terraform resources applied to Keycloak 26.6.3, with a clean re-plan;
   `acr_values_supported`, the audience mapper and service-account roles confirmed
   in a real token.
-- .NET 10 API: 27 tests pass, including forged `alg:none`, wrong-key,
-  wrong-audience, wrong-realm and expired tokens, and 403-vs-401 for an
-  authenticated-but-unauthorized caller.
+- .NET 10 API: 29 tests pass, including forged `alg:none`, wrong-key,
+  wrong-audience, wrong-realm and expired tokens, 403-vs-401 for an
+  authenticated-but-unauthorized caller, and 404-not-403 across the tenant
+  boundary.
 - Desktop auth library: 45 tests pass on macOS/Linux. **Both desktop clients have
   been run end-to-end against the Azure deployment** — WinUI 3 on Windows and
   Electron on macOS — with system-browser sign-in, correct issuer, audience and

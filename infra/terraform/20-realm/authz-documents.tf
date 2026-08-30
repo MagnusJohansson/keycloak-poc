@@ -17,8 +17,13 @@
 #   POLICY     a rule: "is a doc.editor", "is the owner"
 #   PERMISSION binds scopes on a resource to policies
 #
-# The API asks Keycloak for a decision using the UMA ticket flow rather than
-# hardcoding `if (doc.OwnerId == userId)`.
+# STATUS: this model is provisioned but NOT enforced at runtime. The API does
+# local RBAC on the roles in the token plus tenant scoping from the group path;
+# it never asks Keycloak for a decision. Wiring that up means the UMA ticket
+# flow (`grant_type=urn:ietf:params:oauth:grant-type:uma-ticket`) to exchange
+# the access token for an RPT, which needs an outbound call per decision, the
+# client secret, and Keycloak on the request path. That trade is why it is
+# modelled here and evaluated in C# - see DocumentEndpoints.cs.
 # ---------------------------------------------------------------------------
 
 locals {
@@ -34,8 +39,9 @@ resource "keycloak_openid_client_authorization_scope" "document" {
 }
 
 # A single resource TYPE covering every document instance. Per-instance
-# resources are created at runtime by the API when a document is uploaded;
-# this declares the type they share.
+# resources would be registered through the Protection API as documents are
+# uploaded; this declares the type they would share. The API does not register
+# them today - see the STATUS note above.
 resource "keycloak_openid_client_authorization_resource" "document" {
   realm_id           = keycloak_realm.docvault.id
   resource_server_id = keycloak_openid_client.api.resource_server_id

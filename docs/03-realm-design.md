@@ -109,9 +109,11 @@ property. Per-client mappers are more verbose and completely portable.
 ### Fine-grained authorization lives in Keycloak
 
 RBAC answers "may this user edit documents?" but not "may they edit *this*
-document?" — that depends on data. Authorization Services move the second
+document?" — that depends on data. Authorization Services can move the second
 decision into Keycloak, where it is auditable and changeable without redeploying
-the API. See `authz-documents.tf`.
+the API. The model is provisioned in `authz-documents.tf`; the API does not
+evaluate it at runtime, so this is the design sketched in code rather than a
+working path. See the STATUS note at the top of that file.
 
 ## Applying it
 

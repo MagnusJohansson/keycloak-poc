@@ -150,7 +150,7 @@ Nothing about it is special; it does exactly what the Electron client does.
 ```
 apps/desktop-winui/
 ├── DocVault.Desktop.Auth/        net10.0    <- all the OIDC logic
-├── DocVault.Desktop.Auth.Tests/  net10.0    <- 30 tests, run on Linux/macOS in CI
+├── DocVault.Desktop.Auth.Tests/  net10.0    <- 45 tests, run on Linux/macOS in CI
 └── DocVault.WinUI/               net10.0-windows10.0.19041.0
 ```
 

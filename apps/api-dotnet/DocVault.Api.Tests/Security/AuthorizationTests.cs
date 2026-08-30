@@ -71,6 +71,59 @@ public sealed class AuthorizationTests(DocVaultApiFactory factory) : IClassFixtu
     }
 
     [Fact]
+    public async Task Deleting_another_tenants_document_returns_404_not_403()
+    {
+        // 403 would confirm the document exists, which is the one fact tenant isolation
+        // is meant to hide. Note the caller holds doc.admin, so the role check passes and
+        // the request actually reaches the tenant comparison — this asserts the boundary,
+        // not the policy. A 403 here would be the endpoint working and still leaking.
+        var acmeEditor = factory.Tokens.CreateToken(apiRoles: ["doc.editor"], groups: ["/acme/engineering"]);
+        var created = await factory.CreateClientWithToken(acmeEditor)
+            .PostAsJsonAsync("/documents", new { title = "Acme merger terms" });
+        var acmeDocument = await created.Content.ReadFromJsonAsync<DocumentDto>();
+        Assert.NotNull(acmeDocument);
+
+        var globexAdmin = factory.Tokens.CreateToken(apiRoles: ["doc.admin"], groups: ["/globex"]);
+        var response = await factory.CreateClientWithToken(globexAdmin)
+            .DeleteAsync($"/documents/{acmeDocument.Id}");
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+
+        // The refusal must also be a genuine no-op. A 404 that deleted the document anyway
+        // would be worse than a 403 — this proves it survived, and that the 404 was about
+        // tenancy rather than the document being missing or the endpoint being broken.
+        var acmeAdmin = factory.Tokens.CreateToken(apiRoles: ["doc.admin"], groups: ["/acme"]);
+        var ownTenant = await factory.CreateClientWithToken(acmeAdmin)
+            .DeleteAsync($"/documents/{acmeDocument.Id}");
+
+        Assert.Equal(HttpStatusCode.NoContent, ownTenant.StatusCode);
+    }
+
+    [Fact]
+    public async Task Another_tenants_document_is_indistinguishable_from_one_that_never_existed()
+    {
+        // The property that actually matters. Returning 404 is only useful if the two
+        // cases are identical on the wire: the moment they differ — status, body, or
+        // timing — the endpoint becomes an oracle for enumerating other tenants' ids.
+        var acmeEditor = factory.Tokens.CreateToken(apiRoles: ["doc.editor"], groups: ["/acme/engineering"]);
+        var created = await factory.CreateClientWithToken(acmeEditor)
+            .PostAsJsonAsync("/documents", new { title = "Acme board minutes" });
+        var acmeDocument = await created.Content.ReadFromJsonAsync<DocumentDto>();
+        Assert.NotNull(acmeDocument);
+
+        var globexAdmin = factory.Tokens.CreateToken(apiRoles: ["doc.admin"], groups: ["/globex"]);
+        var client = factory.CreateClientWithToken(globexAdmin);
+
+        var existsElsewhere = await client.DeleteAsync($"/documents/{acmeDocument.Id}");
+        var neverExisted = await client.DeleteAsync($"/documents/{Guid.NewGuid()}");
+
+        Assert.Equal(neverExisted.StatusCode, existsElsewhere.StatusCode);
+        Assert.Equal(
+            await neverExisted.Content.ReadAsStringAsync(),
+            await existsElsewhere.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
     public async Task Platform_admin_endpoint_requires_the_realm_role()
     {
         var docAdmin = factory.Tokens.CreateToken(apiRoles: ["doc.admin"], groups: ["/acme"]);
