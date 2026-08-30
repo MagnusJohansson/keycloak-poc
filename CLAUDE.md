@@ -18,7 +18,7 @@ make up          # Keycloak + Postgres + Mailpit (~30s, waits for readiness)
 make seed        # apply the DocVault realm via Terraform, then print secrets
 make api         # .NET 10 API on :5001
 make web         # React SPA on :5173      (separate shell)
-make test        # 72 .NET tests (27 API + 45 desktop-auth) - no Docker, network or cloud
+make test        # 74 .NET tests (29 API + 45 desktop-auth) - no Docker, network or cloud
 make e2e         # 7 Playwright tests - REQUIRES up + seed + api + web running
 make plan        # realm diff; should be EMPTY on an unchanged realm
 make token       # mint a real token and decode its claims
@@ -309,9 +309,10 @@ Every one of these cost real debugging time and is now load-bearing. Do not "sim
 ## Verification status
 
 Proven against real software: 74 Terraform resources applied to Keycloak 26.6.3 with a clean
-re-plan; 27 API + 45 desktop-auth .NET tests (including forged `alg:none`, wrong-key,
-wrong-audience, wrong-realm and expired tokens); 7 Playwright tests in a real browser; 7 Flutter
-tests; React/Vue build; Flutter analyzes clean.
+re-plan; 29 API + 45 desktop-auth .NET tests (including forged `alg:none`, wrong-key,
+wrong-audience, wrong-realm and expired tokens, and 404-not-403 across the tenant
+boundary); 7 Playwright tests in a real browser; 7 Flutter tests; React/Vue build;
+Flutter analyzes clean.
 
 **`10-keycloak-azure` has been applied for real** (Azure, swedencentral) and works: Keycloak came
 up on Container Apps behind HTTPS, `20-realm` applied all 74 resources to it, discovery returns the

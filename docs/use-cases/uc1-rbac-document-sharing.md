@@ -11,16 +11,16 @@ Acme and Globex both use DocVault. Requirements:
 - Within Acme, engineering writes, legal administers, everyone reads.
 - A document's *owner* can share it, regardless of role.
 
-The first three are RBAC. The fourth is not: it depends on data, so no role can
+The first two are RBAC. The third is not: it depends on data, so no role can
 express it.
 
-## Two layers
+## Three layers
 
 | Layer | Answers | Where enforced |
 |---|---|---|
 | Tenant scoping | which documents exist for you | API, from the `groups` claim |
 | RBAC | may you edit *documents* | Keycloak roles → .NET policies |
-| Fine-grained | may you edit *this* document | Keycloak Authorization Services |
+| Fine-grained | may you edit *this* document | Modelled in Authorization Services; not yet enforced |
 
 ### Tenant scoping
 
@@ -56,9 +56,15 @@ resource "keycloak_openid_client_authorization_resource" "document" {
 }
 ```
 
-`owner_managed_access` is what makes "the owner may share it" expressible without
-hard-coding `if (doc.OwnerId == userId)` in the API. The rule lives in Keycloak,
-where it is auditable and changeable without a redeploy.
+`owner_managed_access` is what makes "the owner may share it" *expressible*
+without hard-coding `if (doc.OwnerId == userId)` in the API — the rule can live
+in Keycloak, where it is auditable and changeable without a redeploy.
+
+Expressible, not yet enforced. The model is provisioned, but the API never asks
+Keycloak for a decision: doing so means the UMA ticket flow, an outbound call per
+decision, and Keycloak on the request path. Today the API does RBAC on the roles
+in the token plus tenant scoping from the group path, and there is no share
+endpoint. Treat this section as the shape of the answer, not a working feature.
 
 ## Try it
 

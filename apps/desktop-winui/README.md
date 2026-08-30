@@ -5,7 +5,7 @@ with authorization code + PKCE through the system browser.
 
 ```
 DocVault.Desktop.Auth/        net10.0    all the OIDC logic - builds and tests anywhere
-DocVault.Desktop.Auth.Tests/  net10.0    39 tests, run on Linux/macOS in CI
+DocVault.Desktop.Auth.Tests/  net10.0    45 tests, run on Linux/macOS in CI
 DocVault.WinUI/               net10.0-windows10.0.19041.0    thin XAML shell
 ```
 

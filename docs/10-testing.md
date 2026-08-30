@@ -1,7 +1,7 @@
-# 11. Testing and validation
+# 10. Testing and validation
 
 ```bash
-make test    # 27 tests, no Docker, no secrets, no network
+make test    # 74 tests (29 API + 45 desktop-auth), no Docker, no secrets, no network
 ```
 
 ## The pyramid
@@ -9,10 +9,15 @@ make test    # 27 tests, no Docker, no secrets, no network
 | Layer | Tool | Asserts |
 |---|---|---|
 | Unit | xUnit | Claims transformation and tenant derivation in isolation |
-| Integration | `WebApplicationFactory` + test JWKS | The real pipeline: policies, guards, endpoints |
-| Integration (real IdP) | Testcontainers Keycloak | Tokens from an actual Keycloak |
+| Integration | `WebApplicationFactory` + injected signing key | The real pipeline: policies, guards, endpoints |
+| Integration (real IdP) | `ci.yml` against Docker Keycloak | The realm applies, and the silent mappers took effect |
 | E2E | Playwright | Browser login → API call → step-up → logout |
 | Security | xUnit | Forged and malformed tokens are rejected |
+
+There is no test JWKS endpoint and no Testcontainers tier. The signing key is
+handed to the handler as an object reference, and the "does a real Keycloak
+actually emit this?" question is answered in CI rather than in the unit suite —
+see [CI](#ci) below.
 
 ## Testing auth without a live IdP
 
@@ -52,6 +57,8 @@ Each test is a real attack or a real misconfiguration:
 | `Rejects_an_expired_token` | Bounded `ClockSkew` |
 | `Authenticated_but_role_less_user_gets_403_not_401` | Login loops |
 | `Tenants_cannot_see_each_others_documents` | Cross-tenant leakage |
+| `Deleting_another_tenants_document_returns_404_not_403` | A 403 confirming existence |
+| `Another_tenants_document_is_indistinguishable_from_one_that_never_existed` | Id enumeration across tenants |
 | `Platform_admin_endpoint_requires_the_realm_role` | Client role ≠ realm role |
 | `Analytics_requires_the_consented_scope_not_merely_a_role` | Scope vs role |
 | `Stepping_up_does_not_substitute_for_the_role` | MFA ≠ permission |

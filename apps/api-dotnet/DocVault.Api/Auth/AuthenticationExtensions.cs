@@ -99,7 +99,7 @@ public static class AuthenticationExtensions
                     {
                         // Token validation failures are otherwise silent from the client's
                         // point of view. Logging the reason turns "mysterious 401" into a
-                        // two-minute fix; see docs/12-troubleshooting.md.
+                        // two-minute fix; see docs/11-troubleshooting.md.
                         var logger = context.HttpContext.RequestServices
                             .GetRequiredService<ILoggerFactory>()
                             .CreateLogger("DocVault.Auth");
