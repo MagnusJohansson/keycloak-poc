@@ -114,9 +114,11 @@ public sealed partial class MainWindow : Window
         }
         catch (ApiException ex) when (ex.Status == System.Net.HttpStatusCode.Forbidden)
         {
-            // A plain 403: the caller lacks the role. Re-authenticating would not help, so do
-            // not send them back through sign-in - that is a loop which can never succeed.
-            Report(InfoBarSeverity.Error, "Forbidden — your account lacks the required role.");
+            // A plain 403: re-authenticating would not help, so do not send them back through
+            // sign-in - that is a loop which can never succeed. Not always a missing role, though:
+            // "no tenant" and "ambiguous tenant" are 403s too, and the problem body says which.
+            var reason = DocVaultApiClient.ParseProblemReason(ex.Message) ?? "you may not access this.";
+            Report(InfoBarSeverity.Error, $"Forbidden — {reason}");
         }
     }
 

@@ -82,12 +82,19 @@ class _HomePageState extends State<HomePage> {
           headers: {'Authorization': 'Bearer $token'},
         );
 
+        // Same step-up contract as the web client: the API says what is missing. RFC 9470
+        // sends it as a 401, so the header, not the status, decides.
+        final challenge = response.headers['www-authenticate'] ?? '';
+        if (challenge.contains('insufficient_user_authentication')) {
+          setState(() => _status = 'Step-up required - tap "Step up (OTP)".');
+          return;
+        }
+
         if (response.statusCode == 403) {
-          // Same step-up contract as the web client: the API says what is missing.
-          final challenge = response.headers['www-authenticate'] ?? '';
-          setState(() => _status = challenge.contains('insufficient_user_authentication')
-              ? 'Step-up required - tap "Step up (OTP)".'
-              : 'Forbidden: your account lacks the required role.');
+          // Not always a missing role: "no tenant" and "ambiguous tenant" are 403s too, and
+          // their problem body says which. Pass the server's reason on; a role check's 403
+          // has no body.
+          setState(() => _status = 'Forbidden: ${problemReason(response.body) ?? 'you may not access this.'}');
           return;
         }
 
@@ -144,5 +151,23 @@ class _HomePageState extends State<HomePage> {
         ],
       ),
     );
+  }
+}
+
+/// The reason in an RFC 9457 problem body (`detail`, else `title`), or null when the body is
+/// empty or not a problem document — as for a role check's 403, which carries no body.
+String? problemReason(String body) {
+  try {
+    final json = jsonDecode(body);
+    if (json is! Map) return null;
+    // Type-checked rather than cast: a non-string field would throw TypeError, which the
+    // FormatException handler below does not catch.
+    for (final key in const ['detail', 'title']) {
+      final value = json[key];
+      if (value is String && value.isNotEmpty) return value;
+    }
+    return null;
+  } on FormatException {
+    return null;
   }
 }

@@ -12,7 +12,7 @@
 #
 # How the pieces connect:
 #
-#   1. API returns 403 + `WWW-Authenticate: Bearer error="insufficient_user_
+#   1. API returns 401 + `WWW-Authenticate: Bearer error="insufficient_user_
 #      authentication", acr_values="silver"` when the token's acr is too low.
 #   2. The SPA re-runs the auth request with `acr_values=silver`.
 #   3. Keycloak maps silver -> LoA 2 via `acr.loa.map` (see realm.tf).

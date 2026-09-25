@@ -52,9 +52,10 @@ resource "keycloak_openid_audience_protocol_mapper" "api_audience" {
 # this path (see TenantClaimExtensions.cs).
 #
 # Note: the `tenant` / `department` attributes set on the groups in
-# roles-groups.tf are admin-side metadata. Keycloak has NO built-in mapper that
-# copies group attributes into a token - the path is the thing that travels.
-# That is why the API parses the path rather than reading a `tenant` claim.
+# roles-groups.tf are NOT mapped into any token here, by choice. The built-in
+# User Attribute mapper would resolve them from the user's groups, but with
+# implicit precedence (a user attribute beats the group's; across memberships
+# the first found wins). The path is unambiguous, so the path is what travels.
 resource "keycloak_openid_group_membership_protocol_mapper" "groups" {
   for_each = local.api_calling_clients
 

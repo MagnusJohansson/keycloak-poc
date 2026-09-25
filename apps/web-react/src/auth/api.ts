@@ -62,7 +62,10 @@ export async function callApi<T>(user: User | null | undefined, path: string, in
     },
   });
 
-  if (response.status === 403) {
+  // RFC 9470 sends the step-up challenge as a 401, so the header must be read BEFORE
+  // any "401 means the session expired" handling gets a chance to swallow it. 403 is
+  // accepted too: some resource servers use it, and the header is what decides.
+  if (response.status === 401 || response.status === 403) {
     const requiredAcr = parseStepUpChallenge(response.headers.get('WWW-Authenticate'));
     if (requiredAcr) {
       // Recoverable: the user can re-authenticate at a higher level. Distinguished

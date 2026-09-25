@@ -69,7 +69,7 @@ issuer rather than widening what the API trusts — an API should validate exact
 | Desktop sign-in fails with `invalid_request` | The registered redirect URI does not match. Keycloak honours a wildcard only at the **end** of a URI, so `http://127.0.0.1:*/callback` never matches — the `*` is literal | Register `http://127.0.0.1/*`; Keycloak's RFC 8252 loopback handling ignores the port |
 | Mobile cannot reach Keycloak | `localhost` inside an emulator is the emulator | `make android-reverse` (forwards the device's own localhost to your machine). **Not `10.0.2.2`** — that changes the issuer and every API call then 401s; see IDX10205 above |
 | Silent renew fails, user logged out | Third-party cookies blocked | Custom domain sharing a site with the app, or a BFF |
-| Step-up challenge invisible to the SPA; user sees a bare 403 | `WWW-Authenticate` is **not** CORS-safelisted, so a cross-origin SPA cannot read it | Add `.WithExposedHeaders("WWW-Authenticate")` to the CORS policy |
+| Step-up challenge invisible to the SPA; user sees a bare 401 | `WWW-Authenticate` is **not** CORS-safelisted, so a cross-origin SPA cannot read it | Add `.WithExposedHeaders("WWW-Authenticate")` to the CORS policy |
 
 ## Step-up
 

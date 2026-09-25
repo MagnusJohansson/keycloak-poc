@@ -1,7 +1,7 @@
 # 10. Testing and validation
 
 ```bash
-make test    # 74 tests (29 API + 45 desktop-auth), no Docker, no secrets, no network
+make test    # 87 tests (32 API + 55 desktop-auth), no Docker, no secrets, no network
 ```
 
 ## The pyramid

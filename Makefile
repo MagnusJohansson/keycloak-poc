@@ -82,6 +82,10 @@ show-secrets: ## Print the generated client secrets and demo logins
 	echo "Worker client secret: $$($(TF) output -raw worker_client_secret)" && \
 	echo "Demo users: alice / bob / carol / dave   password: DocVaultLab!2026"
 
+.PHONY: assert-authz
+assert-authz: ## Check the Authorization Services model's decisions (needs up + seed)
+	./tools/assert-authz-model.sh
+
 .PHONY: export-realm
 export-realm: ## Regenerate infra/local/realm-export/docvault-realm.json
 	./tools/export-realm.sh

@@ -42,11 +42,11 @@ resource "keycloak_role" "api" {
 }
 
 # --- Tenants as top-level groups -------------------------------------------
-# The `tenant` attribute here is admin-side metadata only. Keycloak has NO
-# mapper that copies group ATTRIBUTES into a token, so what actually reaches the
-# API is the group PATH ("/acme/engineering") via the mapper in mappers.tf. The
-# API parses the first segment of that path to scope every query - see
-# TenantContext.cs. Do not assume this attribute travels; it does not.
+# The `tenant` attribute here is admin-side metadata only. No mapper in this
+# realm sends it (a User Attribute mapper could - see mappers.tf for why it
+# doesn't), so what actually reaches the API is the group PATH
+# ("/acme/engineering"). The API parses the first segment of that path to scope
+# every query - see TenantContext.cs. Do not assume this attribute travels.
 resource "keycloak_group" "acme" {
   realm_id = keycloak_realm.docvault.id
   name     = "acme"

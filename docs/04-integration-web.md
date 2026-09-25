@@ -92,7 +92,7 @@ answering 403 with 401 — a loop that logging in again cannot break.
 
 ```
 fetch /documents/classified
-  → 403 + WWW-Authenticate: Bearer error="insufficient_user_authentication", acr_values="silver"
+  → 401 + WWW-Authenticate: Bearer error="insufficient_user_authentication", acr_values="silver"
   → signinRedirect({ extraQueryParams: { acr_values: 'silver' }, prompt: 'login' })
   → new token with acr=silver
   → retry
@@ -120,8 +120,8 @@ from the browser fails.
 >
 > It is not one of the CORS-safelisted response headers, so without this a
 > cross-origin SPA cannot read it. The step-up challenge then becomes invisible:
-> the API correctly returns 403 with `acr_values="silver"`, the browser sees only
-> a bare 403, and the user has no way to recover. The Playwright suite caught
+> the API correctly returns 401 with `acr_values="silver"`, the browser sees only
+> a bare 401, and the user has no way to recover. The Playwright suite caught
 > exactly this.
 
 ## TokenInspector

@@ -181,13 +181,18 @@ ipcMain.handle('api:documents', async () => {
     headers: { Authorization: `Bearer ${tokens.access_token}` },
   });
 
+  // RFC 9470 sends the step-up challenge as a 401; the header, not the status, decides.
+  const challenge = response.headers.get('www-authenticate') ?? '';
+  if (challenge.includes('insufficient_user_authentication')) {
+    return { error: 'Step-up required.' };
+  }
+
   if (response.status === 403) {
-    const challenge = response.headers.get('www-authenticate') ?? '';
-    return {
-      error: challenge.includes('insufficient_user_authentication')
-        ? 'Step-up required.'
-        : 'Forbidden: your account lacks the required role.',
-    };
+    // Not always a missing role: "no tenant" and "ambiguous tenant" are 403s too, and their
+    // problem body says which. Pass the server's reason on; a role check's 403 has no body.
+    const problem = await response.json().catch(() => null);
+    const reason = [problem?.detail, problem?.title].find((v) => typeof v === 'string' && v !== '');
+    return { error: `Forbidden: ${reason ?? 'you may not access this.'}` };
   }
 
   if (!response.ok) {

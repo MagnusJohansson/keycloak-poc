@@ -1062,21 +1062,9 @@
                         }
                     },
                     {
-                        "name": "classified-view-permission",
+                        "name": "document-view-scope-permission",
                         "description": "",
-                        "type": "resource",
-                        "logic": "POSITIVE",
-                        "decisionStrategy": "UNANIMOUS",
-                        "config": {
-                            "resources": "[\"classified-document\"]",
-                            "scopes": "[\"document:view\"]",
-                            "applyPolicies": "[\"is-document-admin\"]"
-                        }
-                    },
-                    {
-                        "name": "document-view-permission",
-                        "description": "",
-                        "type": "resource",
+                        "type": "scope",
                         "logic": "POSITIVE",
                         "decisionStrategy": "AFFIRMATIVE",
                         "config": {
@@ -1086,9 +1074,21 @@
                         }
                     },
                     {
-                        "name": "document-edit-permission",
+                        "name": "document-delete-scope-permission",
                         "description": "",
-                        "type": "resource",
+                        "type": "scope",
+                        "logic": "POSITIVE",
+                        "decisionStrategy": "UNANIMOUS",
+                        "config": {
+                            "resources": "[\"document\"]",
+                            "scopes": "[\"document:delete\"]",
+                            "applyPolicies": "[\"is-document-admin\"]"
+                        }
+                    },
+                    {
+                        "name": "document-edit-scope-permission",
+                        "description": "",
+                        "type": "scope",
                         "logic": "POSITIVE",
                         "decisionStrategy": "AFFIRMATIVE",
                         "config": {
@@ -1098,14 +1098,14 @@
                         }
                     },
                     {
-                        "name": "document-delete-permission",
+                        "name": "classified-view-scope-permission",
                         "description": "",
-                        "type": "resource",
+                        "type": "scope",
                         "logic": "POSITIVE",
                         "decisionStrategy": "UNANIMOUS",
                         "config": {
-                            "resources": "[\"document\"]",
-                            "scopes": "[\"document:delete\"]",
+                            "resources": "[\"classified-document\"]",
+                            "scopes": "[\"document:view\"]",
                             "applyPolicies": "[\"is-document-admin\"]"
                         }
                     }
@@ -1906,8 +1906,8 @@
                     "consentRequired": false,
                     "config": {
                         "id.token.claim": "true",
-                        "access.token.claim": "true",
-                        "introspection.token.claim": "true"
+                        "introspection.token.claim": "true",
+                        "access.token.claim": "true"
                     }
                 }
             ]
@@ -2194,8 +2194,8 @@
                     "consentRequired": false,
                     "config": {
                         "id.token.claim": "true",
-                        "access.token.claim": "true",
                         "introspection.token.claim": "true",
+                        "access.token.claim": "true",
                         "userinfo.token.claim": "true"
                     }
                 },
@@ -2402,8 +2402,8 @@
                     "protocolMapper": "oidc-audience-resolve-mapper",
                     "consentRequired": false,
                     "config": {
-                        "access.token.claim": "true",
-                        "introspection.token.claim": "true"
+                        "introspection.token.claim": "true",
+                        "access.token.claim": "true"
                     }
                 }
             ]
@@ -2464,8 +2464,8 @@
                     "protocolMapper": "oidc-sub-mapper",
                     "consentRequired": false,
                     "config": {
-                        "access.token.claim": "true",
-                        "introspection.token.claim": "true"
+                        "introspection.token.claim": "true",
+                        "access.token.claim": "true"
                     }
                 }
             ]
