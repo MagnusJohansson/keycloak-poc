@@ -10,10 +10,12 @@
 # infra/terraform/20-realm/authz-documents.tf), so nothing else would notice if
 # it were wrong. It WAS wrong: the permissions were created without
 # `type = "scope"`, which made them resource permissions that apply to every
-# scope, and with the UNANIMOUS strategy an editor was refused even `view`.
+# scope, and with the UNANIMOUS strategy an editor was refused even `view`
+# (4 of the decisions below fail against that model).
 # A model nobody calls is a model nobody tests - this is the test.
 #
-# Uses the admin policy evaluator, so it needs no user tokens and no browser.
+# Every scope the model grants is asserted both ways, so dropping one from a
+# permission fails here. Uses the admin policy evaluator: no user tokens, no browser.
 # Usage: tools/assert-authz-model.sh   (against the running local lab)
 
 set -euo pipefail
@@ -52,9 +54,11 @@ expect() { # user resource scope PERMIT|DENY
 # carol: doc.admin. dave: no roles.
 expect alice document document:view   PERMIT   # the case that was broken
 expect alice document document:edit   PERMIT
+expect alice document document:share  PERMIT   # granted by the edit permission, alongside edit
 expect alice document document:delete DENY
 expect bob   document document:view   PERMIT
 expect bob   document document:edit   DENY
+expect bob   document document:share  DENY
 expect carol document document:delete PERMIT
 expect dave  document document:view   DENY
 expect alice classified-document document:view DENY

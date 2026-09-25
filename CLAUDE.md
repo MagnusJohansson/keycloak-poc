@@ -119,7 +119,9 @@ Every one of these cost real debugging time and is now load-bearing. Do not "sim
   resource server's `UNANIMOUS` strategy an editor was refused even `view`. Silent, because the API
   never calls the model — `make assert-authz` (also in CI) is the only thing that would notice.
   Keycloak also **ignores a `type` change on an existing permission** (apply reports success, the
-  next plan repeats it), so an existing realm needs a one-time `terraform apply -replace=…`.
+  next plan repeats it), and `replace_triggered_by` on a new `terraform_data` does not fire. The
+  fix therefore uses new addresses (`*_scope`) *and* new names (`*-scope-permission`), so plain
+  `make seed` repairs an old realm; reusing a name could collide, since old and new run in parallel.
 - Keycloak generates `pairwiseSubAlgorithmSalt` itself → perpetual drift without `ignore_changes`.
   Never hardcode that salt.
 - Keycloak *fetches* `sectorIdentifierUri` at mapper-creation time (chicken-and-egg with the API).

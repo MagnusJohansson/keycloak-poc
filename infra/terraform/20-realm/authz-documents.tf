@@ -138,10 +138,20 @@ resource "keycloak_openid_client_role_policy" "admin" {
 # admin could view anything. Nothing reported it: the model is not called at
 # runtime (see STATUS above). Check with the admin console's policy evaluator,
 # or a UMA `response_mode=decision` call with a user's token.
-resource "keycloak_openid_client_authorization_permission" "document_view" {
+#
+# UPGRADE PATH. Keycloak ignores a `type` change on an existing permission: the
+# apply reports success, Keycloak keeps `resource`, and the next plan repeats
+# the change forever. The provider does not mark `type` force-new, and
+# `replace_triggered_by` on a new terraform_data does not fire either (creating
+# the trigger is not a change to it - tried). So the fix gives the permissions
+# NEW resource addresses (`*_scope`) and NEW names (`*-scope-permission`):
+# `make seed` on a realm seeded before the fix destroys the old resource
+# permissions and creates scope ones. New names matter too: old and new run in
+# parallel, and reusing a name could collide with the permission being deleted.
+resource "keycloak_openid_client_authorization_permission" "document_view_scope" {
   realm_id           = keycloak_realm.docvault.id
   resource_server_id = keycloak_openid_client.api.resource_server_id
-  name               = "document-view-permission"
+  name               = "document-view-scope-permission"
   type               = "scope"
   decision_strategy  = "AFFIRMATIVE"
 
@@ -150,10 +160,10 @@ resource "keycloak_openid_client_authorization_permission" "document_view" {
   policies  = [keycloak_openid_client_role_policy.reader.id]
 }
 
-resource "keycloak_openid_client_authorization_permission" "document_edit" {
+resource "keycloak_openid_client_authorization_permission" "document_edit_scope" {
   realm_id           = keycloak_realm.docvault.id
   resource_server_id = keycloak_openid_client.api.resource_server_id
-  name               = "document-edit-permission"
+  name               = "document-edit-scope-permission"
   type               = "scope"
   decision_strategy  = "AFFIRMATIVE"
 
@@ -166,10 +176,10 @@ resource "keycloak_openid_client_authorization_permission" "document_edit" {
 }
 
 # Deleting is admin-only, and UNANIMOUS: every attached policy must pass.
-resource "keycloak_openid_client_authorization_permission" "document_delete" {
+resource "keycloak_openid_client_authorization_permission" "document_delete_scope" {
   realm_id           = keycloak_realm.docvault.id
   resource_server_id = keycloak_openid_client.api.resource_server_id
-  name               = "document-delete-permission"
+  name               = "document-delete-scope-permission"
   type               = "scope"
   decision_strategy  = "UNANIMOUS"
 
@@ -178,10 +188,10 @@ resource "keycloak_openid_client_authorization_permission" "document_delete" {
   policies  = [keycloak_openid_client_role_policy.admin.id]
 }
 
-resource "keycloak_openid_client_authorization_permission" "classified_view" {
+resource "keycloak_openid_client_authorization_permission" "classified_view_scope" {
   realm_id           = keycloak_realm.docvault.id
   resource_server_id = keycloak_openid_client.api.resource_server_id
-  name               = "classified-view-permission"
+  name               = "classified-view-scope-permission"
   type               = "scope"
   decision_strategy  = "UNANIMOUS"
 

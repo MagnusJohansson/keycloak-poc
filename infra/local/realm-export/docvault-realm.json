@@ -1062,19 +1062,19 @@
                         }
                     },
                     {
-                        "name": "document-edit-permission",
+                        "name": "document-view-scope-permission",
                         "description": "",
                         "type": "scope",
                         "logic": "POSITIVE",
                         "decisionStrategy": "AFFIRMATIVE",
                         "config": {
                             "resources": "[\"document\"]",
-                            "scopes": "[\"document:edit\",\"document:share\"]",
-                            "applyPolicies": "[\"is-document-editor\"]"
+                            "scopes": "[\"document:view\"]",
+                            "applyPolicies": "[\"is-document-reader\"]"
                         }
                     },
                     {
-                        "name": "document-delete-permission",
+                        "name": "document-delete-scope-permission",
                         "description": "",
                         "type": "scope",
                         "logic": "POSITIVE",
@@ -1086,7 +1086,19 @@
                         }
                     },
                     {
-                        "name": "classified-view-permission",
+                        "name": "document-edit-scope-permission",
+                        "description": "",
+                        "type": "scope",
+                        "logic": "POSITIVE",
+                        "decisionStrategy": "AFFIRMATIVE",
+                        "config": {
+                            "resources": "[\"document\"]",
+                            "scopes": "[\"document:edit\",\"document:share\"]",
+                            "applyPolicies": "[\"is-document-editor\"]"
+                        }
+                    },
+                    {
+                        "name": "classified-view-scope-permission",
                         "description": "",
                         "type": "scope",
                         "logic": "POSITIVE",
@@ -1095,18 +1107,6 @@
                             "resources": "[\"classified-document\"]",
                             "scopes": "[\"document:view\"]",
                             "applyPolicies": "[\"is-document-admin\"]"
-                        }
-                    },
-                    {
-                        "name": "document-view-permission",
-                        "description": "",
-                        "type": "scope",
-                        "logic": "POSITIVE",
-                        "decisionStrategy": "AFFIRMATIVE",
-                        "config": {
-                            "resources": "[\"document\"]",
-                            "scopes": "[\"document:view\"]",
-                            "applyPolicies": "[\"is-document-reader\"]"
                         }
                     }
                 ],
