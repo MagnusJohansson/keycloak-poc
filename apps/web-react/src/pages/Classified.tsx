@@ -16,7 +16,7 @@ interface ClassifiedResponse {
 
 /**
  * The step-up demo, end to end:
- *   fetch -> 403 + WWW-Authenticate -> re-authenticate with acr_values -> retry.
+ *   fetch -> 401 + WWW-Authenticate -> re-authenticate with acr_values -> retry.
  */
 export function ClassifiedPage() {
   const auth = useAuth();

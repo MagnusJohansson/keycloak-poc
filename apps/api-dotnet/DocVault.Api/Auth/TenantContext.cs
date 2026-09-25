@@ -22,11 +22,12 @@ public static class TenantClaimExtensions
     /// </summary>
     /// <remarks>
     /// <para>
-    /// The token carries group <em>paths</em>, e.g. <c>["/acme/engineering"]</c>, because
-    /// Keycloak has no built-in protocol mapper that copies group <em>attributes</em> into a
-    /// token. The <c>tenant</c> attribute set on the group in Terraform is admin-side metadata
-    /// only — it never reaches the client. So the path is the contract, and the first segment
-    /// is the tenant.
+    /// The token carries group <em>paths</em>, e.g. <c>["/acme/engineering"]</c>, and the first
+    /// segment is the tenant. Keycloak <em>could</em> send the groups' <c>tenant</c> attribute
+    /// instead — the built-in User Attribute mapper resolves it from the user's groups — but
+    /// that resolution is implicit: an attribute on the user silently overrides the group's,
+    /// and across several memberships the first one found wins. The path has no such
+    /// ambiguity and carries the department too, so the path is the contract.
     /// </para>
     /// <para>
     /// A user in more than one tenant is rejected rather than guessed at: silently picking the

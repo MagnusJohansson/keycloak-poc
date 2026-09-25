@@ -18,7 +18,7 @@ make up          # Keycloak + Postgres + Mailpit (~30s, waits for readiness)
 make seed        # apply the DocVault realm via Terraform, then print secrets
 make api         # .NET 10 API on :5001
 make web         # React SPA on :5173      (separate shell)
-make test        # 74 .NET tests (29 API + 45 desktop-auth) - no Docker, network or cloud
+make test        # 76 .NET tests (31 API + 45 desktop-auth) - no Docker, network or cloud
 make e2e         # 7 Playwright tests - REQUIRES up + seed + api + web running
 make plan        # realm diff; should be EMPTY on an unchanged realm
 make token       # mint a real token and decode its claims
@@ -74,8 +74,11 @@ Never hand-edit it — the next `make seed` overwrites it. Terraform is the sour
 ### Demo app: DocVault
 
 Multi-tenant document workspace. Tenants are groups (`/acme`, `/globex`), roles ride on groups, and
-the API derives tenant from the **group path** — Keycloak has no mapper for group *attributes*, so
-the path is what travels.
+the API derives tenant from the **group path**. That is a *choice*, not a Keycloak limitation: the
+built-in User Attribute mapper does resolve an attribute from the user's groups (verified on
+26.6.3). The path wins because that resolution is implicit — a user attribute silently beats the
+group's, and across memberships the first found wins — and because `/acme/engineering` carries
+tenant *and* unit. Do not reintroduce "group attributes can't reach a token"; it is false.
 
 Demo users each exist to make one outcome visible: `alice` (editor, happy path), `bob` (other
 tenant, isolation), `carol` (admin + MFA step-up), `dave` (no roles → **403, not 401**).
@@ -245,8 +248,12 @@ Every one of these cost real debugging time and is now load-bearing. Do not "sim
 **Runtime:**
 
 - **`WWW-Authenticate` is not CORS-safelisted.** Without `.WithExposedHeaders("WWW-Authenticate")`
-  the browser cannot read the RFC 9470 step-up challenge, so the SPA sees a bare 403 and the user
+  the browser cannot read the RFC 9470 step-up challenge, so the SPA sees a bare 401 and the user
   has no recovery path.
+- **The step-up challenge is a 401, not a 403** (RFC 9470 §3): the authentication event is
+  insufficient, not the permissions. Every client reads `WWW-Authenticate` *before* treating a 401
+  as "session expired". It is issued **only when the ACR is the sole unmet requirement** — a
+  `doc.reader` at bronze gets a plain 403, since stepping up could not help.
 - `MapInboundClaims = false` on JwtBearer, or .NET rewrites claim names and hides `realm_access`.
 - `RequireHttpsMetadata` is explicit config, not `!IsDevelopment()` — the environment name is easy
   to lose (`--no-launch-profile` silently means Production). A startup guard rejects the unsafe
@@ -309,7 +316,7 @@ Every one of these cost real debugging time and is now load-bearing. Do not "sim
 ## Verification status
 
 Proven against real software: 74 Terraform resources applied to Keycloak 26.6.3 with a clean
-re-plan; 29 API + 45 desktop-auth .NET tests (including forged `alg:none`, wrong-key,
+re-plan; 31 API + 45 desktop-auth .NET tests (including forged `alg:none`, wrong-key,
 wrong-audience, wrong-realm and expired tokens, and 404-not-403 across the tenant
 boundary); 7 Playwright tests in a real browser; 7 Flutter tests; React/Vue build;
 Flutter analyzes clean.

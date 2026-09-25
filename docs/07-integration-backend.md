@@ -92,13 +92,13 @@ Roles vs scopes: a **role** is what the *user* may do; a **scope** is what the
 *client* was authorised to ask for and the user consented to. The analytics
 endpoint is scope-gated because consent, not job function, is what governs it.
 
-## Step-up: 403 with instructions
+## Step-up: 401 with instructions
 
 An unmet ACR requirement produces a spec-compliant challenge instead of a dead
 end (RFC 9470):
 
 ```
-HTTP/1.1 403 Forbidden
+HTTP/1.1 401 Unauthorized
 WWW-Authenticate: Bearer error="insufficient_user_authentication",
                   acr_values="silver"
 ```
@@ -108,6 +108,12 @@ the handler leaves the requirement *unmet* rather than calling `context.Fail()`,
 "needs to step up" stays distinguishable from "will never be allowed"; and the
 challenge is only issued to an already-authenticated caller, since telling an
 anonymous user to step up before logging in is nonsense.
+
+It is a **401, not a 403**, as in both of RFC 9470's examples: the authentication
+event is insufficient, not the permissions. Clients must read `WWW-Authenticate`
+before treating a 401 as "session expired". And it is issued only when the ACR is
+the *only* unmet requirement — a `doc.reader` at bronze fails the role as well,
+and offering them step-up would walk them through OTP to a plain 403.
 
 ## Tenant isolation
 

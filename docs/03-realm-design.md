@@ -55,13 +55,16 @@ not a tenant property.
 
 ### Tenant travels as a group *path*
 
-Group attributes (`tenant`, `department`) are set in Terraform but **never reach
-the token** — Keycloak has no mapper for group attributes. The token carries
-`groups: ["/acme/engineering"]`, and `TenantClaimExtensions` parses it.
+Group attributes (`tenant`, `department`) are set in Terraform, but no mapper in
+this realm sends them. That is a choice: the built-in User Attribute mapper *would*
+resolve them from the user's groups, but implicitly — an attribute on the user
+silently beats the group's, and across memberships the first found wins. The token
+carries `groups: ["/acme/engineering"]` instead, and `TenantClaimExtensions` parses it.
 
 A user in two tenants throws rather than picking the first. Guessing there would
 be a cross-tenant data leak; the correct product answer is a tenant switcher that
-mints a tenant-scoped token.
+mints a tenant-scoped token. The API answers that caller with a **403** problem
+response (`MultipleTenantsExceptionHandler`), not a 500.
 
 ### Short access tokens, longer sessions
 

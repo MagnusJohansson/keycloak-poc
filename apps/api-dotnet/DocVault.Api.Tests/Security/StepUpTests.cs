@@ -11,14 +11,15 @@ namespace DocVault.Api.Tests.Security;
 public sealed class StepUpTests(DocVaultApiFactory factory) : IClassFixture<DocVaultApiFactory>
 {
     [Fact]
-    public async Task Classified_access_is_refused_without_a_stepped_up_acr()
+    public async Task Classified_access_is_refused_with_401_without_a_stepped_up_acr()
     {
-        // Has the right role, but only authenticated with a password.
+        // Has the right role, but only authenticated with a password. 401, not 403, per
+        // RFC 9470 section 3: the authentication event is insufficient, not the permissions.
         var token = factory.Tokens.CreateToken(apiRoles: ["doc.admin"], groups: ["/acme/legal"], acr: "bronze");
 
         var response = await factory.CreateClientWithToken(token).GetAsync("/documents/classified");
 
-        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
     [Fact]
@@ -55,5 +56,18 @@ public sealed class StepUpTests(DocVaultApiFactory factory) : IClassFixture<DocV
         var response = await factory.CreateClientWithToken(token).GetAsync("/documents/classified");
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task No_step_up_is_offered_when_stepping_up_would_not_help()
+    {
+        // A reader at bronze fails the role AND the ACR. Offering step-up would walk them
+        // through OTP only to be refused again; they must get a plain 403 with no challenge.
+        var token = factory.Tokens.CreateToken(apiRoles: ["doc.reader"], groups: ["/acme"], acr: "bronze");
+
+        var response = await factory.CreateClientWithToken(token).GetAsync("/documents/classified");
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        Assert.DoesNotContain("insufficient_user_authentication", response.Headers.WwwAuthenticate.ToString());
     }
 }

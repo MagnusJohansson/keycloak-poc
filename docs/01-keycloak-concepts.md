@@ -56,9 +56,11 @@ API's claims transformation only imports roles for its own client for that reaso
 group membership rather than a checklist of roles. Sub-groups inherit their
 parent's roles, so `/acme/engineering` gets everything `/acme` has.
 
-> Group **attributes** do *not* reach the token. Keycloak ships no mapper for
-> them. What travels is the group **path**, which is why the API derives the
-> tenant from `/acme/engineering` rather than reading a `tenant` claim.
+> Group **attributes** *can* reach the token: the built-in User Attribute mapper
+> resolves an attribute from the user's groups when the user lacks it. This realm
+> sends the group **path** instead, by choice — the attribute's resolution order is
+> implicit (a user attribute silently wins; across memberships, the first found
+> does), while `/acme/engineering` is unambiguous and carries the department too.
 
 ## Tokens
 

@@ -124,6 +124,28 @@ public sealed class AuthorizationTests(DocVaultApiFactory factory) : IClassFixtu
     }
 
     [Fact]
+    public async Task A_user_in_two_tenants_gets_403_not_500()
+    {
+        // The API refuses to guess which tenant a two-tenant caller means, and it must refuse
+        // cleanly. An unhandled exception here was a 500: a server fault the client could
+        // only retry, for what is really "this token is not scoped to one tenant".
+        var token = factory.Tokens.CreateToken(apiRoles: ["doc.reader"], groups: ["/acme", "/globex"]);
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/documents");
+        request.Headers.Add("Origin", "http://localhost:5173");
+        var response = await factory.CreateClientWithToken(token).SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
+
+        // The exception handler clears the response before writing its own. If that took the
+        // CORS headers with it, the SPA would see an opaque network error instead of this 403.
+        Assert.Equal(
+            "http://localhost:5173",
+            response.Headers.GetValues("Access-Control-Allow-Origin").Single());
+    }
+
+    [Fact]
     public async Task Platform_admin_endpoint_requires_the_realm_role()
     {
         var docAdmin = factory.Tokens.CreateToken(apiRoles: ["doc.admin"], groups: ["/acme"]);

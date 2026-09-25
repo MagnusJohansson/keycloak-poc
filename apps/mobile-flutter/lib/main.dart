@@ -82,12 +82,16 @@ class _HomePageState extends State<HomePage> {
           headers: {'Authorization': 'Bearer $token'},
         );
 
+        // Same step-up contract as the web client: the API says what is missing. RFC 9470
+        // sends it as a 401, so the header, not the status, decides.
+        final challenge = response.headers['www-authenticate'] ?? '';
+        if (challenge.contains('insufficient_user_authentication')) {
+          setState(() => _status = 'Step-up required - tap "Step up (OTP)".');
+          return;
+        }
+
         if (response.statusCode == 403) {
-          // Same step-up contract as the web client: the API says what is missing.
-          final challenge = response.headers['www-authenticate'] ?? '';
-          setState(() => _status = challenge.contains('insufficient_user_authentication')
-              ? 'Step-up required - tap "Step up (OTP)".'
-              : 'Forbidden: your account lacks the required role.');
+          setState(() => _status = 'Forbidden: your account lacks the required role.');
           return;
         }
 

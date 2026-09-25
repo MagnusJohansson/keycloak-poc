@@ -59,6 +59,13 @@ public sealed class StepUpAcrHandler(ILogger<StepUpAcrHandler> logger)
 /// <c>acr_values=silver</c>. Without it the browser has no way to know that re-authenticating
 /// would help, and the user just sees "forbidden".
 /// </para>
+/// <para>
+/// The status is <b>401, not 403</b>, as in both of RFC 9470's examples (section 3). The
+/// deficiency is in the authentication event, not in the user's permissions, and this is the
+/// one 401 where sending the user back to sign in is the right move — with
+/// <c>acr_values</c>. Clients must therefore read the header on a 401 before treating it as
+/// "session expired".
+/// </para>
 /// </remarks>
 public sealed class StepUpAuthorizationResultHandler : IAuthorizationMiddlewareResultHandler
 {
@@ -70,15 +77,21 @@ public sealed class StepUpAuthorizationResultHandler : IAuthorizationMiddlewareR
         AuthorizationPolicy policy,
         PolicyAuthorizationResult authorizeResult)
     {
-        var stepUp = authorizeResult.AuthorizationFailure?.FailedRequirements
-            .OfType<StepUpAcrRequirement>()
-            .FirstOrDefault();
+        var failed = authorizeResult.AuthorizationFailure?.FailedRequirements.ToList() ?? [];
+        var stepUp = failed.OfType<StepUpAcrRequirement>().FirstOrDefault();
 
-        // Only challenge a caller who is already authenticated. An anonymous caller needs a
+        // Challenge only when stepping up is the WHOLE fix. FailedRequirements lists every
+        // unmet requirement, so a doc.reader at bronze fails both the role and the ACR. Offering
+        // them step-up would send them through OTP only to hit a plain 403 afterwards — the
+        // "will never be allowed" case this handler exists to tell apart.
+        //
+        // And only challenge a caller who is already authenticated. An anonymous caller needs a
         // plain 401 first — telling them to "step up" before they have logged in is nonsense.
-        if (stepUp is not null && context.User.Identity?.IsAuthenticated == true)
+        if (stepUp is not null
+            && failed.All(r => r is StepUpAcrRequirement)
+            && context.User.Identity?.IsAuthenticated == true)
         {
-            context.Response.StatusCode = StatusCodes.Status403Forbidden;
+            context.Response.StatusCode = StatusCodes.Status401Unauthorized;
             context.Response.Headers.WWWAuthenticate =
                 $"""Bearer error="insufficient_user_authentication", error_description="A higher authentication level is required", acr_values="{stepUp.RequiredAcr}" """.Trim();
 

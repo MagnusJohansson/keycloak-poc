@@ -54,11 +54,12 @@ public sealed partial class DocVaultApiClient(HttpClient http)
 
         using var response = await http.SendAsync(request, cancellationToken).ConfigureAwait(false);
 
-        if (response.StatusCode == HttpStatusCode.Forbidden)
+        if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
         {
-            // A 403 carrying a challenge is recoverable: re-authenticating at a higher level
-            // fixes it. A plain 403 is not — the user simply lacks the role, and sending them
-            // back through sign-in would be a loop that can never succeed.
+            // A response carrying a challenge is recoverable: re-authenticating at a higher level
+            // fixes it. RFC 9470 sends it as a 401; 403 is accepted too, since the header, not the
+            // status, is what decides. A plain 403 is not recoverable — the user simply lacks the
+            // role, and sending them back through sign-in would be a loop that can never succeed.
             var challenge = ParseStepUpChallenge(response.Headers.WwwAuthenticate.ToString());
             if (challenge is not null)
             {

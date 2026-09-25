@@ -13,7 +13,7 @@ fast.
 
 ```
 1. GET /documents/classified          token has acr=bronze
-2. API: 403 + WWW-Authenticate: Bearer error="insufficient_user_authentication",
+2. API: 401 + WWW-Authenticate: Bearer error="insufficient_user_authentication",
                                 acr_values="silver"
 3. SPA: signinRedirect({ acr_values: 'silver', prompt: 'login' })
 4. Keycloak: acr.loa.map -> silver = LoA 2 -> conditional OTP subflow -> prompt
@@ -81,7 +81,9 @@ for MFA.
 
 The handler leaves the requirement **unmet** rather than calling `context.Fail()`,
 so the result handler can tell "needs to step up" from "will never be allowed" and
-emit an actionable challenge (RFC 9470) instead of a bare 403.
+emit an actionable challenge (RFC 9470) instead of a dead end. The challenge is a
+**401**, as in the RFC's examples, and it is only emitted when the ACR is the sole
+unmet requirement (`No_step_up_is_offered_when_stepping_up_would_not_help`).
 
 ### The client side
 
@@ -110,7 +112,7 @@ Sign in as **alice** instead: she has `doc.editor`, not `doc.admin`, so she gets
 plain 403 with **no** step-up offer — correctly, because re-authenticating would
 not help her.
 
-Covered by `StepUpTests` (4 tests).
+Covered by `StepUpTests` (5 tests).
 
 ## Beyond OTP
 

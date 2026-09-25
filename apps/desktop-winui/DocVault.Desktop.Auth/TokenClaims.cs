@@ -91,9 +91,9 @@ public static class TokenClaims
     /// The caller's tenant, taken from the first segment of their group path.
     /// </summary>
     /// <remarks>
-    /// The token carries group <em>paths</em> such as <c>/acme/engineering</c>, because Keycloak
-    /// has no built-in mapper that copies group <em>attributes</em> into a token. The path is the
-    /// contract, and the API parses it the same way.
+    /// The token carries group <em>paths</em> such as <c>/acme/engineering</c>. The realm sends
+    /// the path rather than a group <em>attribute</em> by choice (see <c>TenantContext.cs</c> in
+    /// the API); the path is the contract, and the API parses it the same way.
     /// </remarks>
     public static string? Tenant(JsonElement? payload)
     {
