@@ -114,6 +114,12 @@ Every one of these cost real debugging time and is now load-bearing. Do not "sim
 - `*_scopes` resources take the client's internal UUID (`.id`), not the OAuth `client_id` string.
 - `keycloak_openid_client_default_scopes` is **authoritative** and its built-in list varies by
   version — avoided deliberately in favour of per-client mappers, to keep the module portable.
+- **Authorization permissions must set `type = "scope"`.** Unset, the provider creates a *resource*
+  permission, which ignores `scopes` and applies to every scope of the resource; with the
+  resource server's `UNANIMOUS` strategy an editor was refused even `view`. Silent, because the API
+  never calls the model — `make assert-authz` (also in CI) is the only thing that would notice.
+  Keycloak also **ignores a `type` change on an existing permission** (apply reports success, the
+  next plan repeats it), so an existing realm needs a one-time `terraform apply -replace=…`.
 - Keycloak generates `pairwiseSubAlgorithmSalt` itself → perpetual drift without `ignore_changes`.
   Never hardcode that salt.
 - Keycloak *fetches* `sectorIdentifierUri` at mapper-creation time (chicken-and-egg with the API).

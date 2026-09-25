@@ -20,9 +20,13 @@
 # STATUS: this model is provisioned but NOT enforced at runtime. The API does
 # local RBAC on the roles in the token plus tenant scoping from the group path;
 # it never asks Keycloak for a decision. Wiring that up means the UMA ticket
-# flow (`grant_type=urn:ietf:params:oauth:grant-type:uma-ticket`) to exchange
-# the access token for an RPT, which needs an outbound call per decision, the
-# client secret, and Keycloak on the request path. That trade is why it is
+# flow (`grant_type=urn:ietf:params:oauth:grant-type:uma-ticket`): the API
+# forwards the user's access token as the bearer and gets back an RPT, or a
+# yes/no with `response_mode=decision`. That needs only the user's token, but
+# an outbound call per decision and Keycloak on the request path. Deciding per
+# DOCUMENT also means registering each one through the Protection API, which
+# accepts only the resource server's own token (so the client secret) and
+# needs allow_remote_resource_management, off here. That trade is why it is
 # modelled here and evaluated in C# - see DocumentEndpoints.cs.
 # ---------------------------------------------------------------------------
 
@@ -127,10 +131,18 @@ resource "keycloak_openid_client_role_policy" "admin" {
 }
 
 # --- Permissions ------------------------------------------------------------
+# Every permission is `type = "scope"`. Leave it unset and the provider creates a
+# RESOURCE permission, which ignores `scopes` and applies to every scope of the
+# resource. With the resource server's UNANIMOUS strategy, a request for
+# document:view then also had to pass document-delete-permission, so only an
+# admin could view anything. Nothing reported it: the model is not called at
+# runtime (see STATUS above). Check with the admin console's policy evaluator,
+# or a UMA `response_mode=decision` call with a user's token.
 resource "keycloak_openid_client_authorization_permission" "document_view" {
   realm_id           = keycloak_realm.docvault.id
   resource_server_id = keycloak_openid_client.api.resource_server_id
   name               = "document-view-permission"
+  type               = "scope"
   decision_strategy  = "AFFIRMATIVE"
 
   resources = [keycloak_openid_client_authorization_resource.document.id]
@@ -142,6 +154,7 @@ resource "keycloak_openid_client_authorization_permission" "document_edit" {
   realm_id           = keycloak_realm.docvault.id
   resource_server_id = keycloak_openid_client.api.resource_server_id
   name               = "document-edit-permission"
+  type               = "scope"
   decision_strategy  = "AFFIRMATIVE"
 
   resources = [keycloak_openid_client_authorization_resource.document.id]
@@ -157,6 +170,7 @@ resource "keycloak_openid_client_authorization_permission" "document_delete" {
   realm_id           = keycloak_realm.docvault.id
   resource_server_id = keycloak_openid_client.api.resource_server_id
   name               = "document-delete-permission"
+  type               = "scope"
   decision_strategy  = "UNANIMOUS"
 
   resources = [keycloak_openid_client_authorization_resource.document.id]
@@ -168,6 +182,7 @@ resource "keycloak_openid_client_authorization_permission" "classified_view" {
   realm_id           = keycloak_realm.docvault.id
   resource_server_id = keycloak_openid_client.api.resource_server_id
   name               = "classified-view-permission"
+  type               = "scope"
   decision_strategy  = "UNANIMOUS"
 
   resources = [keycloak_openid_client_authorization_resource.classified_document.id]

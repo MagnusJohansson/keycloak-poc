@@ -152,6 +152,12 @@ jobs:
           echo "aud = $aud"
           echo "$aud" | grep -q docvault-api || { echo "audience mapper did not take effect"; exit 1; }
 
+      # The API never calls Authorization Services, so nothing else would notice a
+      # wrong model. It was wrong once: permissions without `type = "scope"`
+      # refused an editor even `view`, silently, since the first commit.
+      - name: Authorization model grants what it claims to
+        run: ./tools/assert-authz-model.sh
+
       - name: Plan is empty (no drift)
         working-directory: infra/terraform/20-realm
         run: |
