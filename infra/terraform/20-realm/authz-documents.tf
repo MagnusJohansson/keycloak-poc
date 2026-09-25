@@ -57,7 +57,11 @@ resource "keycloak_openid_client_authorization_resource" "document" {
 
   scopes = [for s in keycloak_openid_client_authorization_scope.document : s.name]
 
-  # Let the resource owner (the uploader) manage access to their own document.
+  # Lets a resource's OWNER grant access to other users (UMA sharing). On this
+  # type-level resource the owner is the resource server itself, not a user, so
+  # nothing can be shared yet. Sharing needs each document registered through the
+  # Protection API with its uploader as owner, which the API does not do (STATUS
+  # above). The flag records the intent; on its own it enables nothing.
   owner_managed_access = true
 }
 
