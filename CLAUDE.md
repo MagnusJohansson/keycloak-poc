@@ -318,7 +318,7 @@ Every one of these cost real debugging time and is now load-bearing. Do not "sim
 Proven against real software: 74 Terraform resources applied to Keycloak 26.6.3 with a clean
 re-plan; 31 API + 48 desktop-auth .NET tests (including forged `alg:none`, wrong-key,
 wrong-audience, wrong-realm and expired tokens, and 404-not-403 across the tenant
-boundary); 7 Playwright tests in a real browser; 11 Flutter tests; React/Vue build;
+boundary); 7 Playwright tests in a real browser; 12 Flutter tests; React/Vue build;
 Flutter analyzes clean.
 
 **`10-keycloak-azure` has been applied for real** (Azure, swedencentral) and works: Keycloak came

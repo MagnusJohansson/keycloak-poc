@@ -160,7 +160,13 @@ String? problemReason(String body) {
   try {
     final json = jsonDecode(body);
     if (json is! Map) return null;
-    return (json['detail'] ?? json['title']) as String?;
+    // Type-checked rather than cast: a non-string field would throw TypeError, which the
+    // FormatException handler below does not catch.
+    for (final key in const ['detail', 'title']) {
+      final value = json[key];
+      if (value is String && value.isNotEmpty) return value;
+    }
+    return null;
   } on FormatException {
     return null;
   }

@@ -191,7 +191,8 @@ ipcMain.handle('api:documents', async () => {
     // Not always a missing role: "no tenant" and "ambiguous tenant" are 403s too, and their
     // problem body says which. Pass the server's reason on; a role check's 403 has no body.
     const problem = await response.json().catch(() => null);
-    return { error: `Forbidden: ${problem?.detail ?? problem?.title ?? 'you may not access this.'}` };
+    const reason = [problem?.detail, problem?.title].find((v) => typeof v === 'string' && v !== '');
+    return { error: `Forbidden: ${reason ?? 'you may not access this.'}` };
   }
 
   if (!response.ok) {

@@ -24,6 +24,12 @@ void main() {
     expect(problemReason(''), isNull);
   });
 
+  test('skips a non-string field instead of throwing', () {
+    // A cast would throw TypeError here, which is not a FormatException.
+    expect(problemReason('{"detail":5,"title":"No tenant"}'), 'No tenant');
+    expect(problemReason('{"detail":{},"title":["x"]}'), isNull);
+  });
+
   test('returns null for a body that is not a problem document', () {
     expect(problemReason('[1,2]'), isNull);
     expect(problemReason('<html>'), isNull);
