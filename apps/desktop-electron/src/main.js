@@ -188,7 +188,10 @@ ipcMain.handle('api:documents', async () => {
   }
 
   if (response.status === 403) {
-    return { error: 'Forbidden: your account lacks the required role.' };
+    // Not always a missing role: "no tenant" and "ambiguous tenant" are 403s too, and their
+    // problem body says which. Pass the server's reason on; a role check's 403 has no body.
+    const problem = await response.json().catch(() => null);
+    return { error: `Forbidden: ${problem?.detail ?? problem?.title ?? 'you may not access this.'}` };
   }
 
   if (!response.ok) {

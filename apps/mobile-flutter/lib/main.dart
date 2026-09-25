@@ -91,7 +91,10 @@ class _HomePageState extends State<HomePage> {
         }
 
         if (response.statusCode == 403) {
-          setState(() => _status = 'Forbidden: your account lacks the required role.');
+          // Not always a missing role: "no tenant" and "ambiguous tenant" are 403s too, and
+          // their problem body says which. Pass the server's reason on; a role check's 403
+          // has no body.
+          setState(() => _status = 'Forbidden: ${problemReason(response.body) ?? 'you may not access this.'}');
           return;
         }
 
@@ -148,5 +151,17 @@ class _HomePageState extends State<HomePage> {
         ],
       ),
     );
+  }
+}
+
+/// The reason in an RFC 9457 problem body (`detail`, else `title`), or null when the body is
+/// empty or not a problem document — as for a role check's 403, which carries no body.
+String? problemReason(String body) {
+  try {
+    final json = jsonDecode(body);
+    if (json is! Map) return null;
+    return (json['detail'] ?? json['title']) as String?;
+  } on FormatException {
+    return null;
   }
 }
