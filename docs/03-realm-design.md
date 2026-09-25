@@ -63,8 +63,10 @@ carries `groups: ["/acme/engineering"]` instead, and `TenantClaimExtensions` par
 
 A user in two tenants throws rather than picking the first. Guessing there would
 be a cross-tenant data leak; the correct product answer is a tenant switcher that
-mints a tenant-scoped token. The API answers that caller with a **403** problem
-response (`MultipleTenantsExceptionHandler`), not a 500.
+mints a tenant-scoped token. The document and analytics endpoints answer that
+caller with a **403** problem response (`MultipleTenantsExceptionHandler`), not a
+500. `/me` is the deliberate exception: it catches the ambiguity and returns 200
+with `tenantError`, because its job is to show the caller what the API sees.
 
 ### Short access tokens, longer sessions
 

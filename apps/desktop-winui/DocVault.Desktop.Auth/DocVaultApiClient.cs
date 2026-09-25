@@ -47,6 +47,48 @@ public sealed partial class DocVaultApiClient(HttpClient http)
         return match.Success ? match.Groups[1].Value : null;
     }
 
+    /// <summary>
+    /// The reason in an RFC 9457 problem body (<c>detail</c>, else <c>title</c>), or null when the
+    /// body is empty or not a problem document, as for a role check's 403, which has no body.
+    /// </summary>
+    /// <remarks>
+    /// A 403 is not always a missing role: "no tenant" and "ambiguous tenant" are 403s whose body
+    /// says which, so the shell shows this rather than guessing. Each field is type-checked rather
+    /// than cast, so a malformed body falls back instead of throwing.
+    /// </remarks>
+    public static string? ParseProblemReason(string? body)
+    {
+        if (string.IsNullOrWhiteSpace(body))
+        {
+            return null;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(body);
+            if (document.RootElement.ValueKind != JsonValueKind.Object)
+            {
+                return null;
+            }
+
+            foreach (var key in (ReadOnlySpan<string>)["detail", "title"])
+            {
+                if (document.RootElement.TryGetProperty(key, out var value)
+                    && value.ValueKind == JsonValueKind.String
+                    && value.GetString() is { Length: > 0 } reason)
+                {
+                    return reason;
+                }
+            }
+
+            return null;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
     public async Task<JsonElement> GetAsync(string accessToken, string path, CancellationToken cancellationToken = default)
     {
         using var request = new HttpRequestMessage(HttpMethod.Get, path);

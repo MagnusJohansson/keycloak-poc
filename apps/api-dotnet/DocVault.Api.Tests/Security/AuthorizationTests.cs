@@ -123,15 +123,18 @@ public sealed class AuthorizationTests(DocVaultApiFactory factory) : IClassFixtu
             await existsElsewhere.Content.ReadAsStringAsync());
     }
 
-    [Fact]
-    public async Task A_user_in_two_tenants_gets_403_not_500()
+    [Theory]
+    [InlineData("/documents")]
+    [InlineData("/analytics/usage")]
+    public async Task A_user_in_two_tenants_gets_403_not_500(string path)
     {
         // The API refuses to guess which tenant a two-tenant caller means, and it must refuse
         // cleanly. An unhandled exception here was a 500: a server fault the client could
         // only retry, for what is really "this token is not scoped to one tenant".
-        var token = factory.Tokens.CreateToken(apiRoles: ["doc.reader"], groups: ["/acme", "/globex"]);
+        var token = factory.Tokens.CreateToken(
+            apiRoles: ["doc.reader"], groups: ["/acme", "/globex"], scope: "openid analytics:read");
 
-        using var request = new HttpRequestMessage(HttpMethod.Get, "/documents");
+        using var request = new HttpRequestMessage(HttpMethod.Get, path);
         request.Headers.Add("Origin", "http://localhost:5173");
         var response = await factory.CreateClientWithToken(token).SendAsync(request);
 

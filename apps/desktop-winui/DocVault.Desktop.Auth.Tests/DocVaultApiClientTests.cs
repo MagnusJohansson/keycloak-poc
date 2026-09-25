@@ -54,6 +54,19 @@ public class DocVaultApiClientTests
         Assert.Contains("Ambiguous tenant", ex.Message);
     }
 
+    [Theory]
+    [InlineData("""{"title":"Ambiguous tenant","detail":"Two tenants."}""", "Two tenants.")]
+    [InlineData("""{"title":"No tenant"}""", "No tenant")]
+    [InlineData("""{"detail":5,"title":"No tenant"}""", "No tenant")] // a non-string field is skipped, not cast
+    [InlineData("""{"detail":{},"title":["x"]}""", null)]
+    [InlineData("", null)]                                           // a role check's 403 has no body
+    [InlineData("[1,2]", null)]
+    [InlineData("<html>", null)]
+    public void ProblemReason_reads_detail_then_title_and_never_throws(string body, string? expected)
+    {
+        Assert.Equal(expected, DocVaultApiClient.ParseProblemReason(body));
+    }
+
     private static DocVaultApiClient ClientReturning(HttpStatusCode status, string? wwwAuthenticate = null, string body = "")
     {
         var response = new HttpResponseMessage(status) { Content = new StringContent(body) };
