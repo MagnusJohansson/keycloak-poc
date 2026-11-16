@@ -60,7 +60,10 @@ services:
       # Keep in step with the Azure deployment so behaviour is identical.
       #   organization  - multi-tenancy primitives
       #   opentelemetry - tracing
-      KC_FEATURES: "organization,opentelemetry"
+      #   resource-indicators - EXPERIMENTAL in 26.6. RFC 8707: makes Keycloak honour
+      #     the `resource` parameter MCP clients send, so a token for the MCP server
+      #     carries that server's URL as `aud`. Not enabled on Azure. See 20-realm/mcp.tf.
+      KC_FEATURES: "organization,opentelemetry,resource-indicators"
 
       KC_LOG_LEVEL: info
     ports:

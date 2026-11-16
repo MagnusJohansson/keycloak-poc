@@ -16,6 +16,8 @@ Read in order, or jump to what you need.
 7. [Desktop — Electron & WinUI 3](06-integration-desktop.md)
 8. [Backend — .NET 10](07-integration-backend.md)
 
+Also: [AI assistants — an MCP server authorized by Keycloak](13-integration-mcp.md), the local lab only.
+
 ### Apply
 9. [Use cases](08-use-cases.md) — six scenarios, end to end
 10. [Deploying Keycloak on Azure](09-deploying-on-azure.md)

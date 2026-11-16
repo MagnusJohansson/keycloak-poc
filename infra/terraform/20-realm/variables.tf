@@ -91,6 +91,12 @@ variable "api_origin" {
 # A custom URI scheme is claimed OS-wide. Two apps registering the same one is
 # ambiguous: Android picks non-deterministically and iOS generally gives it to
 # whichever was installed last, so an OAuth redirect can land in the wrong app.
+variable "mcp_resource_url" {
+  type        = string
+  default     = "http://localhost:5002/mcp"
+  description = "Canonical URL of the MCP server (apps/mcp-dotnet), no trailing slash. It is both the RFC 8707 resource and the server's client_id; see mcp.tf."
+}
+
 variable "flutter_redirect_scheme" {
   type        = string
   default     = "io.docvault.flutter"

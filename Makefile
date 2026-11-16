@@ -116,6 +116,19 @@ web-vue: ## Run the Vue SPA on :5174
 worker: ## Run the background worker (client_credentials demo)
 	dotnet run --project apps/api-dotnet/DocVault.Worker
 
+.PHONY: mcp
+mcp: ## Run the MCP server on :5002 (needs up + seed + api)
+	@cd $(REALM_DIR) && $(WS_LOCAL) >/dev/null
+	ASPNETCORE_URLS=http://localhost:5002 \
+	Mcp__ClientSecret="$$(cd $(REALM_DIR) && $(TF) output -raw mcp_server_client_secret)" \
+		dotnet run --project apps/mcp-dotnet/DocVault.Mcp --no-launch-profile
+
+.PHONY: assert-mcp
+assert-mcp: ## Check MCP authorization end to end (needs up + seed + api + mcp)
+	@cd $(REALM_DIR) && $(WS_LOCAL) >/dev/null
+	MCP_CLIENT_SECRET="$$(cd $(REALM_DIR) && $(TF) output -raw mcp_server_client_secret)" \
+		python3 tools/assert-mcp-authz.py
+
 # --- Tests ------------------------------------------------------------------
 .PHONY: test
 test: ## Unit + integration + security tests (no Docker, no network)
