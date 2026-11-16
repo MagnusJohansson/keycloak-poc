@@ -358,6 +358,14 @@ Every one of these cost real debugging time and is now load-bearing. Do not "sim
   function on purpose — it rewrites itself, and prepending lines to a script bash is still reading
   shifts its file offset and makes it execute garbage.
 
+## Releasing
+
+Publishing a GitHub Release (tag `vX.Y.Z` on `main`) runs `.github/workflows/release.yml`: it
+checks the tag is on main and that `CHANGELOG.md` has a `## X.Y.Z` section, runs the .NET tests,
+then attaches a `git archive` source tarball, `SHA256SUMS.txt` and the Sigstore attestation bundle
+(`.sigstore.json`). Add the changelog section BEFORE publishing; the workflow runs from the tagged
+commit, so a tag on a commit without this workflow attaches nothing and leaves an unsigned release.
+
 ## Verification status
 
 Proven against real software: 86 Terraform resources applied to the local Keycloak 26.6.3 with a

@@ -303,6 +303,21 @@ Built and checked against real software, not just written down:
 - The Flutter client has been driven end-to-end on an Android emulator against the
   local lab, and React against the full Azure stack (cloud Keycloak *and* cloud API).
 
+## Releases
+
+Releases are tagged from `main` and listed on the
+[Releases page](https://github.com/MagnusJohansson/keycloak-poc/releases), with
+notes in [CHANGELOG.md](CHANGELOG.md). A lab has nothing to install, so a release
+is a fixed point to cite: the source as it was, tested, at that tag.
+
+Each release attaches the source archive, its SHA-256 checksum and a signed build
+provenance attestation. To check that an archive was produced by this
+repository's release workflow from that tag:
+
+```bash
+gh attestation verify docvault-v1.0.0.tar.gz --repo MagnusJohansson/keycloak-poc
+```
+
 ## Licence
 
 GPL-3.0-or-later — see [LICENSE](LICENSE).
