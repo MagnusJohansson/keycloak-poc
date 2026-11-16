@@ -359,9 +359,11 @@ path, not its content; add `--source-digest <commit>` to pin the commit as well.
 I built this lab with Claude Code as a pair programmer, and the commit history
 says so. The discipline that matters is checking the output, so the claims here
 are tested against real software and not only written down: see
-[Verified](#verified). The MCP server and the release workflow were also reviewed
-by a second, independent Claude session before they were merged. The design
-decisions, and the responsibility for what is here, are mine.
+[Verified](#verified). Changes are also reviewed by something other than the
+session that wrote them: the pull requests of August and September 2026 by
+GitHub Copilot, and the MCP server and the release workflow by a second,
+independent Claude session. The design decisions, and the responsibility for
+what is here, are mine.
 
 ## Licence
 
