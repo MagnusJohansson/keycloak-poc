@@ -1,0 +1,77 @@
+# DocVault - a Keycloak proof-of-concept lab.
+# Copyright (C) 2026 Magnus Johansson
+# SPDX-License-Identifier: GPL-3.0-or-later
+# See the LICENSE file for the full licence text.
+
+# Weekly dependency updates, grouped so a lab with six clients does not get a
+# pull request per package. `cooldown` waits a week after a release before
+# proposing it: time for a bad release to be noticed and withdrawn.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      actions:
+        patterns: ["*"]
+
+  - package-ecosystem: nuget
+    directories:
+      - /apps/api-dotnet
+      - /apps/mcp-dotnet
+      - /apps/desktop-winui
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      nuget-minor-and-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: npm
+    directories:
+      - /apps/web-react
+      - /apps/web-vue
+      - /apps/desktop-electron
+      - /apps/mobile-react-native
+      - /tests/e2e-playwright
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      npm-minor-and-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: pub
+    directory: /apps/mobile-flutter
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      pub-minor-and-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: terraform
+    directories:
+      - /infra/terraform/10-keycloak-azure
+      - /infra/terraform/20-realm
+      - /infra/terraform/30-azure
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      terraform:
+        patterns: ["*"]
+
+  - package-ecosystem: docker
+    directory: /apps/api-dotnet
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7

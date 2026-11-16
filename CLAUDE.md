@@ -20,7 +20,7 @@ make api         # .NET 10 API on :5001
 make web         # React SPA on :5173      (separate shell)
 make mcp         # MCP server on :5002  (separate shell; needs up + seed + api)
 make assert-mcp  # 24 checks of MCP authorization - REQUIRES up + seed + api + mcp running
-make test        # 151 .NET tests (32 API + 64 MCP + 55 desktop-auth) - no Docker, network or cloud
+make test        # 153 .NET tests (32 API + 64 MCP + 57 desktop-auth) - no Docker, network or cloud
 make e2e         # 7 Playwright tests - REQUIRES up + seed + api + web running
 make plan        # realm diff; should be EMPTY on an unchanged realm
 make token       # mint a real token and decode its claims
@@ -370,7 +370,7 @@ commit, so a tag on a commit without this workflow attaches nothing and leaves a
 
 Proven against real software: 86 Terraform resources applied to the local Keycloak 26.6.3 with a
 clean re-plan (Azure was applied with the 74 that predate the MCP server); 32 API + 64 MCP +
-55 desktop-auth .NET tests (including forged `alg:none`, wrong-key,
+57 desktop-auth .NET tests (including forged `alg:none`, wrong-key,
 wrong-audience, wrong-realm and expired tokens, and 404-not-403 across the tenant
 boundary); 7 Playwright tests in a real browser; 12 Flutter tests; React/Vue build;
 Flutter analyzes clean.

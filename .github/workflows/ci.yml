@@ -12,6 +12,11 @@ on:
   push: { branches: [main] }
   pull_request:
 
+# Read-only: no job here writes to the repository or needs a token for more.
+# Actions are pinned to commit SHAs (version in the comment); Dependabot updates them.
+permissions:
+  contents: read
+
 jobs:
   license:
     name: Licence headers
@@ -19,15 +24,15 @@ jobs:
     # No toolchain, no secrets - it is a grep. Runs first so an unmarked new
     # source file fails in seconds rather than after the whole matrix.
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - run: tools/license-header.sh --check
 
   api:
     name: .NET API
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
         with:
           dotnet-version: '10.0.x'
       - run: dotnet restore apps/api-dotnet/DocVault.slnx
@@ -47,8 +52,8 @@ jobs:
       matrix:
         app: [web-react, web-vue]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: '22'
       - run: npm ci || npm install
@@ -65,8 +70,8 @@ jobs:
     name: Flutter client
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: subosito/flutter-action@v2
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
         with:
           channel: stable
       - run: flutter pub get
@@ -84,8 +89,8 @@ jobs:
     # without this the shell would ship having never been compiled anywhere.
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
         with:
           dotnet-version: '10.0.x'
       - name: Build
@@ -100,8 +105,8 @@ jobs:
       matrix:
         module: [10-keycloak-azure, 20-realm, 30-azure]
     steps:
-      - uses: actions/checkout@v4
-      - uses: hashicorp/setup-terraform@v3
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
       - run: terraform fmt -check -diff
         working-directory: infra/terraform/${{ matrix.module }}
       # -backend=false: validation needs no state and no credentials.
@@ -114,9 +119,8 @@ jobs:
     name: Realm applies to real Keycloak
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: hashicorp/setup-terraform@v3
-
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
       # The claim this repo rests on: the realm module works against upstream
       # Keycloak. If that ever stops being true, this job fails.
       - name: Start Keycloak
@@ -183,7 +187,7 @@ jobs:
       # resource-indicators feature off, or a mapper missing, sign-in still works
       # and only the audience is wrong. So run the real servers against this
       # Keycloak and sign in as the demo users.
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
         with:
           dotnet-version: '10.0.x'
       - name: Start the API and the MCP server
