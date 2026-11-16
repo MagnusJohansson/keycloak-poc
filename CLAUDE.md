@@ -19,7 +19,7 @@ make seed        # apply the DocVault realm via Terraform, then print secrets
 make api         # .NET 10 API on :5001
 make web         # React SPA on :5173      (separate shell)
 make mcp         # MCP server on :5002  (separate shell; needs up + seed + api)
-make assert-mcp  # 24 checks of MCP authorization - REQUIRES up + seed + api + mcp running
+make assert-mcp  # 25 checks of MCP authorization - REQUIRES up + seed + api + mcp running
 make test        # 153 .NET tests (32 API + 64 MCP + 57 desktop-auth) - no Docker, network or cloud
 make e2e         # 7 Playwright tests - REQUIRES up + seed + api + web running
 make plan        # realm diff; should be EMPTY on an unchanged realm

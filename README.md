@@ -260,7 +260,7 @@ make seed         # local Docker Keycloak
 make seed-azure   # Keycloak on Azure
 ```
 
-Same 86 resources, same realm; only a URL and a credential differ. Two
+Same 87 resources, same realm; only a URL and a credential differ. Two
 consequences worth having:
 
 - **The local lab is faithful.** If it stops being so, `make seed` fails
@@ -293,7 +293,7 @@ Built and checked against real software, not just written down:
 - 7 Playwright tests pass in a real browser against real Keycloak.
 - MCP server: 64 tests pass with forged tokens (wrong audience, `alg:none`,
   wrong key, wrong realm, expired) and every scope challenge, and
-  `make assert-mcp` passes 24 checks against the local Keycloak, API and MCP
+  `make assert-mcp` passes 25 checks against the local Keycloak, API and MCP
   server, signing in as the demo users. Driven from Claude Code as a real
   client: sign-in, consent, a tool call, and the scope step-up when a tool
   needed `docvault:write`. **Local lab and CI only**: it needs

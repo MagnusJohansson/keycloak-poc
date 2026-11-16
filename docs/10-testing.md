@@ -2,7 +2,7 @@
 
 ```bash
 make test    # 153 tests (32 API + 64 MCP server + 57 desktop-auth), no Docker, no secrets, no network
-make assert-mcp   # 24 checks of MCP authorization against the running lab (needs up + seed + api + mcp)
+make assert-mcp   # 25 checks of MCP authorization against the running lab (needs up + seed + api + mcp)
 ```
 
 ## The pyramid

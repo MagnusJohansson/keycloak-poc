@@ -84,15 +84,21 @@ def http(method, url, data=None, headers=None, form=False, cookies=None):
     return response.status, response.headers, response.read().decode()
 
 
-def page_text(body):
+def page_text(body, limit=200):
     """What a Keycloak HTML page says, for a failure message. Pages carry no tokens."""
     text = re.sub(r"<script.*?</script>|<style.*?</style>|<[^>]+>", " ", body, flags=re.S)
-    return re.sub(r"\s+", " ", html.unescape(text)).strip()[:200]
+    return re.sub(r"\s+", " ", html.unescape(text)).strip()[:limit]
 
 
 def claims(jwt):
     payload = jwt.split(".")[1]
     return json.loads(base64.urlsafe_b64decode(payload + "=" * (-len(payload) % 4)))
+
+
+# The text of each consent screen Keycloak showed, in order. It shows one only
+# while the user has not yet granted what is asked, so on a realm that has been
+# signed in to before there may be none.
+consent_screens = []
 
 
 def sign_in(username, scope, resource=MCP):
@@ -123,6 +129,7 @@ def sign_in(username, scope, resource=MCP):
         if status in (302, 303) and headers["Location"].startswith(KEYCLOAK):
             status, headers, body = http("GET", headers["Location"], cookies=cookies)
         elif status == 200 and 'name="accept"' in body:
+            consent_screens.append(page_text(body, limit=2000))
             form = re.search(r'<form[^>]*action="([^"]+)"', body)
             status, headers, body = http(
                 "POST", urllib.parse.urljoin(KEYCLOAK, html.unescape(form.group(1))), {"accept": "Yes"},
@@ -222,6 +229,15 @@ def main():
         print(f"\n{passed} passed, {failed} failed")
         sys.exit(1)
     alice_claims = claims(alice["access_token"])
+    # The consent screen should say what the assistant gets and nothing it does
+    # not: Keycloak's built-in `roles` scope lists "User roles" unless the
+    # client drops it, although this client's token carries no roles.
+    if consent_screens:
+        screen = consent_screens[0]
+        check("the consent screen names the assistant's permission and no roles",
+              "Let the assistant list your documents" in screen and "User roles" not in screen, screen[:300])
+    else:
+        print("  SKIP  the consent screen (alice had already consented; shown on a fresh realm)")
     # Fails silently into aud=<client id> if the resource-indicators feature is off.
     check("aud is exactly the MCP server's URL (RFC 8707)", alice_claims.get("aud") == MCP, f"aud={alice_claims.get('aud')}")
     check("the token carries the consented scope", "docvault:read" in alice_claims.get("scope", "").split(), alice_claims.get("scope"))
