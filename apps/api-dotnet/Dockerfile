@@ -4,7 +4,7 @@
 # See the LICENSE file for the full licence text.
 
 # Multi-stage: the runtime image carries no SDK and no source.
-FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:11.0 AS build
 WORKDIR /src
 
 # Restore as its own layer so a source-only change does not re-download packages.
