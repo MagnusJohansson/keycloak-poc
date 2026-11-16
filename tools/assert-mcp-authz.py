@@ -84,6 +84,12 @@ def http(method, url, data=None, headers=None, form=False, cookies=None):
     return response.status, response.headers, response.read().decode()
 
 
+def page_text(body):
+    """What a Keycloak HTML page says, for a failure message. Pages carry no tokens."""
+    text = re.sub(r"<script.*?</script>|<style.*?</style>|<[^>]+>", " ", body, flags=re.S)
+    return re.sub(r"\s+", " ", html.unescape(text)).strip()[:200]
+
+
 def claims(jwt):
     payload = jwt.split(".")[1]
     return json.loads(base64.urlsafe_b64decode(payload + "=" * (-len(payload) % 4)))
@@ -124,7 +130,7 @@ def sign_in(username, scope, resource=MCP):
         else:
             break
     if status not in (302, 303):
-        return {"error": "login_failed", "status": status}
+        return {"error": "login_failed", "status": status, "error_description": page_text(body)}
     params = urllib.parse.parse_qs(urllib.parse.urlparse(headers["Location"]).query)
     if "code" not in params:
         return {"error": params.get("error", ["no_code"])[0], "iss": params.get("iss", [None])[0]}
