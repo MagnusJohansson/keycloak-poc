@@ -286,7 +286,7 @@ Built and checked against real software, not just written down:
 - Keycloak on Azure and the API on Container Apps are both applied and running,
   not merely planned.
 - 7 Playwright tests pass in a real browser against real Keycloak.
-- MCP server: 63 tests pass with forged tokens (wrong audience, `alg:none`,
+- MCP server: 64 tests pass with forged tokens (wrong audience, `alg:none`,
   wrong key, wrong realm, expired) and every scope challenge, and
   `make assert-mcp` passes 24 checks against the local Keycloak, API and MCP
   server, signing in as the demo users. Driven from Claude Code as a real

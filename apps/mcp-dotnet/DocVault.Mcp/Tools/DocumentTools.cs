@@ -38,7 +38,7 @@ public sealed class DocumentTools(
     {
         // Control AND format characters: bidi overrides and zero-width characters
         // can make a title read differently to a person than to a model.
-        if (string.IsNullOrWhiteSpace(title) || title.Length > MaxTitleLength || title.Any(IsInvisible))
+        if (string.IsNullOrWhiteSpace(title) || title.Length > MaxTitleLength || HasInvisible(title))
         {
             return Task.FromResult(Error($"A title must be 1-{MaxTitleLength} characters with no control or invisible characters."));
         }
@@ -86,9 +86,30 @@ public sealed class DocumentTools(
         return result.Ok ? Text(result.Text) : Error(result.Text);
     }
 
-    private static bool IsInvisible(char c) =>
-        char.IsControl(c) || char.GetUnicodeCategory(c) is System.Globalization.UnicodeCategory.Format
-            or System.Globalization.UnicodeCategory.LineSeparator or System.Globalization.UnicodeCategory.ParagraphSeparator;
+    /// <summary>
+    /// By rune, not by char: the Unicode tag characters (U+E0000-E007F), the usual
+    /// carrier for hidden text, lie outside the BMP, where each half of the
+    /// surrogate pair has the category "Surrogate" and would pass a per-char test.
+    /// </summary>
+    private static bool HasInvisible(string title)
+    {
+        foreach (var rune in title.EnumerateRunes())
+        {
+            // EnumerateRunes yields U+FFFD for a lone surrogate.
+            if (rune == System.Text.Rune.ReplacementChar
+                || System.Text.Rune.IsControl(rune)
+                || System.Text.Rune.GetUnicodeCategory(rune) is System.Globalization.UnicodeCategory.Format
+                    or System.Globalization.UnicodeCategory.LineSeparator
+                    or System.Globalization.UnicodeCategory.ParagraphSeparator
+                    or System.Globalization.UnicodeCategory.PrivateUse
+                    or System.Globalization.UnicodeCategory.OtherNotAssigned)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
 
     private static string? BearerToken(HttpContext context)
     {

@@ -1547,11 +1547,12 @@
                     "consentRequired": false,
                     "config": {
                         "full.path": "true",
-                        "id.token.claim": "true",
                         "introspection.token.claim": "false",
+                        "userinfo.token.claim": "true",
+                        "multivalued": "true",
+                        "id.token.claim": "true",
                         "access.token.claim": "true",
-                        "claim.name": "groups",
-                        "userinfo.token.claim": "true"
+                        "claim.name": "groups"
                     }
                 },
                 {
@@ -1835,11 +1836,12 @@
                     "consentRequired": false,
                     "config": {
                         "full.path": "true",
-                        "id.token.claim": "true",
                         "introspection.token.claim": "false",
+                        "userinfo.token.claim": "true",
+                        "multivalued": "true",
+                        "id.token.claim": "true",
                         "access.token.claim": "true",
-                        "claim.name": "groups",
-                        "userinfo.token.claim": "true"
+                        "claim.name": "groups"
                     }
                 }
             ],
@@ -3422,14 +3424,14 @@
                     "authenticator": "auth-cookie",
                     "authenticatorFlow": false,
                     "requirement": "ALTERNATIVE",
-                    "priority": 0,
+                    "priority": 10,
                     "autheticatorFlow": false,
                     "userSetupAllowed": false
                 },
                 {
                     "authenticatorFlow": true,
                     "requirement": "ALTERNATIVE",
-                    "priority": 0,
+                    "priority": 20,
                     "autheticatorFlow": true,
                     "flowAlias": "stepup-forms",
                     "userSetupAllowed": false
@@ -3731,7 +3733,7 @@
                 {
                     "authenticatorFlow": true,
                     "requirement": "CONDITIONAL",
-                    "priority": 0,
+                    "priority": 10,
                     "autheticatorFlow": true,
                     "flowAlias": "stepup-loa1-password",
                     "userSetupAllowed": false
@@ -3739,7 +3741,7 @@
                 {
                     "authenticatorFlow": true,
                     "requirement": "CONDITIONAL",
-                    "priority": 0,
+                    "priority": 20,
                     "autheticatorFlow": true,
                     "flowAlias": "stepup-loa2-otp",
                     "userSetupAllowed": false
@@ -3755,19 +3757,19 @@
             "builtIn": false,
             "authenticationExecutions": [
                 {
-                    "authenticator": "auth-username-password-form",
-                    "authenticatorFlow": false,
-                    "requirement": "REQUIRED",
-                    "priority": 0,
-                    "autheticatorFlow": false,
-                    "userSetupAllowed": false
-                },
-                {
                     "authenticatorConfig": "stepup-loa1-condition",
                     "authenticator": "conditional-level-of-authentication",
                     "authenticatorFlow": false,
                     "requirement": "REQUIRED",
-                    "priority": 0,
+                    "priority": 10,
+                    "autheticatorFlow": false,
+                    "userSetupAllowed": false
+                },
+                {
+                    "authenticator": "auth-username-password-form",
+                    "authenticatorFlow": false,
+                    "requirement": "REQUIRED",
+                    "priority": 20,
                     "autheticatorFlow": false,
                     "userSetupAllowed": false
                 }
@@ -3782,19 +3784,19 @@
             "builtIn": false,
             "authenticationExecutions": [
                 {
-                    "authenticator": "auth-otp-form",
-                    "authenticatorFlow": false,
-                    "requirement": "REQUIRED",
-                    "priority": 0,
-                    "autheticatorFlow": false,
-                    "userSetupAllowed": false
-                },
-                {
                     "authenticatorConfig": "stepup-loa2-condition",
                     "authenticator": "conditional-level-of-authentication",
                     "authenticatorFlow": false,
                     "requirement": "REQUIRED",
-                    "priority": 0,
+                    "priority": 10,
+                    "autheticatorFlow": false,
+                    "userSetupAllowed": false
+                },
+                {
+                    "authenticator": "auth-otp-form",
+                    "authenticatorFlow": false,
+                    "requirement": "REQUIRED",
+                    "priority": 20,
                     "autheticatorFlow": false,
                     "userSetupAllowed": false
                 }

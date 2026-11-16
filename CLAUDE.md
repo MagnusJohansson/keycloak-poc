@@ -20,7 +20,7 @@ make api         # .NET 10 API on :5001
 make web         # React SPA on :5173      (separate shell)
 make mcp         # MCP server on :5002  (separate shell; needs up + seed + api)
 make assert-mcp  # 24 checks of MCP authorization - REQUIRES up + seed + api + mcp running
-make test        # 150 .NET tests (32 API + 63 MCP + 55 desktop-auth) - no Docker, network or cloud
+make test        # 151 .NET tests (32 API + 64 MCP + 55 desktop-auth) - no Docker, network or cloud
 make e2e         # 7 Playwright tests - REQUIRES up + seed + api + web running
 make plan        # realm diff; should be EMPTY on an unchanged realm
 make token       # mint a real token and decode its claims
@@ -111,8 +111,11 @@ Every one of these cost real debugging time and is now load-bearing. Do not "sim
 
 - A resource server using Authorization Services **cannot** be `BEARER-ONLY` — Keycloak returns a
   bare HTTP 500. `docvault-api` is `CONFIDENTIAL` with login flows disabled.
-- Authentication executions are ordered by **creation sequence**; Terraform parallelises, so
-  `authn-stepup.tf` needs explicit `depends_on` chains or the flow comes out shuffled.
+- Authentication executions are ordered by **`priority`, and only by priority**. Unset, every
+  execution is 0 and ties come back in database order: not creation order, and different on each
+  fresh Keycloak. `authn-stepup.tf` sets `priority` on every execution and subflow; the
+  `depends_on` chains it once relied on do NOT pin the order. When the OTP subflow sorted first,
+  a correct password got 400 "Invalid username or password" (2 of 9 CI runs). CI asserts the order.
 - `*_scopes` resources take the client's internal UUID (`.id`), not the OAuth `client_id` string.
 - `keycloak_openid_client_default_scopes` is **authoritative** and its built-in list varies by
   version — avoided deliberately in favour of per-client mappers, to keep the module portable.
@@ -358,7 +361,7 @@ Every one of these cost real debugging time and is now load-bearing. Do not "sim
 ## Verification status
 
 Proven against real software: 86 Terraform resources applied to the local Keycloak 26.6.3 with a
-clean re-plan (Azure was applied with the 74 that predate the MCP server); 32 API + 63 MCP +
+clean re-plan (Azure was applied with the 74 that predate the MCP server); 32 API + 64 MCP +
 55 desktop-auth .NET tests (including forged `alg:none`, wrong-key,
 wrong-audience, wrong-realm and expired tokens, and 404-not-403 across the tenant
 boundary); 7 Playwright tests in a real browser; 12 Flutter tests; React/Vue build;

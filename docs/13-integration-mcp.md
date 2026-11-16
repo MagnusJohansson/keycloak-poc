@@ -96,8 +96,10 @@ What a tool returns goes to the model as it is, and that includes document title
 other members of the tenant wrote. A colleague can put instructions in a title.
 Nothing here can stop a model reading them; what limits the damage is the same two
 layers. The assistant can do only what was consented to, as that user, and
-`delete_document` is marked destructive so a client asks before running it. New
-titles are refused if they contain control or invisible characters.
+`delete_document` is marked destructive so a client asks before running it.
+Titles created *through the assistant* are refused if they contain control or
+invisible characters; the API itself does not check, so a title stored by the web
+app can still carry them, and `list_documents` returns it as it is.
 
 The scope never widens what the user can do. Granting an assistant
 `docvault:delete` does not make alice an administrator; it only means that *if*
@@ -169,6 +171,10 @@ Each of these produced no error at the point of the mistake.
   assistant acting for her can delete a document and cannot reach `/admin`.
 
 ## What is not here
+
+- **Discovery on another name for the same host.** The metadata document is served
+  only for the host in the resource URL. A client configured with
+  `http://127.0.0.1:5002/mcp` instead of `http://localhost:5002/mcp` gets a 404.
 
 - **Client registration by metadata document (CIMD).** MCP prefers it; Keycloak
   26.6 has it as a second experimental feature. The client is pre-registered in

@@ -26,6 +26,15 @@
 # that are painful to debug.
 # ---------------------------------------------------------------------------
 
+# ORDER IS SET BY `priority`, on every execution and subflow below.
+#
+# Keycloak sorts a flow's executions by priority only. Left unset they are all
+# 0, and ties come back in whatever order the database returns: not creation
+# order, and not the same on every fresh Keycloak. When the OTP subflow sorts
+# before the password subflow, a first sign-in reaches the OTP form with no
+# user and Keycloak answers 400 "Invalid username or password", for a correct
+# password. That failed CI twice in nine runs before it was understood; the
+# `depends_on` chains this file used to rely on do not pin the order.
 resource "keycloak_authentication_flow" "browser_stepup" {
   realm_id    = keycloak_realm.docvault.id
   alias       = "browser-stepup"
@@ -38,6 +47,7 @@ resource "keycloak_authentication_execution" "cookie" {
   parent_flow_alias = keycloak_authentication_flow.browser_stepup.alias
   authenticator     = "auth-cookie"
   requirement       = "ALTERNATIVE"
+  priority          = 10
 }
 
 # --- 2. Otherwise, run the forms subflow. ----------------------------------
@@ -46,6 +56,7 @@ resource "keycloak_authentication_subflow" "forms" {
   parent_flow_alias = keycloak_authentication_flow.browser_stepup.alias
   alias             = "stepup-forms"
   requirement       = "ALTERNATIVE"
+  priority          = 20
 
   depends_on = [keycloak_authentication_execution.cookie]
 }
@@ -56,6 +67,7 @@ resource "keycloak_authentication_subflow" "loa1" {
   parent_flow_alias = keycloak_authentication_subflow.forms.alias
   alias             = "stepup-loa1-password"
   requirement       = "CONDITIONAL"
+  priority          = 10
 }
 
 resource "keycloak_authentication_execution" "loa1_condition" {
@@ -63,6 +75,7 @@ resource "keycloak_authentication_execution" "loa1_condition" {
   parent_flow_alias = keycloak_authentication_subflow.loa1.alias
   authenticator     = "conditional-level-of-authentication"
   requirement       = "REQUIRED"
+  priority          = 10
 }
 
 resource "keycloak_authentication_execution_config" "loa1_condition" {
@@ -83,6 +96,7 @@ resource "keycloak_authentication_execution" "password" {
   parent_flow_alias = keycloak_authentication_subflow.loa1.alias
   authenticator     = "auth-username-password-form"
   requirement       = "REQUIRED"
+  priority          = 20
 
   depends_on = [keycloak_authentication_execution.loa1_condition]
 }
@@ -93,6 +107,7 @@ resource "keycloak_authentication_subflow" "loa2" {
   parent_flow_alias = keycloak_authentication_subflow.forms.alias
   alias             = "stepup-loa2-otp"
   requirement       = "CONDITIONAL"
+  priority          = 20
 
   depends_on = [keycloak_authentication_subflow.loa1]
 }
@@ -102,6 +117,7 @@ resource "keycloak_authentication_execution" "loa2_condition" {
   parent_flow_alias = keycloak_authentication_subflow.loa2.alias
   authenticator     = "conditional-level-of-authentication"
   requirement       = "REQUIRED"
+  priority          = 10
 }
 
 resource "keycloak_authentication_execution_config" "loa2_condition" {
@@ -122,6 +138,7 @@ resource "keycloak_authentication_execution" "otp" {
   parent_flow_alias = keycloak_authentication_subflow.loa2.alias
   authenticator     = "auth-otp-form"
   requirement       = "REQUIRED"
+  priority          = 20
 
   depends_on = [keycloak_authentication_execution.loa2_condition]
 }
