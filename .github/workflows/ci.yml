@@ -190,7 +190,10 @@ jobs:
 
       - name: Server logs (on failure)
         if: failure()
-        run: cat api.log mcp.log || true
+        run: |
+          cat api.log mcp.log || true
+          # Keycloak's events say WHY a sign-in was refused; its pages do not.
+          docker compose -f infra/local/docker-compose.yml logs keycloak | grep -E "org.keycloak.events|ERROR" | tail -40 || true
 
       - name: Plan is empty (no drift)
         working-directory: infra/terraform/20-realm
