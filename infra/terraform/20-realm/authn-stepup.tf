@@ -19,11 +19,6 @@
 #   4. The flow below sees a requested LoA of 2 and demands OTP.
 #   5. The new token carries `acr: "silver"` and the API lets the request through.
 #
-# NOTE ON ORDERING: keycloak_authentication_execution resources are created in
-# API-call order, and Keycloak assigns priority by creation sequence. Terraform
-# parallelises by default, so explicit depends_on chains are REQUIRED here.
-# Without them the flow comes out shuffled and authentication breaks in ways
-# that are painful to debug.
 # ---------------------------------------------------------------------------
 
 # ORDER IS SET BY `priority`, on every execution and subflow below.

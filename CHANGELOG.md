@@ -4,6 +4,12 @@ Each release attaches a source archive with a signed build provenance
 attestation; see [Releases](README.md#releases). The release workflow refuses a
 tag that is not on `main`.
 
+## Unreleased
+
+- The MCP client's consent screen no longer lists "User roles". Its token never
+  carried roles; the built-in `roles` scope was only attached, and so offered.
+  `make assert-mcp` now checks the screen (25 checks).
+
 ## 1.0.0
 
 The first tagged release of the lab. Everything here was built between August

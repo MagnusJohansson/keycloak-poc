@@ -153,6 +153,21 @@ resource "keycloak_openid_audience_protocol_mapper" "mcp_client_audience" {
   add_to_id_token          = false
 }
 
+# The consent screen lists every scope attached to the client, so the built-in
+# `roles` scope showed as "User roles" although this client's token carries no
+# roles (full scope is off). Dropping it makes the screen say what is granted.
+#
+# This resource is AUTHORITATIVE, which mappers.tf avoids for the other
+# clients: the built-in list differs between Keycloak versions. It is accepted
+# here because this client exists in the local lab only, and its consent
+# screen is the point. Built-ins of Keycloak 26.6, minus `roles`.
+resource "keycloak_openid_client_default_scopes" "mcp_client" {
+  realm_id  = keycloak_realm.docvault.id
+  client_id = keycloak_openid_client.mcp_client.id
+
+  default_scopes = ["acr", "basic", "email", "profile", "web-origins"]
+}
+
 resource "keycloak_openid_client_optional_scopes" "mcp_client" {
   realm_id  = keycloak_realm.docvault.id
   client_id = keycloak_openid_client.mcp_client.id # the UUID, not the client_id string

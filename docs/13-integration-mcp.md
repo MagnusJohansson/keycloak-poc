@@ -13,7 +13,7 @@ who enforces that?**
 ```bash
 make up && make seed && make api     # as before
 make mcp                             # the MCP server on :5002
-make assert-mcp                      # 24 checks against the real stack
+make assert-mcp                      # 25 checks against the real stack
 ```
 
 Then, from Claude Code:
@@ -161,6 +161,12 @@ Each of these produced no error at the point of the mistake.
   act on. `ScopeChallengeMiddleware` reads the tool name from the request body and
   sends the `403` challenge. Tools stay listed whatever the scope: an assistant
   has to see a tool to ask for the permission to use it.
+- **The consent screen offered "User roles", which the token never carries.**
+  Keycloak lists every scope attached to a client, and the built-in `roles` scope
+  is attached to all of them. The MCP client's token has no roles, because full
+  scope is off, but the user was still asked to grant them. The client now drops
+  that scope, so the screen lists what the assistant gets: its permissions, and
+  the user's name and email. `make assert-mcp` reads the screen and checks it.
 - **A user with no roles cannot be exchanged at all** unless the server's client
   has an audience mapper for the API: Keycloak answers
   `"Requested audience not available"`. With the mapper, dave gets a token with no

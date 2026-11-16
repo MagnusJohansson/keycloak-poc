@@ -5,6 +5,29 @@
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/MagnusJohansson/keycloak-poc/badge)](https://scorecard.dev/viewer/?uri=github.com/MagnusJohansson/keycloak-poc)
 [![License: GPL-3.0-or-later](https://img.shields.io/github/license/MagnusJohansson/keycloak-poc)](LICENSE)
 
+**TL;DR:** A working identity lab built around Keycloak 26, small enough to run
+on a laptop and complete enough to show the decisions an identity platform needs.
+
+- **The realm is code.** One Terraform module defines clients, roles, groups,
+  mappers and login flows, and applies unchanged to a local Docker Keycloak and
+  to Keycloak on Azure Container Apps. CI applies it to a real Keycloak on every run.
+- **One API, eight kinds of client.** A .NET 10 API validates tokens for React,
+  Vue, Flutter, React Native, Electron and WinUI 3 clients, a background worker,
+  and an AI assistant.
+- **Access control in layers.** Role-based access, tenant isolation, step-up MFA
+  (RFC 9470), service-to-service calls, consent, and an audit trail to Azure Sentinel.
+- **An AI assistant as a client.** An MCP server with audience-bound tokens,
+  consented scopes and token exchange, so an assistant can do only what the user
+  consented to, as that user.
+- **Tested against the real thing.** 153 .NET tests with forged tokens, browser
+  tests against a real Keycloak, and end-to-end checks that sign in as the demo users.
+
+It is a lab, not a product: the demo passwords are published, and the MCP part
+relies on an experimental Keycloak feature.
+[What has and has not been verified](#verified) is listed below.
+
+---
+
 A runnable proof of concept for [Keycloak](https://www.keycloak.org/), the
 open-source identity and access management server. It covers running Keycloak,
 configuring a realm as code, deploying to Azure, and integrating it with web,
@@ -260,7 +283,7 @@ make seed         # local Docker Keycloak
 make seed-azure   # Keycloak on Azure
 ```
 
-Same 86 resources, same realm; only a URL and a credential differ. Two
+Same 87 resources, same realm; only a URL and a credential differ. Two
 consequences worth having:
 
 - **The local lab is faithful.** If it stops being so, `make seed` fails
@@ -275,7 +298,7 @@ rather than asserted.
 
 Built and checked against real software, not just written down:
 
-- 86 Terraform resources applied to the local Keycloak 26.6.3, with a clean re-plan
+- 87 Terraform resources applied to the local Keycloak 26.6.3, with a clean re-plan
   (the Azure deployment was applied with the 74 that existed before the MCP server);
   `acr_values_supported`, the audience mapper and service-account roles confirmed
   in a real token.
@@ -283,7 +306,7 @@ Built and checked against real software, not just written down:
   wrong-audience, wrong-realm and expired tokens, 403-vs-401 for an
   authenticated-but-unauthorized caller, and 404-not-403 across the tenant
   boundary.
-- Desktop auth library: 45 tests pass on macOS/Linux. **Both desktop clients have
+- Desktop auth library: 57 tests pass on macOS/Linux. **Both desktop clients have
   been run end-to-end against the Azure deployment** — WinUI 3 on Windows and
   Electron on macOS — with system-browser sign-in, correct issuer, audience and
   roles in the token, and tenant-scoped documents returned. The WinUI shell is
@@ -293,7 +316,7 @@ Built and checked against real software, not just written down:
 - 7 Playwright tests pass in a real browser against real Keycloak.
 - MCP server: 64 tests pass with forged tokens (wrong audience, `alg:none`,
   wrong key, wrong realm, expired) and every scope challenge, and
-  `make assert-mcp` passes 24 checks against the local Keycloak, API and MCP
+  `make assert-mcp` passes 25 checks against the local Keycloak, API and MCP
   server, signing in as the demo users. Driven from Claude Code as a real
   client: sign-in, consent, a tool call, and the scope step-up when a tool
   needed `docvault:write`. **Local lab and CI only**: it needs
@@ -330,6 +353,17 @@ What the signature does not show is the branch. The release workflow refuses a
 tag that is not on `main`, which guards against a mistake; the attestation
 itself records the workflow and the tag. `--signer-workflow` pins the workflow's
 path, not its content; add `--source-digest <commit>` to pin the commit as well.
+
+## How this was built
+
+I built this lab with Claude Code as a pair programmer, and the commit history
+says so. The discipline that matters is checking the output, so the claims here
+are tested against real software and not only written down: see
+[Verified](#verified). Changes are also reviewed by something other than the
+session that wrote them: the pull requests of August and September 2026 by
+GitHub Copilot, and the MCP server and the release workflow by a second,
+independent Claude session. The design decisions, and the responsibility for
+what is here, are mine.
 
 ## Licence
 
