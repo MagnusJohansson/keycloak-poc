@@ -2,4 +2,6 @@
   <Project Path="DocVault.Api.Tests/DocVault.Api.Tests.csproj" />
   <Project Path="DocVault.Api/DocVault.Api.csproj" />
   <Project Path="DocVault.Worker/DocVault.Worker.csproj" />
+  <Project Path="../mcp-dotnet/DocVault.Mcp/DocVault.Mcp.csproj" />
+  <Project Path="../mcp-dotnet/DocVault.Mcp.Tests/DocVault.Mcp.Tests.csproj" />
 </Solution>

@@ -18,7 +18,9 @@ make up          # Keycloak + Postgres + Mailpit (~30s, waits for readiness)
 make seed        # apply the DocVault realm via Terraform, then print secrets
 make api         # .NET 10 API on :5001
 make web         # React SPA on :5173      (separate shell)
-make test        # 87 .NET tests (32 API + 55 desktop-auth) - no Docker, network or cloud
+make mcp         # MCP server on :5002  (separate shell; needs up + seed + api)
+make assert-mcp  # 24 checks of MCP authorization - REQUIRES up + seed + api + mcp running
+make test        # 136 .NET tests (32 API + 49 MCP + 55 desktop-auth) - no Docker, network or cloud
 make e2e         # 7 Playwright tests - REQUIRES up + seed + api + web running
 make plan        # realm diff; should be EMPTY on an unchanged realm
 make token       # mint a real token and decode its claims
@@ -190,6 +192,31 @@ Every one of these cost real debugging time and is now load-bearing. Do not "sim
 - `start`, never `start-dev`: dev mode disables hostname and HTTPS checks and will run happily in
   production while silently weakening both.
 
+**MCP server (`apps/mcp-dotnet`, `20-realm/mcp.tf`)** - see `docs/13-integration-mcp.md`:
+
+- **The MCP server's Keycloak `client_id` is its URL** (`var.mcp_resource_url`), on purpose. With
+  resource indicators the token's `aud` is that URL, and standard token exchange only lets a
+  client exchange a token whose `aud` contains its own `client_id`. A short name signs users in
+  fine and then fails every tool call with `403 "Client is not within the token audience"`.
+- **`resource-indicators` is an EXPERIMENTAL Keycloak feature**, enabled in
+  `infra/local/docker-compose.yml` only. Off, nothing errors: `resource` is ignored and `aud`
+  silently comes from the audience mapper. `10-keycloak-azure` does not enable it, so MCP is a
+  local-lab + CI feature; do not claim it works on Azure.
+- **`IgnoreTrailingSlashWhenValidatingAudience = false`** in the MCP server. .NET's default
+  accepts `…/mcp/` for `…/mcp`. Found by a unit test.
+- **The SDK (ModelContextProtocol.AspNetCore 2.4) does not send MCP's `insufficient_scope`
+  challenge** and by default derives the metadata `resource` from the Host header.
+  `ScopeChallengeMiddleware` and the fixed `ResourceMetadataUri` exist for those; do not replace
+  them with `[Authorize]` on tools, which hides tools and returns an error clients cannot act on.
+- **`mcp_server` has `full_scope_allowed = false` plus an API audience mapper.** Without the
+  first, an administrator's realm roles ride into the exchanged token; without the second, a
+  user with no roles fails at the exchange (`Requested audience not available`) instead of
+  getting the API's 403.
+- **`WebApplicationFactory` + settings read at startup:** the MCP tests use `UseSetting`, because
+  `Program` reads `McpSettings` while building, before `ConfigureAppConfiguration` values exist.
+- `tools/assert-mcp-authz.py` handles cookies by hand: `http.cookiejar` drops Keycloak's cookies
+  on plain-HTTP localhost. It must never print a token.
+
 **Desktop clients (`apps/desktop-winui`, `apps/desktop-electron`):**
 
 - Configuration is `DocVault.WinUI/appsettings.json` (copied next to the exe), overridable with
@@ -323,8 +350,9 @@ Every one of these cost real debugging time and is now load-bearing. Do not "sim
 
 ## Verification status
 
-Proven against real software: 74 Terraform resources applied to Keycloak 26.6.3 with a clean
-re-plan; 32 API + 55 desktop-auth .NET tests (including forged `alg:none`, wrong-key,
+Proven against real software: 86 Terraform resources applied to the local Keycloak 26.6.3 with a
+clean re-plan (Azure was applied with the 74 that predate the MCP server); 32 API + 49 MCP +
+55 desktop-auth .NET tests (including forged `alg:none`, wrong-key,
 wrong-audience, wrong-realm and expired tokens, and 404-not-403 across the tenant
 boundary); 7 Playwright tests in a real browser; 12 Flutter tests; React/Vue build;
 Flutter analyzes clean.
@@ -339,7 +367,14 @@ service-account role. Both environments re-plan clean.
 ACR via managed identity (AcrPull, no registry password), and accepts tokens issued by the Azure
 Keycloak. Both Azure modules and the realm re-plan clean.
 
-**Not verified:** the Flutter client against *Azure* (only the local lab was driven on the
+**The MCP server has been verified against the local lab only**: `make assert-mcp` passes 24
+checks with real sign-ins as alice, bob, carol and dave (audience = the server URL, unknown
+resource refused, exchange to the API, no realm roles for carol, scope challenge, tenant
+isolation). A spike build of it was driven from Claude Code (sign-in, consent, list documents,
+token refresh).
+
+**Not verified:** the MCP server on Azure (feature flag not enabled there), and MCP clients other
+than Claude Code. Also not verified: the Flutter client against *Azure* (only the local lab was driven on the
 emulator), and the iOS simulator path at all. React Native ships an auth module, not a runnable app.
 
 **Not executed:** the Static Web Apps are provisioned but empty — Terraform does not upload SPA

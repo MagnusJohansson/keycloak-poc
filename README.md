@@ -221,6 +221,7 @@ The Azure variants read files you create and that are gitignored
 | 4 | Machine-to-machine — `client_credentials`, service accounts | [uc4](docs/use-cases/uc4-service-to-service.md) |
 | 5 | Consent + data minimisation — pairwise subject identifiers | [uc5](docs/use-cases/uc5-consent-and-privacy.md) |
 | 6 | Audit → SIEM → Azure Sentinel | [uc6](docs/use-cases/uc6-audit-siem-sentinel.md) |
+| 7 | An AI assistant as a client — an MCP server with audience-bound tokens, consented scopes and token exchange (local lab; uses an experimental Keycloak feature) | [MCP](docs/13-integration-mcp.md) |
 
 ## Repository map
 
@@ -233,6 +234,7 @@ infra/
   local/                        docker-compose lab
 apps/
   api-dotnet/             .NET 10 resource server + worker + tests
+  mcp-dotnet/             MCP server for AI assistants (resource indicators, token exchange) + tests
   web-react/              full reference client (PKCE, RBAC, step-up, TokenInspector)
   web-vue/                runnable-lite
   mobile-flutter/         runnable-lite  (flutter_appauth + Keychain/Keystore)
@@ -240,7 +242,7 @@ apps/
   desktop-electron/       runnable-lite  (loopback PKCE, tokens never in the renderer)
   desktop-winui/          WinUI 3 / .NET 10 (Duende OidcClient, DPAPI) + cross-platform auth lib
 tests/e2e-playwright/     browser login -> API call
-tools/                    export-realm.sh, decode-token.sh
+tools/                    export-realm.sh, decode-token.sh, assert-mcp-authz.py
 ```
 
 ## The idea worth stealing
@@ -253,7 +255,7 @@ make seed         # local Docker Keycloak
 make seed-azure   # Keycloak on Azure
 ```
 
-Same 74 resources, same realm; only a URL and a credential differ. Two
+Same 86 resources, same realm; only a URL and a credential differ. Two
 consequences worth having:
 
 - **The local lab is faithful.** If it stops being so, `make seed` fails
@@ -268,10 +270,11 @@ rather than asserted.
 
 Built and checked against real software, not just written down:
 
-- 74 Terraform resources applied to Keycloak 26.6.3, with a clean re-plan;
+- 86 Terraform resources applied to the local Keycloak 26.6.3, with a clean re-plan
+  (the Azure deployment was applied with the 74 that existed before the MCP server);
   `acr_values_supported`, the audience mapper and service-account roles confirmed
   in a real token.
-- .NET 10 API: 29 tests pass, including forged `alg:none`, wrong-key,
+- .NET 10 API: 32 tests pass, including forged `alg:none`, wrong-key,
   wrong-audience, wrong-realm and expired tokens, 403-vs-401 for an
   authenticated-but-unauthorized caller, and 404-not-403 across the tenant
   boundary.
@@ -283,6 +286,12 @@ Built and checked against real software, not just written down:
 - Keycloak on Azure and the API on Container Apps are both applied and running,
   not merely planned.
 - 7 Playwright tests pass in a real browser against real Keycloak.
+- MCP server: 49 tests pass with forged tokens (wrong audience, `alg:none`,
+  wrong key, wrong realm, expired) and every scope challenge, and
+  `make assert-mcp` passes 24 checks against the local Keycloak, API and MCP
+  server, signing in as the demo users. **Local lab and CI only**: it needs
+  Keycloak's experimental `resource-indicators` feature, which the Azure module
+  does not enable.
 - React and Vue build; Flutter analyzes clean and its tests pass.
 - The Flutter client has been driven end-to-end on an Android emulator against the
   local lab, and React against the full Azure stack (cloud Keycloak *and* cloud API).

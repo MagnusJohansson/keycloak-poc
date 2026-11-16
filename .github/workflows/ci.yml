@@ -158,6 +158,40 @@ jobs:
       - name: Authorization model grants what it claims to
         run: ./tools/assert-authz-model.sh
 
+      # MCP authorization depends on realm settings that fail silently: with the
+      # resource-indicators feature off, or a mapper missing, sign-in still works
+      # and only the audience is wrong. So run the real servers against this
+      # Keycloak and sign in as the demo users.
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Start the API and the MCP server
+        run: |
+          set -euo pipefail
+          dotnet build apps/api-dotnet/DocVault.slnx --configuration Release
+          secret=$(terraform -chdir=infra/terraform/20-realm output -raw mcp_server_client_secret)
+          echo "::add-mask::$secret"
+          echo "MCP_CLIENT_SECRET=$secret" >> "$GITHUB_ENV"
+          ASPNETCORE_URLS=http://localhost:5001 nohup dotnet run --no-build --configuration Release \
+            --project apps/api-dotnet/DocVault.Api --no-launch-profile > api.log 2>&1 &
+          ASPNETCORE_URLS=http://localhost:5002 Mcp__ClientSecret="$secret" nohup dotnet run --no-build --configuration Release \
+            --project apps/mcp-dotnet/DocVault.Mcp --no-launch-profile > mcp.log 2>&1 &
+          for i in $(seq 1 30); do
+            a=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:5001/documents || true)
+            m=$(curl -s -o /dev/null -w '%{http_code}' -X POST http://localhost:5002/mcp || true)
+            [ "$a$m" = "401401" ] && exit 0
+            sleep 2
+          done
+          cat api.log mcp.log
+          exit 1
+
+      - name: MCP authorization works end to end
+        run: python3 tools/assert-mcp-authz.py
+
+      - name: Server logs (on failure)
+        if: failure()
+        run: cat api.log mcp.log || true
+
       - name: Plan is empty (no drift)
         working-directory: infra/terraform/20-realm
         run: |

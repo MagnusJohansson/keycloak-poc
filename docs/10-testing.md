@@ -1,7 +1,8 @@
 # 10. Testing and validation
 
 ```bash
-make test    # 87 tests (32 API + 55 desktop-auth), no Docker, no secrets, no network
+make test    # 136 tests (32 API + 49 MCP server + 55 desktop-auth), no Docker, no secrets, no network
+make assert-mcp   # 24 checks of MCP authorization against the running lab (needs up + seed + api + mcp)
 ```
 
 ## The pyramid

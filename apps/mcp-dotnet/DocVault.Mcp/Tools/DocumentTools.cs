@@ -1,0 +1,98 @@
+// DocVault - a Keycloak proof-of-concept lab.
+// Copyright (C) 2026 Magnus Johansson
+// SPDX-License-Identifier: GPL-3.0-or-later
+// See the LICENSE file for the full licence text.
+
+using System.ComponentModel;
+using DocVault.Mcp.Auth;
+using DocVault.Mcp.Downstream;
+using ModelContextProtocol;
+using ModelContextProtocol.Protocol;
+using ModelContextProtocol.Server;
+
+namespace DocVault.Mcp.Tools;
+
+/// <summary>
+/// The tools an assistant gets. Each needs one scope (see <see cref="ToolScopes"/>)
+/// and calls the API as the user. Tool arguments come from a language model and are
+/// treated as untrusted: typed, bounded, and never used to choose a tenant or a user.
+/// </summary>
+[McpServerToolType]
+public sealed class DocumentTools(
+    IHttpContextAccessor accessor,
+    DocVaultApiClient api,
+    ILogger<DocumentTools> logger)
+{
+    private const int MaxTitleLength = 200;
+
+    [McpServerTool(Name = ToolScopes.ListDocuments, ReadOnly = true, Destructive = false, OpenWorld = false)]
+    [Description("List the documents in the signed-in user's tenant.")]
+    public Task<CallToolResult> ListDocuments(CancellationToken cancellationToken) =>
+        RunAsync(ToolScopes.ListDocuments, token => api.ListDocumentsAsync(token, cancellationToken));
+
+    [McpServerTool(Name = ToolScopes.CreateDocument, ReadOnly = false, Destructive = false, OpenWorld = false)]
+    [Description("Create a document in the signed-in user's tenant. Needs the editor or admin role in DocVault.")]
+    public Task<CallToolResult> CreateDocument(
+        [Description("Title of the new document, 1-200 characters.")] string title,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(title) || title.Length > MaxTitleLength || title.Any(char.IsControl))
+        {
+            return Task.FromResult(Error($"A title must be 1-{MaxTitleLength} characters with no control characters."));
+        }
+
+        return RunAsync(ToolScopes.CreateDocument, token => api.CreateDocumentAsync(token, title.Trim(), cancellationToken));
+    }
+
+    [McpServerTool(Name = ToolScopes.DeleteDocument, ReadOnly = false, Destructive = true, OpenWorld = false)]
+    [Description("Permanently delete a document by id. Needs the admin role in DocVault.")]
+    public Task<CallToolResult> DeleteDocument(
+        [Description("The document's id (a GUID), as returned by list_documents.")] string id,
+        CancellationToken cancellationToken)
+    {
+        // Parsed here rather than by the SDK, so a bad id gets a sentence the model can act on.
+        if (!Guid.TryParse(id, out var documentId))
+        {
+            return Task.FromResult(Error("The id must be a GUID, as returned by list_documents."));
+        }
+
+        return RunAsync(ToolScopes.DeleteDocument, token => api.DeleteDocumentAsync(token, documentId, cancellationToken));
+    }
+
+    private async Task<CallToolResult> RunAsync(string tool, Func<string, Task<ApiResult>> call)
+    {
+        var context = accessor.HttpContext ?? throw new McpException("No HTTP request for this call.");
+        var user = context.User;
+
+        // Defence in depth. ScopeChallengeMiddleware has already answered a call
+        // without the scope with a 403 challenge; this holds if it is ever bypassed.
+        var scope = ToolScopes.RequiredFor(tool)!;
+        if (!user.HasScope(scope))
+        {
+            throw new McpException($"This tool needs the '{scope}' permission.");
+        }
+
+        var token = BearerToken(context) ?? throw new McpException("No bearer token on this request.");
+        var result = await call(token);
+
+        // One line per tool call: who, through which client, what, and how it ended.
+        logger.LogInformation(
+            "tool={Tool} user={User} sub={Subject} client={Client} outcome={Outcome}",
+            tool, user.Identity?.Name, user.FindFirst("sub")?.Value, user.FindFirst("azp")?.Value,
+            result.Ok ? "ok" : "refused");
+
+        return result.Ok ? Text(result.Text) : Error(result.Text);
+    }
+
+    private static string? BearerToken(HttpContext context)
+    {
+        var header = context.Request.Headers.Authorization.ToString();
+        return header.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase) ? header["Bearer ".Length..].Trim() : null;
+    }
+
+    private static CallToolResult Text(string text) =>
+        new() { Content = [new TextContentBlock { Text = text }] };
+
+    private static CallToolResult Error(string text) =>
+        new() { IsError = true, Content = [new TextContentBlock { Text = text }] };
+}

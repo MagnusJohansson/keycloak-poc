@@ -29,7 +29,19 @@ output "client_ids" {
     winui     = keycloak_openid_client.winui.client_id
     worker    = keycloak_openid_client.worker.client_id
     analytics = keycloak_openid_client.analytics.client_id
+    mcp       = keycloak_openid_client.mcp_client.client_id
   }
+}
+
+output "mcp_resource_url" {
+  description = "The MCP server's URL: its RFC 8707 resource, its expected `aud`, and its client_id."
+  value       = keycloak_openid_client.mcp_server.client_id
+}
+
+output "mcp_server_client_secret" {
+  description = "The MCP server's secret for token exchange (RFC 8693)."
+  value       = keycloak_openid_client.mcp_server.client_secret
+  sensitive   = true
 }
 
 output "worker_client_secret" {

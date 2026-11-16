@@ -365,6 +365,8 @@
             "docvault-web-react": [],
             "docvault-reactnative": [],
             "docvault-web-vue": [],
+            "docvault-mcp-client": [],
+            "http://localhost:5002/mcp": [],
             "docvault-desktop": [],
             "docvault-flutter": [],
             "admin-cli": [],
@@ -646,6 +648,16 @@
         }
     ],
     "clientScopeMappings": {
+        "docvault-api": [
+            {
+                "client": "http://localhost:5002/mcp",
+                "roles": [
+                    "doc.admin",
+                    "doc.editor",
+                    "doc.reader"
+                ]
+            }
+        ],
         "account": [
             {
                 "client": "account-console",
@@ -1314,6 +1326,80 @@
             ]
         },
         {
+            "id": "3bdcd518-51e1-46da-9767-2b57b75c8a83",
+            "clientId": "docvault-mcp-client",
+            "name": "DocVault MCP client (AI assistant)",
+            "description": "",
+            "adminUrl": "",
+            "baseUrl": "",
+            "surrogateAuthRequired": false,
+            "enabled": true,
+            "alwaysDisplayInConsole": false,
+            "clientAuthenticatorType": "client-secret",
+            "redirectUris": [
+                "http://localhost/*",
+                "http://127.0.0.1/*"
+            ],
+            "webOrigins": [],
+            "notBefore": 0,
+            "bearerOnly": false,
+            "consentRequired": true,
+            "standardFlowEnabled": true,
+            "implicitFlowEnabled": false,
+            "directAccessGrantsEnabled": false,
+            "serviceAccountsEnabled": false,
+            "publicClient": true,
+            "frontchannelLogout": false,
+            "protocol": "openid-connect",
+            "attributes": {
+                "oauth2.jwt.authorization.grant.enabled": "false",
+                "standard.token.exchange.enabled": "false",
+                "oauth2.device.authorization.grant.enabled": "false",
+                "backchannel.logout.revoke.offline.tokens": "false",
+                "use.refresh.tokens": "true",
+                "exclude.session.state.from.auth.response": "false",
+                "realm_client": "false",
+                "exclude.issuer.from.auth.response": "false",
+                "backchannel.logout.session.required": "true",
+                "client_credentials.use_refresh_token": "false",
+                "display.on.consent.screen": "false",
+                "pkce.code.challenge.method": "S256",
+                "dpop.bound.access.tokens": "false"
+            },
+            "authenticationFlowBindingOverrides": {},
+            "fullScopeAllowed": false,
+            "nodeReRegistrationTimeout": -1,
+            "protocolMappers": [
+                {
+                    "id": "241a05c6-6ae7-4942-84c8-e87489c64b90",
+                    "name": "docvault-mcp-audience",
+                    "protocol": "openid-connect",
+                    "protocolMapper": "oidc-audience-mapper",
+                    "consentRequired": false,
+                    "config": {
+                        "included.client.audience": "http://localhost:5002/mcp",
+                        "id.token.claim": "false",
+                        "access.token.claim": "true",
+                        "introspection.token.claim": "true"
+                    }
+                }
+            ],
+            "defaultClientScopes": [
+                "web-origins",
+                "acr",
+                "roles",
+                "profile",
+                "basic",
+                "email"
+            ],
+            "optionalClientScopes": [
+                "docvault:delete",
+                "offline_access",
+                "docvault:read",
+                "docvault:write"
+            ]
+        },
+        {
             "id": "c49fa0d1-770f-4cfe-9ac0-7f412d15ff59",
             "clientId": "docvault-reactnative",
             "name": "DocVault Mobile (React Native)",
@@ -1461,12 +1547,11 @@
                     "consentRequired": false,
                     "config": {
                         "full.path": "true",
-                        "introspection.token.claim": "false",
-                        "userinfo.token.claim": "true",
-                        "multivalued": "true",
                         "id.token.claim": "true",
+                        "introspection.token.claim": "false",
                         "access.token.claim": "true",
-                        "claim.name": "groups"
+                        "claim.name": "groups",
+                        "userinfo.token.claim": "true"
                     }
                 },
                 {
@@ -1776,6 +1861,96 @@
             ]
         },
         {
+            "id": "1d30eea0-a028-4469-8623-bea95ac607a7",
+            "clientId": "http://localhost:5002/mcp",
+            "name": "DocVault MCP server",
+            "description": "",
+            "adminUrl": "",
+            "baseUrl": "",
+            "surrogateAuthRequired": false,
+            "enabled": true,
+            "alwaysDisplayInConsole": false,
+            "clientAuthenticatorType": "client-secret",
+            "secret": "**********",
+            "redirectUris": [],
+            "webOrigins": [],
+            "notBefore": 0,
+            "bearerOnly": false,
+            "consentRequired": false,
+            "standardFlowEnabled": false,
+            "implicitFlowEnabled": false,
+            "directAccessGrantsEnabled": false,
+            "serviceAccountsEnabled": false,
+            "publicClient": false,
+            "frontchannelLogout": false,
+            "protocol": "openid-connect",
+            "attributes": {
+                "resource_url": "http://localhost:5002/mcp",
+                "client.secret.creation.time": "1794852209",
+                "oauth2.jwt.authorization.grant.enabled": "false",
+                "standard.token.exchange.enabled": "true",
+                "oauth2.device.authorization.grant.enabled": "false",
+                "backchannel.logout.revoke.offline.tokens": "false",
+                "use.refresh.tokens": "true",
+                "exclude.session.state.from.auth.response": "false",
+                "realm_client": "false",
+                "exclude.issuer.from.auth.response": "false",
+                "backchannel.logout.session.required": "true",
+                "client_credentials.use_refresh_token": "false",
+                "display.on.consent.screen": "false",
+                "dpop.bound.access.tokens": "false"
+            },
+            "authenticationFlowBindingOverrides": {},
+            "fullScopeAllowed": false,
+            "nodeReRegistrationTimeout": -1,
+            "protocolMappers": [
+                {
+                    "id": "37efb3fd-fcd5-434d-9320-a45fc6c24d39",
+                    "name": "groups",
+                    "protocol": "openid-connect",
+                    "protocolMapper": "oidc-group-membership-mapper",
+                    "consentRequired": false,
+                    "config": {
+                        "full.path": "true",
+                        "introspection.token.claim": "false",
+                        "userinfo.token.claim": "false",
+                        "multivalued": "true",
+                        "id.token.claim": "false",
+                        "access.token.claim": "true",
+                        "claim.name": "groups"
+                    }
+                },
+                {
+                    "id": "4dac1151-9156-4b20-bf8a-a849a8c0d0dd",
+                    "name": "docvault-api-audience",
+                    "protocol": "openid-connect",
+                    "protocolMapper": "oidc-audience-mapper",
+                    "consentRequired": false,
+                    "config": {
+                        "included.client.audience": "docvault-api",
+                        "id.token.claim": "false",
+                        "access.token.claim": "true",
+                        "introspection.token.claim": "true"
+                    }
+                }
+            ],
+            "defaultClientScopes": [
+                "web-origins",
+                "acr",
+                "roles",
+                "profile",
+                "basic",
+                "email"
+            ],
+            "optionalClientScopes": [
+                "address",
+                "phone",
+                "organization",
+                "offline_access",
+                "microprofile-jwt"
+            ]
+        },
+        {
             "id": "640d608a-931b-4063-ac79-65c54c264e3d",
             "clientId": "realm-management",
             "name": "${client_realm-management}",
@@ -1937,6 +2112,19 @@
             ]
         },
         {
+            "id": "5c1c21a4-73e7-484f-9372-8a49800db059",
+            "name": "docvault:delete",
+            "description": "MCP: Let the assistant delete documents",
+            "protocol": "openid-connect",
+            "attributes": {
+                "include.in.token.scope": "true",
+                "display.on.consent.screen": "true",
+                "gui.order": "",
+                "consent.screen.text": "Let the assistant delete documents",
+                "include.in.openid.provider.metadata": "true"
+            }
+        },
+        {
             "id": "388f3b44-3f23-4852-8632-cde0abec6e6e",
             "name": "organization",
             "description": "Additional claims about the organization a subject belongs to",
@@ -2007,6 +2195,19 @@
                     }
                 }
             ]
+        },
+        {
+            "id": "ba98e32e-eab3-4bc0-a6e8-3a65c64aed44",
+            "name": "docvault:write",
+            "description": "MCP: Let the assistant create documents",
+            "protocol": "openid-connect",
+            "attributes": {
+                "include.in.token.scope": "true",
+                "display.on.consent.screen": "true",
+                "gui.order": "",
+                "consent.screen.text": "Let the assistant create documents",
+                "include.in.openid.provider.metadata": "true"
+            }
         },
         {
             "id": "f46d832b-e784-4a8d-a548-c0ac3429ba02",
@@ -2520,6 +2721,19 @@
                     "config": {}
                 }
             ]
+        },
+        {
+            "id": "df9bda25-13c4-460d-be4b-468e95c225b3",
+            "name": "docvault:read",
+            "description": "MCP: Let the assistant list your documents",
+            "protocol": "openid-connect",
+            "attributes": {
+                "include.in.token.scope": "true",
+                "display.on.consent.screen": "true",
+                "gui.order": "",
+                "consent.screen.text": "Let the assistant list your documents",
+                "include.in.openid.provider.metadata": "true"
+            }
         },
         {
             "id": "2cac3adc-09b4-4649-b640-28c042d89388",
