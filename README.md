@@ -289,7 +289,9 @@ Built and checked against real software, not just written down:
 - MCP server: 49 tests pass with forged tokens (wrong audience, `alg:none`,
   wrong key, wrong realm, expired) and every scope challenge, and
   `make assert-mcp` passes 24 checks against the local Keycloak, API and MCP
-  server, signing in as the demo users. **Local lab and CI only**: it needs
+  server, signing in as the demo users. Driven from Claude Code as a real
+  client: sign-in, consent, a tool call, and the scope step-up when a tool
+  needed `docvault:write`. **Local lab and CI only**: it needs
   Keycloak's experimental `resource-indicators` feature, which the Azure module
   does not enable.
 - React and Vue build; Flutter analyzes clean and its tests pass.

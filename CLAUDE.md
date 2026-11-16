@@ -370,8 +370,11 @@ Keycloak. Both Azure modules and the realm re-plan clean.
 **The MCP server has been verified against the local lab only**: `make assert-mcp` passes 24
 checks with real sign-ins as alice, bob, carol and dave (audience = the server URL, unknown
 resource refused, exchange to the API, no realm roles for carol, scope challenge, tenant
-isolation). A spike build of it was driven from Claude Code (sign-in, consent, list documents,
-token refresh).
+isolation). It has also been driven from Claude Code by the user: sign-in, consent, list
+documents, then `create_document` with only the read scope, which produced Claude Code's
+"needs additional permissions (it asked for the scope docvault:write)" prompt, a re-authorization
+with `scope=docvault:read … docvault:write`, `prompt=consent` and the `resource` parameter, and a
+retried call that created the document.
 
 **Not verified:** the MCP server on Azure (feature flag not enabled there), and MCP clients other
 than Claude Code. Also not verified: the Flutter client against *Azure* (only the local lab was driven on the

@@ -23,7 +23,14 @@ claude mcp add --transport http --client-id docvault-mcp-client docvault http://
 ```
 
 Run `/mcp`, authenticate as `alice`, approve the consent screen, and ask for your
-documents.
+documents. Then ask it to create one. The first sign-in asked only for
+`docvault:read`, so the server answers with a scope challenge and Claude Code
+asks you:
+
+> MCP server "docvault" needs additional permissions for this tool (it asked for
+> the scope "docvault:write"). Re-authenticate now?
+
+Say yes, consent to the extra permission in the browser, and the call is retried.
 
 > **This is a lab, and part of it is experimental upstream.** It follows the MCP
 > authorization specification of 2026-07-28. Keycloak 26.6 implements the part of
