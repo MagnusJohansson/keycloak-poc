@@ -354,6 +354,15 @@ tag that is not on `main`, which guards against a mistake; the attestation
 itself records the workflow and the tag. `--signer-workflow` pins the workflow's
 path, not its content; add `--source-digest <commit>` to pin the commit as well.
 
+## How this was built
+
+I built this lab with Claude Code as a pair programmer, and the commit history
+says so. The discipline that matters is checking the output, so the claims here
+are tested against real software and not only written down: see
+[Verified](#verified). The MCP server and the release workflow were also reviewed
+by a second, independent Claude session before they were merged. The design
+decisions, and the responsibility for what is here, are mine.
+
 ## Licence
 
 GPL-3.0-or-later — see [LICENSE](LICENSE).
