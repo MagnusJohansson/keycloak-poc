@@ -98,8 +98,10 @@ public sealed class LoopbackBrowser : IBrowser
         var response = context.Request.Url?.Query ?? string.Empty;
 
         // Query only - never the tokens, which arrive later on the back channel.
+        // The query is whatever a local process sent to the loopback port, so it is
+        // not trusted as log text: line breaks would let it forge log entries.
         _log.LogInformation("Redirect received: {Response}",
-            response.Contains("error=", StringComparison.Ordinal) ? response : "(authorization code received)");
+            response.Contains("error=", StringComparison.Ordinal) ? ForLog(response) : "(authorization code received)");
 
         await WriteClosingPageAsync(context.Response).ConfigureAwait(false);
 
@@ -160,4 +162,11 @@ public sealed class LoopbackBrowser : IBrowser
 
     private static BrowserResult Failure(BrowserResultType type, string error) =>
         new() { ResultType = type, Error = error };
+
+    /// <summary>One bounded line for a log: control characters replaced, length capped.</summary>
+    internal static string ForLog(string value)
+    {
+        var text = value.Length <= 500 ? value : value[..500] + "…";
+        return new string([.. text.Select(c => char.IsControl(c) ? ' ' : c)]);
+    }
 }
