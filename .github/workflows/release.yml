@@ -1,0 +1,165 @@
+# DocVault - a Keycloak proof-of-concept lab.
+# Copyright (C) 2026 Magnus Johansson
+# SPDX-License-Identifier: GPL-3.0-or-later
+# See the LICENSE file for the full licence text.
+
+name: Release
+
+# Publishing a GitHub Release is the single trigger: the release notes exist
+# before anything is attached, and a draft attaches nothing.
+#
+# verify -> publish. The source archive is attached only if the tag is a
+# version on main with a changelog entry and the .NET tests pass. It carries a
+# signed build provenance attestation (Sigstore), so anyone can check that the
+# archive was produced by this workflow from this repository at that tag:
+#
+#   gh attestation verify docvault-v1.0.0.tar.gz --repo MagnusJohansson/keycloak-poc \
+#     --signer-workflow MagnusJohansson/keycloak-poc/.github/workflows/release.yml \
+#     --source-ref refs/tags/v1.0.0
+#
+# If a job fails, `withdraw` sets the release back to a draft.
+#
+# Actions are pinned to commit SHAs (version in the comment).
+on:
+  release:
+    types: [published]
+
+# Read-only by default; each job adds only what it needs.
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Verify the release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0 # full history, for the "tag is on main" check
+          persist-credentials: false
+
+      - name: Check the release against the repository
+        env:
+          PRERELEASE: ${{ github.event.release.prerelease }}
+        run: |
+          fail() { echo "::error::$1"; exit 1; }
+
+          version="${GITHUB_REF_NAME#v}"
+          echo "$GITHUB_REF_NAME" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$' ||
+            fail "Release tag $GITHUB_REF_NAME is not a version like v1.2.3."
+
+          # A pre-release is documented under the version it leads to:
+          # v1.2.3-rc.1 needs a "## 1.2.3" section.
+          base="${version%%-*}"
+          grep -Fxq "## $base" CHANGELOG.md ||
+            fail "CHANGELOG.md has no '## $base' section."
+
+          # The "pre-release" checkbox has to agree with the version.
+          case "$version" in
+            *-*) [ "$PRERELEASE" = "true" ] ||
+                   fail "$version is a pre-release version, but the release isn't marked as a pre-release." ;;
+            *)   [ "$PRERELEASE" = "false" ] ||
+                   fail "$version is a stable version, but the release is marked as a pre-release." ;;
+          esac
+
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main ||
+            fail "The release tag points to a commit that isn't on main."
+
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
+        with:
+          dotnet-version: '10.0.x'
+
+      # The same suites as CI's .NET job: the API, the MCP server and the
+      # desktop auth library, with their forged-token tests.
+      - name: Test
+        run: |
+          dotnet test apps/api-dotnet/DocVault.slnx --configuration Release
+          dotnet test apps/desktop-winui/DocVault.Desktop.Auth.Tests --configuration Release
+
+  publish:
+    name: Attach the signed source archive
+    needs: verify
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # upload release assets
+      id-token: write # sign the attestation (Sigstore, keyless)
+      attestations: write # store the attestation with the repository
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      # `git archive` of the tag: exactly the tracked files, no build output.
+      - name: Build the source archive
+        id: archive
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          name="docvault-${GITHUB_REF_NAME}"
+          git archive --format=tar.gz --prefix="${name}/" -o "${name}.tar.gz" "$GITHUB_SHA"
+          sha256sum "${name}.tar.gz" > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+          # A re-run must not swap a published archive for different bytes:
+          # `git archive` output can change between git versions. The same
+          # bytes are fine, and a re-run then only refreshes the attestation.
+          published="$(gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name')"
+          if printf '%s\n' "$published" | grep -Fxq "${name}.tar.gz"; then
+            gh release download "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" \
+              --pattern "${name}.tar.gz" --dir published
+            if ! cmp -s "published/${name}.tar.gz" "${name}.tar.gz"; then
+              echo "::error::The release already has ${name}.tar.gz with different contents. Not replacing it."
+              exit 1
+            fi
+          fi
+
+          echo "file=${name}.tar.gz" >> "$GITHUB_OUTPUT"
+
+      - name: Attest build provenance
+        id: attest
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: ${{ steps.archive.outputs.file }}
+
+      # The Sigstore bundle goes next to the archive, so the archive can be
+      # verified from the downloaded files alone (`--bundle`, see the README).
+      - name: Upload to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARCHIVE: ${{ steps.archive.outputs.file }}
+          BUNDLE: ${{ steps.attest.outputs.bundle-path }}
+        run: |
+          set -euo pipefail
+          cp "$BUNDLE" "${ARCHIVE}.sigstore.json"
+          gh release upload "$GITHUB_REF_NAME" "$ARCHIVE" "${ARCHIVE}.sigstore.json" SHA256SUMS.txt \
+            --repo "$GITHUB_REPOSITORY" --clobber
+
+  # A release is public from the moment it is published, before `verify` has
+  # run. If anything above fails, take it back to a draft, so a release without
+  # its signed archive does not stay public. Publishing the draft again starts
+  # this workflow again.
+  #
+  # A release that already has its signed archive is left alone: a failed
+  # re-run of a good release must not take it offline.
+  withdraw:
+    name: Withdraw a failed release
+    needs: [verify, publish]
+    if: ${{ failure() || cancelled() }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # edit the release
+    steps:
+      - name: Set the release back to draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          assets="$(gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name')"
+          if printf '%s\n' "$assets" | grep -Fxq "docvault-${GITHUB_REF_NAME}.tar.gz.sigstore.json"; then
+            echo "::warning::This run failed, but the release already has its signed archive. Leaving it published."
+            exit 0
+          fi
+          gh release edit "$GITHUB_REF_NAME" --draft --repo "$GITHUB_REPOSITORY"
