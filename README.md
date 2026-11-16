@@ -1,5 +1,10 @@
 # DocVault — a Keycloak identity lab
 
+[![CI](https://github.com/MagnusJohansson/keycloak-poc/actions/workflows/ci.yml/badge.svg)](https://github.com/MagnusJohansson/keycloak-poc/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/MagnusJohansson/keycloak-poc/actions/workflows/codeql.yml/badge.svg)](https://github.com/MagnusJohansson/keycloak-poc/actions/workflows/codeql.yml)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/MagnusJohansson/keycloak-poc/badge)](https://scorecard.dev/viewer/?uri=github.com/MagnusJohansson/keycloak-poc)
+[![License: GPL-3.0-or-later](https://img.shields.io/github/license/MagnusJohansson/keycloak-poc)](LICENSE)
+
 A runnable proof of concept for [Keycloak](https://www.keycloak.org/), the
 open-source identity and access management server. It covers running Keycloak,
 configuring a realm as code, deploying to Azure, and integrating it with web,
