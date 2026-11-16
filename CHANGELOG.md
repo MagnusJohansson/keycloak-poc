@@ -4,11 +4,15 @@ Each release attaches a source archive with a signed build provenance
 attestation; see [Releases](README.md#releases). The release workflow refuses a
 tag that is not on `main`.
 
-## Unreleased
+## 1.0.1
 
 - The MCP client's consent screen no longer lists "User roles". Its token never
   carried roles; the built-in `roles` scope was only attached, and so offered.
   `make assert-mcp` now checks the screen (25 checks).
+- The step-up flow's Terraform no longer carries the old note saying
+  `depends_on` pins the order of a login flow. It does not; `priority` does.
+- README: a TL;DR at the top, a note on how the lab was built and reviewed, and
+  corrected counts (87 Terraform resources, 57 desktop auth tests).
 
 ## 1.0.0
 
