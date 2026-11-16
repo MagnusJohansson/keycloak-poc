@@ -92,6 +92,13 @@ through the assistant, and `make assert-mcp` asserts every row:
 | bob (other tenant) | read | `list_documents` | globex's documents only |
 | dave (no roles) | read | `list_documents` | refused by the API, reported as a tool error |
 
+What a tool returns goes to the model as it is, and that includes document titles
+other members of the tenant wrote. A colleague can put instructions in a title.
+Nothing here can stop a model reading them; what limits the damage is the same two
+layers. The assistant can do only what was consented to, as that user, and
+`delete_document` is marked destructive so a client asks before running it. New
+titles are refused if they contain control or invisible characters.
+
 The scope never widens what the user can do. Granting an assistant
 `docvault:delete` does not make alice an administrator; it only means that *if*
 she were one, the assistant could use that.
@@ -100,9 +107,10 @@ she were one, the assistant could use that.
 
 `Program.cs` and `Auth/` in `apps/mcp-dotnet/DocVault.Mcp`:
 
-1. **The token was issued for this server.** `ValidAudience` is the server's URL,
-   compared exactly. A DocVault API token, or a token for another MCP server in
-   the same realm, has a good signature and issuer and is still refused.
+1. **The token was issued for this server, and only for it.** The audience must be
+   the server's URL, compared exactly, and the only audience in the token. A
+   DocVault API token, or a token for another MCP server in the same realm, has a
+   good signature and issuer and is still refused.
 2. **The metadata describes this server and nothing else.** One fixed document at
    `/.well-known/oauth-protected-resource/mcp` (RFC 9728) tells a client which
    authorization server to use.
@@ -135,8 +143,17 @@ Each of these produced no error at the point of the mistake.
   found this, not a review.
 - **The SDK's metadata follows the request.** By default the MCP C# SDK derives
   `resource` from the `Host` header and answers under any path suffix, so a
-  caller could have the server describe a resource it is not. The server sets one
-  fixed document; other paths are 404.
+  caller could have the server describe a resource it is not. Giving it a
+  relative metadata path fixes the document but not the 401, whose
+  `resource_metadata` link is still built from `Host`. The server sets an
+  absolute URL: one fixed document, a constant link, other paths 404.
+- **.NET accepts a token if any one of its audiences matches.** A token for
+  `[this server, something else]` passes the default check. The server requires
+  exactly one audience.
+- **Routing serves `/mcp/` too, and a parser can disagree with the SDK's.** The
+  scope challenge compares the path without a trailing slash, and refuses a body
+  it cannot read (a byte-order mark, UTF-16) with a 400 instead of passing it on.
+  Each tool also checks its own scope, in case something still gets past.
 - **The SDK does not send the scope challenge.** Its authorization filters hide
   the tool and answer a call with a JSON-RPC "forbidden", which a client cannot
   act on. `ScopeChallengeMiddleware` reads the tool name from the request body and
@@ -171,7 +188,8 @@ Each of these produced no error at the point of the mistake.
 
 `apps/mcp-dotnet/DocVault.Mcp.Tests` runs the real server in memory with forged
 tokens: wrong audience (the API's, a sibling server's, a near miss by slash, case
-or path), `alg: none`, wrong key, wrong realm, expired; every scope challenge;
+or path, one audience of two), `alg: none`, wrong key, wrong realm, expired; every
+scope challenge, on every path the endpoint serves; unreadable bodies;
 that the API receives the exchanged token and never the incoming one; that
 Keycloak's refusal text does not reach the assistant; and that the server refuses
 to start with a missing secret, a resource URL that could never equal `aud`, or a

@@ -36,9 +36,11 @@ public sealed class DocumentTools(
         [Description("Title of the new document, 1-200 characters.")] string title,
         CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(title) || title.Length > MaxTitleLength || title.Any(char.IsControl))
+        // Control AND format characters: bidi overrides and zero-width characters
+        // can make a title read differently to a person than to a model.
+        if (string.IsNullOrWhiteSpace(title) || title.Length > MaxTitleLength || title.Any(IsInvisible))
         {
-            return Task.FromResult(Error($"A title must be 1-{MaxTitleLength} characters with no control characters."));
+            return Task.FromResult(Error($"A title must be 1-{MaxTitleLength} characters with no control or invisible characters."));
         }
 
         return RunAsync(ToolScopes.CreateDocument, token => api.CreateDocumentAsync(token, title.Trim(), cancellationToken));
@@ -83,6 +85,10 @@ public sealed class DocumentTools(
 
         return result.Ok ? Text(result.Text) : Error(result.Text);
     }
+
+    private static bool IsInvisible(char c) =>
+        char.IsControl(c) || char.GetUnicodeCategory(c) is System.Globalization.UnicodeCategory.Format
+            or System.Globalization.UnicodeCategory.LineSeparator or System.Globalization.UnicodeCategory.ParagraphSeparator;
 
     private static string? BearerToken(HttpContext context)
     {

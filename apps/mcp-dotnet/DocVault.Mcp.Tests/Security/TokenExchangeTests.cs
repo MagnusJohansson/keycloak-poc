@@ -102,6 +102,8 @@ public sealed class TokenExchangeTests(McpServerFactory factory) : IClassFixture
     [Theory]
     [InlineData("create_document", """{"title":""}""")]
     [InlineData("create_document", """{"title":"line one\nline two"}""")]
+    [InlineData("create_document", """{"title":"invoice\u202Egnp.exe"}""")] // right-to-left override
+    [InlineData("create_document", """{"title":"zero\u200Bwidth"}""")]
     [InlineData("delete_document", """{"id":"not-a-guid"}""")]
     [InlineData("delete_document", """{"id":"../documents"}""")]
     public async Task Bad_arguments_are_refused_before_any_downstream_call(string tool, string arguments)

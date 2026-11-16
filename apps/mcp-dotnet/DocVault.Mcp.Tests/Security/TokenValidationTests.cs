@@ -34,7 +34,36 @@ public sealed class TokenValidationTests(McpServerFactory factory) : IClassFixtu
         // RFC 9728: this is how an MCP client finds the authorization server.
         var challenge = response.Headers.WwwAuthenticate.ToString();
         Assert.Contains("Bearer", challenge);
-        Assert.Contains("resource_metadata=\"http://localhost/.well-known/oauth-protected-resource/mcp\"", challenge);
+        Assert.Contains("resource_metadata=\"https://mcp.test.local/.well-known/oauth-protected-resource/mcp\"", challenge);
+    }
+
+    [Fact]
+    public async Task The_challenge_does_not_follow_the_Host_header()
+    {
+        // Behind a proxy that forwards Host, a caller could otherwise make the server
+        // point a client at metadata on a host of the caller's choosing.
+        var request = new HttpRequestMessage(HttpMethod.Post, "/mcp")
+        {
+            Content = new StringContent("{}", System.Text.Encoding.UTF8, "application/json"),
+        };
+        request.Headers.Host = "evil.example";
+
+        var response = await factory.CreateClient().SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        var challenge = response.Headers.WwwAuthenticate.ToString();
+        Assert.DoesNotContain("evil.example", challenge);
+        Assert.Contains("https://mcp.test.local/.well-known/oauth-protected-resource/mcp", challenge);
+    }
+
+    [Fact]
+    public async Task Rejects_a_token_that_is_also_for_something_else()
+    {
+        // aud: [this server, the API]. One of the two matches, which .NET accepts by
+        // default. A token issued specifically for this server names only this server.
+        var token = factory.Tokens.CreateToken(secondAudience: TestTokenIssuer.ApiAudience);
+
+        await AssertRefusedAsync(token);
     }
 
     [Fact]

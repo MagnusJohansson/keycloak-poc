@@ -7,7 +7,6 @@ using System.Net;
 using System.Text.Json;
 using DocVault.Mcp.Tests.Support;
 using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Hosting;
 
 namespace DocVault.Mcp.Tests.Security;
 
@@ -55,7 +54,7 @@ public sealed class MetadataTests(McpServerFactory factory) : IClassFixture<McpS
 /// <summary>A wrong setting stops the start. None is silently defaulted.</summary>
 public sealed class SettingsTests
 {
-    private static McpSettings Load(Dictionary<string, string?> overrides, string environment = "Production")
+    private static McpSettings Load(Dictionary<string, string?> overrides)
     {
         var values = new Dictionary<string, string?>
         {
@@ -67,7 +66,7 @@ public sealed class SettingsTests
         };
         foreach (var (k, v) in overrides) values[k] = v;
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(values).Build();
-        return McpSettings.Load(configuration, new HostEnvironment(environment));
+        return McpSettings.Load(configuration);
     }
 
     [Fact]
@@ -90,12 +89,21 @@ public sealed class SettingsTests
     [InlineData("Mcp:ResourceUrl", "https://mcp.example/mcp/")] // would never equal `aud`
     [InlineData("Mcp:ResourceUrl", "https://mcp.example/mcp#frag")]
     [InlineData("Mcp:ResourceUrl", "https://mcp.example/mcp?x=1")]
+    [InlineData("Mcp:ResourceUrl", "http://mcp.example/mcp")] // clients' tokens in clear text
     [InlineData("DocVault:ApiBaseUrl", "http://api.example")] // user tokens in clear text
+    [InlineData("DocVault:ApiBaseUrl", "https://api.example/v1")] // the path would be dropped silently
     [InlineData("DocVault:ApiAudience", "")]
     [InlineData("Keycloak:Authority", "")]
     public void Refuses_to_start_with_a_missing_or_unsafe_setting(string key, string? value)
     {
         Assert.Throws<InvalidOperationException>(() => Load(new() { [key] = value }));
+    }
+
+    [Fact]
+    public void Requires_HTTPS_metadata_unless_told_otherwise()
+    {
+        // Not derived from the environment name: unset means safe.
+        Assert.True(Load([]).RequireHttpsMetadata);
     }
 
     [Fact]
@@ -120,13 +128,5 @@ public sealed class SettingsTests
         });
 
         Assert.False(settings.RequireHttpsMetadata);
-    }
-
-    private sealed class HostEnvironment(string name) : IHostEnvironment
-    {
-        public string EnvironmentName { get; set; } = name;
-        public string ApplicationName { get; set; } = "DocVault.Mcp.Tests";
-        public string ContentRootPath { get; set; } = AppContext.BaseDirectory;
-        public Microsoft.Extensions.FileProviders.IFileProvider ContentRootFileProvider { get; set; } = null!;
     }
 }

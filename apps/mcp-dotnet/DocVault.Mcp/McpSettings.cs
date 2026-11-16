@@ -30,7 +30,7 @@ public sealed record McpSettings(
 
     public string TokenEndpoint => $"{Authority}/protocol/openid-connect/token";
 
-    public static McpSettings Load(IConfiguration configuration, IHostEnvironment environment)
+    public static McpSettings Load(IConfiguration configuration)
     {
         var authority = Required(configuration, "Keycloak:Authority").TrimEnd('/');
         var resource = Required(configuration, "Mcp:ResourceUrl");
@@ -38,7 +38,9 @@ public sealed record McpSettings(
         var apiBase = Required(configuration, "DocVault:ApiBaseUrl");
         var apiAudience = Required(configuration, "DocVault:ApiAudience");
 
-        var requireHttps = configuration.GetValue<bool?>("Keycloak:RequireHttpsMetadata") ?? !environment.IsDevelopment();
+        // Explicit configuration, defaulting to safe. Not derived from the environment
+        // name, which is easy to lose (--no-launch-profile silently means Production).
+        var requireHttps = configuration.GetValue<bool?>("Keycloak:RequireHttpsMetadata") ?? true;
         if (!requireHttps && !IsLoopback(authority))
         {
             throw new InvalidOperationException(
@@ -63,10 +65,23 @@ public sealed record McpSettings(
                 "exactly with the token's audience and with the Keycloak client_id.");
         }
 
+        // Clients send their bearer tokens to this URL.
+        if (resourceUrl.Scheme == Uri.UriSchemeHttp && !resourceUrl.IsLoopback)
+        {
+            throw new InvalidOperationException(
+                $"Mcp:ResourceUrl '{resource}' is plain HTTP on a non-loopback host; clients would send tokens in clear text.");
+        }
+
         if (!Uri.TryCreate(apiBase, UriKind.Absolute, out var apiBaseUrl)
             || (apiBaseUrl.Scheme != Uri.UriSchemeHttp && apiBaseUrl.Scheme != Uri.UriSchemeHttps))
         {
             throw new InvalidOperationException($"DocVault:ApiBaseUrl '{apiBase}' must be an absolute http(s) URL.");
+        }
+
+        // Requests go to "/documents" on this host; a path here would be dropped silently.
+        if (apiBaseUrl.AbsolutePath != "/" || apiBaseUrl.Query.Length > 0)
+        {
+            throw new InvalidOperationException($"DocVault:ApiBaseUrl '{apiBase}' must be an origin, with no path or query.");
         }
 
         // The exchanged token (a user's API token) travels to this URL.

@@ -140,6 +140,13 @@ def sign_in(username, scope, resource=MCP):
     return result
 
 
+def describe(response):
+    """An error response for a log line. Never a token, not even part of one."""
+    if "access_token" in response:
+        return "a token was issued"
+    return json.dumps({k: v for k, v in response.items() if k in ("error", "error_description", "status")})[:160]
+
+
 def exchange(subject_token, client_id, client_secret):
     status, _, body = http("POST", TOKEN_URL, {
         "grant_type": "urn:ietf:params:oauth:grant-type:token-exchange",
@@ -203,8 +210,11 @@ def main():
     print("\nTokens Keycloak issues for the MCP server")
     alice = sign_in("alice", "openid docvault:read")
     if "access_token" not in alice:
-        check("alice signs in through the MCP client", False, json.dumps(alice))
-        return
+        check("alice signs in through the MCP client", False, describe(alice))
+        # Everything below needs her token. Exit non-zero: a bare return here
+        # would end the script "successfully" on the likeliest regression.
+        print(f"\n{passed} passed, {failed} failed")
+        sys.exit(1)
     alice_claims = claims(alice["access_token"])
     # Fails silently into aud=<client id> if the resource-indicators feature is off.
     check("aud is exactly the MCP server's URL (RFC 8707)", alice_claims.get("aud") == MCP, f"aud={alice_claims.get('aud')}")
@@ -214,7 +224,7 @@ def main():
     check("the authorization response carried iss", alice.get("iss_param") == server["issuer"], str(alice.get("iss_param")))
 
     refused = sign_in("alice", "openid docvault:read", resource="https://evil.example/mcp")
-    check("a token for an unknown resource is refused by Keycloak", refused.get("error") == "invalid_target", json.dumps(refused)[:120])
+    check("a token for an unknown resource is refused by Keycloak", refused.get("error") == "invalid_target", describe(refused))
 
     print("\nAudience binding, both ways")
     status, _, _ = http("GET", f"{API}/documents", headers={"Authorization": f"Bearer {alice['access_token']}"})
@@ -222,7 +232,7 @@ def main():
     status, exchanged = exchange(alice["access_token"], MCP, SECRET)
     # Never print a token, not even part of one: CI logs are public.
     check("the MCP server can exchange it for an API token (RFC 8693)", status == 200 and "access_token" in exchanged,
-          "" if "access_token" in exchanged else json.dumps(exchanged)[:120])
+          "" if "access_token" in exchanged else describe(exchanged))
     if "access_token" in exchanged:
         api_claims = claims(exchanged["access_token"])
         audience = api_claims.get("aud")
@@ -242,7 +252,7 @@ def main():
         check("an administrator's exchanged token carries document roles but no realm roles",
               "doc.admin" in roles and not carol_api.get("realm_access"), f"realm_access={carol_api.get('realm_access')}")
     else:
-        check("carol's token can be exchanged", False, json.dumps(carol_exchanged)[:120])
+        check("carol's token can be exchanged", False, describe(carol_exchanged))
 
     print("\nTools, as each demo user")
     status, _, message = mcp(alice["access_token"], "tools/list")
@@ -258,7 +268,10 @@ def main():
 
     dave = sign_in("dave", "openid docvault:read")
     status, _, is_error, text = tool(dave.get("access_token"), "list_documents")
-    check("dave (no roles) is refused by the API, reported as a tool error", status == 200 and is_error, text[:60])
+    # The text matters: without the API audience mapper on the MCP server's client,
+    # dave fails earlier, at the exchange, and that is an error too.
+    check("dave (no roles) is refused by the API, not at the exchange",
+          status == 200 and is_error and "your DocVault role" in text, text[:60])
 
     status, challenge, _, _ = tool(alice["access_token"], "create_document", {"title": "x"})
     check("a call without the scope gets 403 insufficient_scope naming it",
@@ -271,7 +284,7 @@ def main():
     if document_id:
         # The scope says the assistant may delete. alice's role says she may not.
         _, _, is_error, text = tool(writer["access_token"], "delete_document", {"id": document_id})
-        check("the delete scope does not give alice the admin role", is_error, text[:60])
+        check("the delete scope does not give alice the admin role", is_error and "your DocVault role" in text, text[:60])
         _, _, is_error, text = tool(carol.get("access_token"), "delete_document", {"id": document_id})
         check("carol (admin) deletes it", not is_error, text[:60])
         _, _, is_error, text = tool(bob.get("access_token"), "list_documents")

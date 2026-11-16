@@ -29,6 +29,13 @@ public sealed class McpServerFactory : WebApplicationFactory<Program>
     public TestTokenIssuer Tokens { get; } = new();
     public DownstreamStub Downstream { get; } = new();
 
+    public McpServerFactory()
+    {
+        // Requests arrive at the server's own URL, as they do in the lab. The
+        // metadata document is served only for the configured host.
+        ClientOptions.BaseAddress = new Uri("https://mcp.test.local");
+    }
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Development");
@@ -67,13 +74,14 @@ public sealed class McpServerFactory : WebApplicationFactory<Program>
     }
 
     /// <summary>POST one JSON-RPC message to /mcp, as an MCP client does.</summary>
-    public async Task<HttpResponseMessage> PostAsync(string? token, object message)
+    public Task<HttpResponseMessage> PostAsync(string? token, object message, string path = "/mcp") =>
+        PostRawAsync(token, new StringContent(JsonSerializer.Serialize(message), Encoding.UTF8, "application/json"), path);
+
+    /// <summary>POST arbitrary content, for bodies a well-behaved client would not send.</summary>
+    public async Task<HttpResponseMessage> PostRawAsync(string? token, HttpContent content, string path = "/mcp")
     {
         var client = CreateClient();
-        var request = new HttpRequestMessage(HttpMethod.Post, "/mcp")
-        {
-            Content = new StringContent(JsonSerializer.Serialize(message), Encoding.UTF8, "application/json"),
-        };
+        var request = new HttpRequestMessage(HttpMethod.Post, path) { Content = content };
         request.Headers.Accept.ParseAdd("application/json");
         request.Headers.Accept.ParseAdd("text/event-stream");
         request.Headers.Add("MCP-Protocol-Version", "2025-06-18");

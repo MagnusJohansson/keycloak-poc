@@ -20,7 +20,7 @@ make api         # .NET 10 API on :5001
 make web         # React SPA on :5173      (separate shell)
 make mcp         # MCP server on :5002  (separate shell; needs up + seed + api)
 make assert-mcp  # 24 checks of MCP authorization - REQUIRES up + seed + api + mcp running
-make test        # 136 .NET tests (32 API + 49 MCP + 55 desktop-auth) - no Docker, network or cloud
+make test        # 150 .NET tests (32 API + 63 MCP + 55 desktop-auth) - no Docker, network or cloud
 make e2e         # 7 Playwright tests - REQUIRES up + seed + api + web running
 make plan        # realm diff; should be EMPTY on an unchanged realm
 make token       # mint a real token and decode its claims
@@ -206,7 +206,8 @@ Every one of these cost real debugging time and is now load-bearing. Do not "sim
   accepts `…/mcp/` for `…/mcp`. Found by a unit test.
 - **The SDK (ModelContextProtocol.AspNetCore 2.4) does not send MCP's `insufficient_scope`
   challenge** and by default derives the metadata `resource` from the Host header.
-  `ScopeChallengeMiddleware` and the fixed `ResourceMetadataUri` exist for those; do not replace
+  `ScopeChallengeMiddleware` and the fixed, ABSOLUTE `ResourceMetadataUri` exist for those (a
+  relative one still builds the 401's `resource_metadata` link from Host); do not replace
   them with `[Authorize]` on tools, which hides tools and returns an error clients cannot act on.
 - **`mcp_server` has `full_scope_allowed = false` plus an API audience mapper.** Without the
   first, an administrator's realm roles ride into the exchanged token; without the second, a
@@ -214,7 +215,13 @@ Every one of these cost real debugging time and is now load-bearing. Do not "sim
   getting the API's 403.
 - **`WebApplicationFactory` + settings read at startup:** the MCP tests use `UseSetting`, because
   `Program` reads `McpSettings` while building, before `ConfigureAppConfiguration` values exist.
-- `tools/assert-mcp-authz.py` handles cookies by hand: `http.cookiejar` drops Keycloak's cookies
+- **The scope middleware fails closed** (400 on a body it cannot parse, path compared without a
+  trailing slash) and each tool re-checks its scope. Do not turn the 400 into a pass-through.
+- **`AudienceValidator` requires exactly one audience.** .NET's default accepts any match in an
+  `aud` array.
+- `tools/assert-mcp-authz.py` must exit non-zero on every failure path, and its dave check asserts
+  the API's refusal text: without `mcp_server_api_audience` dave fails at the exchange instead,
+  which is also an error. It handles cookies by hand: `http.cookiejar` drops Keycloak's cookies
   on plain-HTTP localhost. It must never print a token.
 
 **Desktop clients (`apps/desktop-winui`, `apps/desktop-electron`):**
@@ -351,7 +358,7 @@ Every one of these cost real debugging time and is now load-bearing. Do not "sim
 ## Verification status
 
 Proven against real software: 86 Terraform resources applied to the local Keycloak 26.6.3 with a
-clean re-plan (Azure was applied with the 74 that predate the MCP server); 32 API + 49 MCP +
+clean re-plan (Azure was applied with the 74 that predate the MCP server); 32 API + 63 MCP +
 55 desktop-auth .NET tests (including forged `alg:none`, wrong-key,
 wrong-audience, wrong-realm and expired tokens, and 404-not-403 across the tenant
 boundary); 7 Playwright tests in a real browser; 12 Flutter tests; React/Vue build;

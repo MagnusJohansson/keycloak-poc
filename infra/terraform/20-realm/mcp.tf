@@ -158,7 +158,8 @@ resource "keycloak_openid_client_optional_scopes" "mcp_client" {
   client_id = keycloak_openid_client.mcp_client.id # the UUID, not the client_id string
 
   # Authoritative: restates Keycloak's built-in optional scopes this client
-  # keeps. offline_access is what lets an assistant refresh without a browser.
+  # keeps. Ordinary refresh tokens already let an assistant refresh without a
+  # browser; offline_access lets that outlive the user's SSO session.
   optional_scopes = concat(
     [for s in keycloak_openid_client_scope.mcp : s.name],
     ["offline_access"],

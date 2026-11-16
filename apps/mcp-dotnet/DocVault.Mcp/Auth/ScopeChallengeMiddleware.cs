@@ -24,8 +24,11 @@ public sealed class ScopeChallengeMiddleware(RequestDelegate next, McpSettings s
 
     public async Task InvokeAsync(HttpContext context)
     {
+        // Routing also matches "/mcp/", so compare without a trailing slash: a path
+        // the endpoint serves and this skipped would get no challenge.
+        var path = context.Request.Path.Value?.TrimEnd('/') ?? string.Empty;
         if (!HttpMethods.IsPost(context.Request.Method)
-            || !context.Request.Path.Equals(settings.McpPath, StringComparison.OrdinalIgnoreCase)
+            || !string.Equals(path, settings.McpPath, StringComparison.OrdinalIgnoreCase)
             || context.User.Identity?.IsAuthenticated != true)
         {
             await next(context);
@@ -45,7 +48,9 @@ public sealed class ScopeChallengeMiddleware(RequestDelegate next, McpSettings s
 
         if (missing is null)
         {
-            await next(context);
+            // Fail closed. A body this cannot read (a byte-order mark, UTF-16) might
+            // still be one the SDK can, and it would then reach a tool unchecked.
+            context.Response.StatusCode = StatusCodes.Status400BadRequest;
             return;
         }
 
@@ -69,8 +74,7 @@ public sealed class ScopeChallengeMiddleware(RequestDelegate next, McpSettings s
 
     /// <summary>
     /// The scopes the request's tool calls need and the token lacks: empty when it
-    /// lacks none, null when the body is not something this can read (the SDK then
-    /// rejects it as it would anyway).
+    /// lacks none, null when the body is not UTF-8 JSON this can read.
     /// </summary>
     private static async Task<SortedSet<string>?> MissingScopesAsync(HttpContext context)
     {

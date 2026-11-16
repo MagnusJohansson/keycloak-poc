@@ -14,7 +14,7 @@ using ModelContextProtocol.AspNetCore.Authentication;
 
 var builder = WebApplication.CreateBuilder(args);
 
-var settings = McpSettings.Load(builder.Configuration, builder.Environment);
+var settings = McpSettings.Load(builder.Configuration);
 builder.Services.AddSingleton(settings);
 
 builder.Services
@@ -46,6 +46,11 @@ builder.Services
             // .NET treats "…/mcp/" and "…/mcp" as the same audience unless told not
             // to. They are different resources; the comparison here is exact.
             IgnoreTrailingSlashWhenValidatingAudience = false,
+            // And it is the ONLY audience. .NET accepts a token if any of several
+            // audiences matches; a token that is also for something else was not
+            // issued specifically for this server.
+            AudienceValidator = (audiences, _, parameters) =>
+                audiences.Count() == 1 && audiences.Single() == parameters.ValidAudience,
 
             ValidateLifetime = true,
             ValidateIssuerSigningKey = true,
@@ -71,10 +76,12 @@ builder.Services
     })
     .AddMcp(options =>
     {
-        // Fixed, not derived from the request: by default the SDK builds `resource`
-        // from the Host header and serves metadata under any path suffix, which
-        // would let a caller have this server describe a resource it is not.
-        options.ResourceMetadataUri = new Uri(settings.ResourceMetadataPath, UriKind.Relative);
+        // Fixed and absolute, not derived from the request. By default the SDK builds
+        // `resource` from the Host header and serves metadata under any path suffix,
+        // and with a relative URI it still builds the 401's resource_metadata link
+        // from the Host header. Absolute, the link is constant and the document is
+        // served only for this server's own host.
+        options.ResourceMetadataUri = new Uri(settings.ResourceMetadataUrl, UriKind.Absolute);
         options.ResourceMetadata = new()
         {
             Resource = settings.Resource,

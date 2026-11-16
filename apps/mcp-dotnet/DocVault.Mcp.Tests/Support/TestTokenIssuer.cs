@@ -34,7 +34,8 @@ public sealed class TestTokenIssuer : IDisposable
         string issuer = Issuer,
         string audience = Resource,
         DateTime? expires = null,
-        SecurityKey? overrideKey = null)
+        SecurityKey? overrideKey = null,
+        string? secondAudience = null)
     {
         var claims = new List<Claim>
         {
@@ -45,6 +46,12 @@ public sealed class TestTokenIssuer : IDisposable
         if (scope is not null)
         {
             claims.Add(new Claim("scope", scope));
+        }
+
+        if (secondAudience is not null)
+        {
+            // A second `aud` claim makes the token's audience an array.
+            claims.Add(new Claim("aud", secondAudience));
         }
 
         var expiry = expires ?? DateTime.UtcNow.AddMinutes(5);

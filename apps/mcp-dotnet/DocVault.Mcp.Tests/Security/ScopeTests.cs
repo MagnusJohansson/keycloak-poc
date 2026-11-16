@@ -105,6 +105,45 @@ public sealed class ScopeTests(McpServerFactory factory) : IClassFixture<McpServ
         Assert.Empty(factory.Downstream.Requests);
     }
 
+    [Theory]
+    [InlineData("/mcp/")] // routing serves this path too
+    [InlineData("/MCP")]
+    public async Task The_challenge_covers_every_path_the_endpoint_serves(string path)
+    {
+        factory.Downstream.Reset();
+        var token = factory.Tokens.CreateToken(scope: "openid docvault:read");
+        var call = new { jsonrpc = "2.0", id = 1, method = "tools/call", @params = new { name = "delete_document", arguments = new { id = Guid.NewGuid().ToString() } } };
+
+        var response = await factory.PostAsync(token, call, path);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        Assert.Empty(factory.Downstream.Requests);
+    }
+
+    [Theory]
+    [InlineData("bom")] // UTF-8 with a byte-order mark
+    [InlineData("utf-16")]
+    [InlineData("garbage")]
+    public async Task A_body_the_scope_check_cannot_read_is_refused_not_passed_on(string kind)
+    {
+        factory.Downstream.Reset();
+        var token = factory.Tokens.CreateToken(scope: "openid docvault:read");
+        const string json = """{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"delete_document","arguments":{"id":"7b0c8f0e-4d0a-4c46-9f0a-1f2f3a4b5c6d"}}}""";
+        var bytes = kind switch
+        {
+            "bom" => [0xEF, 0xBB, 0xBF, .. System.Text.Encoding.UTF8.GetBytes(json)],
+            "utf-16" => System.Text.Encoding.Unicode.GetBytes(json),
+            _ => "{not json"u8.ToArray(),
+        };
+        var content = new ByteArrayContent(bytes);
+        content.Headers.ContentType = new("application/json") { CharSet = kind == "utf-16" ? "utf-16" : "utf-8" };
+
+        var response = await factory.PostRawAsync(token, content);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Empty(factory.Downstream.Requests);
+    }
+
     [Fact]
     public async Task An_oversized_body_is_refused_rather_than_passed_through_unchecked()
     {
