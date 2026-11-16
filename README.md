@@ -328,7 +328,8 @@ attached to the release instead of fetching the attestation from GitHub.
 
 What the signature does not show is the branch. The release workflow refuses a
 tag that is not on `main`, which guards against a mistake; the attestation
-itself records the workflow and the tag.
+itself records the workflow and the tag. `--signer-workflow` pins the workflow's
+path, not its content; add `--source-digest <commit>` to pin the commit as well.
 
 ## Licence
 

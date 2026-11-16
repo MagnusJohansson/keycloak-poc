@@ -141,6 +141,9 @@ jobs:
   # run. If anything above fails, take it back to a draft, so a release without
   # its signed archive does not stay public. Publishing the draft again starts
   # this workflow again.
+  #
+  # A release that already has its signed archive is left alone: a failed
+  # re-run of a good release must not take it offline.
   withdraw:
     name: Withdraw a failed release
     needs: [verify, publish]
@@ -152,4 +155,11 @@ jobs:
       - name: Set the release back to draft
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release edit "$GITHUB_REF_NAME" --draft --repo "$GITHUB_REPOSITORY"
+        run: |
+          set -euo pipefail
+          assets="$(gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name')"
+          if printf '%s\n' "$assets" | grep -Fxq "docvault-${GITHUB_REF_NAME}.tar.gz.sigstore.json"; then
+            echo "::warning::This run failed, but the release already has its signed archive. Leaving it published."
+            exit 0
+          fi
+          gh release edit "$GITHUB_REF_NAME" --draft --repo "$GITHUB_REPOSITORY"

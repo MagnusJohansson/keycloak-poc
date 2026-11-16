@@ -369,8 +369,11 @@ commit, so a tag on a commit without this workflow attaches nothing and leaves a
 A pre-release (`vX.Y.Z-rc.1`, marked as a pre-release) is checked against the `## X.Y.Z` section,
 so it can rehearse a release without a changelog change.
 
-If the workflow fails, its `withdraw` job sets the release back to a draft. Then:
-- a flaky test or an upload error: publish the draft again, which starts the workflow again;
+If the workflow fails, its `withdraw` job sets the release back to a draft, unless the release
+already has its signed archive (a failed re-run of a good release leaves it published). A tag that
+is not `vX.Y.Z` fails `verify`, so such a release is drafted too. Then:
+- a flaky test or an upload error: publish the draft again, which starts the workflow again
+  ("Re-run failed jobs" alone attaches the files but leaves the release a draft);
 - anything in the tagged commit (missing changelog section, tag not on main): the workflow and
   the changelog both come from that commit, so no re-run can pass. Delete the draft release AND
   the tag, fix `main`, and publish a new release.
