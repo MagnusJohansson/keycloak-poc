@@ -13,7 +13,11 @@ name: Release
 # signed build provenance attestation (Sigstore), so anyone can check that the
 # archive was produced by this workflow from this repository at that tag:
 #
-#   gh attestation verify docvault-v1.0.0.tar.gz --repo MagnusJohansson/keycloak-poc
+#   gh attestation verify docvault-v1.0.0.tar.gz --repo MagnusJohansson/keycloak-poc \
+#     --signer-workflow MagnusJohansson/keycloak-poc/.github/workflows/release.yml \
+#     --source-ref refs/tags/v1.0.0
+#
+# If a job fails, `withdraw` sets the release back to a draft.
 #
 # Actions are pinned to commit SHAs (version in the comment).
 on:
@@ -45,8 +49,11 @@ jobs:
           echo "$GITHUB_REF_NAME" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$' ||
             fail "Release tag $GITHUB_REF_NAME is not a version like v1.2.3."
 
-          grep -Fxq "## $version" CHANGELOG.md ||
-            fail "CHANGELOG.md has no '## $version' section."
+          # A pre-release is documented under the version it leads to:
+          # v1.2.3-rc.1 needs a "## 1.2.3" section.
+          base="${version%%-*}"
+          grep -Fxq "## $base" CHANGELOG.md ||
+            fail "CHANGELOG.md has no '## $base' section."
 
           # The "pre-release" checkbox has to agree with the version.
           case "$version" in
@@ -87,12 +94,28 @@ jobs:
       # `git archive` of the tag: exactly the tracked files, no build output.
       - name: Build the source archive
         id: archive
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           name="docvault-${GITHUB_REF_NAME}"
           git archive --format=tar.gz --prefix="${name}/" -o "${name}.tar.gz" "$GITHUB_SHA"
           sha256sum "${name}.tar.gz" > SHA256SUMS.txt
           cat SHA256SUMS.txt
+
+          # A re-run must not swap a published archive for different bytes:
+          # `git archive` output can change between git versions. The same
+          # bytes are fine, and a re-run then only refreshes the attestation.
+          published="$(gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name')"
+          if printf '%s\n' "$published" | grep -Fxq "${name}.tar.gz"; then
+            gh release download "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" \
+              --pattern "${name}.tar.gz" --dir published
+            if ! cmp -s "published/${name}.tar.gz" "${name}.tar.gz"; then
+              echo "::error::The release already has ${name}.tar.gz with different contents. Not replacing it."
+              exit 1
+            fi
+          fi
+
           echo "file=${name}.tar.gz" >> "$GITHUB_OUTPUT"
 
       - name: Attest build provenance
@@ -101,8 +124,8 @@ jobs:
         with:
           subject-path: ${{ steps.archive.outputs.file }}
 
-      # The Sigstore bundle goes next to the archive, so it can be verified
-      # offline and without the GitHub CLI as well.
+      # The Sigstore bundle goes next to the archive, so the archive can be
+      # verified from the downloaded files alone (`--bundle`, see the README).
       - name: Upload to the release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -113,3 +136,20 @@ jobs:
           cp "$BUNDLE" "${ARCHIVE}.sigstore.json"
           gh release upload "$GITHUB_REF_NAME" "$ARCHIVE" "${ARCHIVE}.sigstore.json" SHA256SUMS.txt \
             --repo "$GITHUB_REPOSITORY" --clobber
+
+  # A release is public from the moment it is published, before `verify` has
+  # run. If anything above fails, take it back to a draft, so a release without
+  # its signed archive does not stay public. Publishing the draft again starts
+  # this workflow again.
+  withdraw:
+    name: Withdraw a failed release
+    needs: [verify, publish]
+    if: ${{ failure() || cancelled() }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # edit the release
+    steps:
+      - name: Set the release back to draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release edit "$GITHUB_REF_NAME" --draft --repo "$GITHUB_REPOSITORY"

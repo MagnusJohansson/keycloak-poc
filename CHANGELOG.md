@@ -1,7 +1,8 @@
 # Changelog
 
-Releases are tagged from `main`. Each one attaches a source archive with a signed
-build provenance attestation; see [Releases](README.md#releases).
+Each release attaches a source archive with a signed build provenance
+attestation; see [Releases](README.md#releases). The release workflow refuses a
+tag that is not on `main`.
 
 ## 1.0.0
 

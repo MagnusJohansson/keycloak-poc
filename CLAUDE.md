@@ -366,6 +366,16 @@ then attaches a `git archive` source tarball, `SHA256SUMS.txt` and the Sigstore 
 (`.sigstore.json`). Add the changelog section BEFORE publishing; the workflow runs from the tagged
 commit, so a tag on a commit without this workflow attaches nothing and leaves an unsigned release.
 
+A pre-release (`vX.Y.Z-rc.1`, marked as a pre-release) is checked against the `## X.Y.Z` section,
+so it can rehearse a release without a changelog change.
+
+If the workflow fails, its `withdraw` job sets the release back to a draft. Then:
+- a flaky test or an upload error: publish the draft again, which starts the workflow again;
+- anything in the tagged commit (missing changelog section, tag not on main): the workflow and
+  the changelog both come from that commit, so no re-run can pass. Delete the draft release AND
+  the tag, fix `main`, and publish a new release.
+A re-run refuses to replace an already-attached archive with different bytes.
+
 ## Verification status
 
 Proven against real software: 86 Terraform resources applied to the local Keycloak 26.6.3 with a

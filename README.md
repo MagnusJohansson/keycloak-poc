@@ -315,8 +315,20 @@ provenance attestation. To check that an archive was produced by this
 repository's release workflow from that tag:
 
 ```bash
-gh attestation verify docvault-v1.0.0.tar.gz --repo MagnusJohansson/keycloak-poc
+gh attestation verify docvault-v1.0.0.tar.gz \
+  --repo MagnusJohansson/keycloak-poc \
+  --signer-workflow MagnusJohansson/keycloak-poc/.github/workflows/release.yml \
+  --source-ref refs/tags/v1.0.0
 ```
+
+Without the last two flags the command shows only that *some* workflow in this
+repository attested the file. Add
+`--bundle docvault-v1.0.0.tar.gz.sigstore.json` to verify against the bundle
+attached to the release instead of fetching the attestation from GitHub.
+
+What the signature does not show is the branch. The release workflow refuses a
+tag that is not on `main`, which guards against a mistake; the attestation
+itself records the workflow and the tag.
 
 ## Licence
 
