@@ -12,7 +12,7 @@
   "dependencies": {
     "react": "19.1.0",
     "react-native": "0.81.4",
-    "react-native-app-auth": "^8.0.3",
+    "react-native-app-auth": "^9.0.0",
     "react-native-keychain": "^9.2.2"
   }
 }
