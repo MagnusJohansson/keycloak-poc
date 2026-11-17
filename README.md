@@ -18,8 +18,9 @@ on a laptop and complete enough to show the decisions an identity platform needs
   (RFC 9470), service-to-service calls, consent, and an audit trail to Azure Sentinel.
 - **An AI assistant as a client.** An MCP server with audience-bound tokens,
   consented scopes and token exchange, so an assistant can do only what the user
-  consented to, as that user.
-- **Tested against the real thing.** 153 .NET tests with forged tokens, browser
+  consented to, as that user. An audit log records each call: who, through which
+  client, which tool, and how it ended.
+- **Tested against the real thing.** 182 .NET tests with forged tokens, browser
   tests against a real Keycloak, and end-to-end checks that sign in as the demo users.
 
 It is a lab, not a product: the demo passwords are published, and the MCP part
@@ -314,10 +315,12 @@ Built and checked against real software, not just written down:
 - Keycloak on Azure and the API on Container Apps are both applied and running,
   not merely planned.
 - 7 Playwright tests pass in a real browser against real Keycloak.
-- MCP server: 64 tests pass with forged tokens (wrong audience, `alg:none`,
-  wrong key, wrong realm, expired) and every scope challenge, and
-  `make assert-mcp` passes 25 checks against the local Keycloak, API and MCP
-  server, signing in as the demo users. Driven from Claude Code as a real
+- MCP server: 89 tests pass with forged tokens (wrong audience, `alg:none`,
+  wrong key, wrong realm, expired), every scope challenge and the audit log, and
+  `make assert-mcp` passes 34 checks against the local Keycloak, API and MCP
+  server, signing in as the demo users. The last eight read the audit log the
+  server wrote about those sign-ins, and match one call to Keycloak's events and
+  to the API's own log. Driven from Claude Code as a real
   client: sign-in, consent, a tool call, and the scope step-up when a tool
   needed `docvault:write`. **Local lab and CI only**: it needs
   Keycloak's experimental `resource-indicators` feature, which the Azure module

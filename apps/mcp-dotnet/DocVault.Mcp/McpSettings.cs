@@ -15,7 +15,8 @@ public sealed record McpSettings(
     Uri ResourceUrl,
     string ClientSecret,
     Uri ApiBaseUrl,
-    string ApiAudience)
+    string ApiAudience,
+    string? AuditFile = null)
 {
     /// <summary>The path MCP is served at, taken from the resource URL ("/mcp").</summary>
     public string McpPath => ResourceUrl.AbsolutePath;
@@ -91,7 +92,20 @@ public sealed record McpSettings(
                 $"DocVault:ApiBaseUrl '{apiBase}' is plain HTTP to a non-loopback host; user tokens would cross the network in clear text.");
         }
 
-        return new McpSettings(authority, requireHttps, resourceUrl, secret, apiBaseUrl, apiAudience);
+        // Optional: the audit trail as a JSON Lines file, as well as in the log.
+        var auditFile = configuration["Audit:File"];
+        if (string.IsNullOrWhiteSpace(auditFile))
+        {
+            auditFile = null;
+        }
+        else if (!Path.IsPathFullyQualified(auditFile))
+        {
+            // A relative path depends on where the server was started from; the
+            // trail would land somewhere nobody looks.
+            throw new InvalidOperationException($"Audit:File '{auditFile}' must be an absolute path.");
+        }
+
+        return new McpSettings(authority, requireHttps, resourceUrl, secret, apiBaseUrl, apiAudience, auditFile);
     }
 
     private static string Required(IConfiguration configuration, string key)

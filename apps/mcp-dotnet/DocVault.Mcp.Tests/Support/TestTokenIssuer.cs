@@ -42,6 +42,8 @@ public sealed class TestTokenIssuer : IDisposable
             new("sub", $"sub-{username}"),
             new("preferred_username", username),
             new("azp", "docvault-mcp-client"),
+            new("jti", $"jti-{Guid.NewGuid():N}"),
+            new("sid", $"sid-{username}"),
         };
         if (scope is not null)
         {

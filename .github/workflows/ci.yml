@@ -197,9 +197,12 @@ jobs:
           secret=$(terraform -chdir=infra/terraform/20-realm output -raw mcp_server_client_secret)
           echo "::add-mask::$secret"
           echo "MCP_CLIENT_SECRET=$secret" >> "$GITHUB_ENV"
+          # The script reads what the servers wrote about its own calls.
+          echo "MCP_AUDIT_LOG=$PWD/mcp-audit.jsonl" >> "$GITHUB_ENV"
+          echo "DOCVAULT_API_LOG=$PWD/api.log" >> "$GITHUB_ENV"
           ASPNETCORE_URLS=http://localhost:5001 nohup dotnet run --no-build --configuration Release \
             --project apps/api-dotnet/DocVault.Api --no-launch-profile > api.log 2>&1 &
-          ASPNETCORE_URLS=http://localhost:5002 Mcp__ClientSecret="$secret" nohup dotnet run --no-build --configuration Release \
+          ASPNETCORE_URLS=http://localhost:5002 Mcp__ClientSecret="$secret" Audit__File="$PWD/mcp-audit.jsonl" nohup dotnet run --no-build --configuration Release \
             --project apps/mcp-dotnet/DocVault.Mcp --no-launch-profile > mcp.log 2>&1 &
           for i in $(seq 1 30); do
             a=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:5001/documents || true)
@@ -216,7 +219,7 @@ jobs:
       - name: Server logs (on failure)
         if: failure()
         run: |
-          cat api.log mcp.log || true
+          cat api.log mcp.log mcp-audit.jsonl || true
           # Keycloak's events say WHY a sign-in was refused; its pages do not.
           docker compose -f infra/local/docker-compose.yml logs keycloak | grep -E "org.keycloak.events|ERROR|WARN|requires user" | tail -60 || true
 

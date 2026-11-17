@@ -27,6 +27,7 @@ import os
 import re
 import secrets
 import sys
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -40,6 +41,13 @@ PASSWORD = os.environ.get("SEED_USER_PASSWORD", "DocVaultLab!2026")
 SECRET = os.environ.get("MCP_CLIENT_SECRET", "")
 REDIRECT = "http://localhost:43210/callback"  # any loopback port; nothing listens
 TOKEN_URL = f"{KEYCLOAK}/realms/{REALM}/protocol/openid-connect/token"
+# The MCP server's audit file (its Audit:File) and the API's log. `make mcp`,
+# `make api` and CI write both; without them the audit checks are skipped.
+AUDIT_LOG = os.environ.get("MCP_AUDIT_LOG", "")
+API_LOG = os.environ.get("DOCVAULT_API_LOG", "")
+# The local lab's admin (infra/environments/local/realm.tfvars), to read events.
+ADMIN_USER = os.environ.get("KEYCLOAK_ADMIN_USER", "admin")
+ADMIN_PASSWORD = os.environ.get("KEYCLOAK_ADMIN_PASSWORD", "admin")
 
 passed = failed = 0
 
@@ -197,9 +205,104 @@ def tool(token, name, arguments=None):
     return status, challenge, bool(result.get("isError")), text
 
 
+def lines_of(path):
+    try:
+        with open(path, encoding="utf-8", errors="replace") as file:
+            return file.read().splitlines()
+    except OSError:
+        return []
+
+
+def keycloak_events(event_type, user_id):
+    """Keycloak's stored events of one type for one user, newest first. None if not readable."""
+    status, _, body = http("POST", f"{KEYCLOAK}/realms/master/protocol/openid-connect/token", {
+        "grant_type": "password", "client_id": "admin-cli", "username": ADMIN_USER, "password": ADMIN_PASSWORD,
+    }, form=True)
+    if status != 200:
+        return None
+    query = urllib.parse.urlencode({"type": event_type, "user": user_id, "max": 50})
+    status, _, body = http("GET", f"{KEYCLOAK}/admin/realms/{REALM}/events?{query}",
+                           headers={"Authorization": "Bearer " + json.loads(body)["access_token"]})
+    return json.loads(body) if status == 200 else None
+
+
+def audit_checks(skip, tokens, alice_claims, carol_claims, document_id):
+    """What the MCP server wrote about the calls above, and what the API logged."""
+    print("\nThe audit log")
+    if not AUDIT_LOG:
+        print("  SKIP  the audit log (MCP_AUDIT_LOG is not set; `make mcp` and `make assert-mcp` set it)")
+        return
+    lines = lines_of(AUDIT_LOG)[skip:]
+    records = []
+    for line in lines:
+        try:
+            records.append(json.loads(line))
+        except ValueError:
+            records.append({})
+    check("every line of the audit file is one JSON record", bool(records) and all(records), f"{len(lines)} lines")
+
+    def find(**want):
+        return next((r for r in records if all(r.get(k) == v for k, v in want.items())), None)
+
+    listed = find(event="tool.call", tool="list_documents", outcome="ok", **{"user.id": alice_claims.get("sub")})
+    check("alice's list call is on record: her id, the client, the token's id",
+          bool(listed) and listed.get("client.id") == CLIENT and listed.get("user.name") == "alice"
+          and listed.get("token.id") == alice_claims.get("jti"), json.dumps(listed)[:200])
+
+    challenged = find(event="scope.challenge", tool="create_document", **{"user.id": alice_claims.get("sub")})
+    check("the refused create is on record as a scope challenge naming docvault:write",
+          bool(challenged) and challenged.get("scope.required") == "docvault:write" and challenged.get("outcome") == "refused",
+          json.dumps(challenged)[:200])
+
+    if document_id:
+        refused = find(event="tool.call", tool="delete_document", outcome="refused", **{"document.id": document_id})
+        check("alice's refused delete is on record as the API's refusal, not the scope's",
+              bool(refused) and refused.get("reason") == "api_forbidden" and refused.get("user.name") == "alice",
+              json.dumps(refused)[:200])
+        deleted = find(event="tool.call", tool="delete_document", outcome="ok", **{"document.id": document_id})
+        check("carol's delete of the same document is on record under her id",
+              bool(deleted) and deleted.get("user.id") == carol_claims.get("sub"), json.dumps(deleted)[:200])
+
+    text = "\n".join(lines)
+    leaked = [t for t in tokens if t and (t in text or any(part in text for part in t.split(".")))]
+    check("no record holds a token or the client secret", not leaked and SECRET not in text, f"{len(leaked)} tokens found")
+
+    # Keycloak keeps its own record of the same session: the token the audit log
+    # names by id, and the MCP server exchanging it.
+    issued = keycloak_events("CODE_TO_TOKEN", alice_claims.get("sub"))
+    exchanges = keycloak_events("TOKEN_EXCHANGE", alice_claims.get("sub"))
+    if issued is None or exchanges is None:
+        print("  SKIP  Keycloak's events (the admin API was not readable with KEYCLOAK_ADMIN_USER/PASSWORD)")
+    else:
+        token_event = next((e for e in issued if e.get("details", {}).get("token_id") == (listed or {}).get("token.id")), None)
+        exchange_event = next((e for e in exchanges
+                               if e.get("sessionId") == (listed or {}).get("session.id")
+                               and e.get("clientId") == MCP
+                               and e.get("details", {}).get("subject_token_client_id") == CLIENT
+                               and e.get("details", {}).get("audience") == "docvault-api"), None)
+        check("Keycloak's events hold the same token id and session, and the MCP server's exchange",
+              bool(listed) and bool(token_event) and token_event.get("clientId") == CLIENT and bool(exchange_event),
+              f"CODE_TO_TOKEN={'found' if token_event else 'missing'} TOKEN_EXCHANGE={'found' if exchange_event else 'missing'}")
+
+    if not API_LOG:
+        print("  SKIP  the API's access log (DOCVAULT_API_LOG is not set; `make api` writes .lab/api.log)")
+        return
+    trace = (listed or {}).get("trace.id")
+    line = None
+    for _ in range(10):  # the API writes its line after it has answered
+        line = next((l for l in lines_of(API_LOG) if trace and f"trace={trace}" in l), None)
+        if line:
+            break
+        time.sleep(0.5)
+    check("the API logged the same request: same trace id, alice, and the MCP server as the client",
+          bool(line) and "user=alice" in line and f"client={MCP}" in line and "status=200" in line,
+          (line or f"no API log line with trace={trace}")[:200])
+
+
 def main():
     if not SECRET:
         sys.exit("MCP_CLIENT_SECRET is not set (terraform output -raw mcp_server_client_secret).")
+    audit_start = len(lines_of(AUDIT_LOG)) if AUDIT_LOG else 0
     parts = urllib.parse.urlparse(MCP)
     metadata_url = f"{parts.scheme}://{parts.netloc}/.well-known/oauth-protected-resource{parts.path}"
 
@@ -259,6 +362,8 @@ def main():
         api_claims = claims(exchanged["access_token"])
         audience = api_claims.get("aud")
         check("the exchanged token is for the API only", audience in ("docvault-api", ["docvault-api"]), f"aud={audience}")
+        # How the API can tell an assistant's request from the user's own.
+        check("the exchanged token names the MCP server as its client (azp)", api_claims.get("azp") == MCP, f"azp={api_claims.get('azp')}")
         check("it is still alice, with her tenant group",
               api_claims.get("preferred_username") == "alice" and api_claims.get("groups") == ["/acme/engineering"],
               f"groups={api_claims.get('groups')}")
@@ -311,6 +416,10 @@ def main():
         check("carol (admin) deletes it", not is_error, text[:60])
         _, _, is_error, text = tool(bob.get("access_token"), "list_documents")
         check("the document never appeared in bob's tenant", "assert-mcp-authz" not in text)
+
+    tokens = [t.get("access_token") for t in (alice, bob, dave, carol, writer)]
+    carol_claims = claims(carol["access_token"]) if "access_token" in carol else {}
+    audit_checks(audit_start, tokens, alice_claims, carol_claims, document_id)
 
     print(f"\n{passed} passed, {failed} failed")
     sys.exit(0 if failed == 0 else 1)

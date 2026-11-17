@@ -8,12 +8,12 @@ and `delete_document`. The interesting part is not the tools. It is that an
 assistant is a new kind of client: the user did not write it, cannot read its
 reasoning, and it takes instructions from whatever it reads. So the question this
 chapter answers is: **what is the assistant allowed to do, on whose behalf, and
-who enforces that?**
+who enforces that?** And afterwards: **how do you know what it did?**
 
 ```bash
 make up && make seed && make api     # as before
 make mcp                             # the MCP server on :5002
-make assert-mcp                      # 25 checks against the real stack
+make assert-mcp                      # 34 checks against the real stack
 ```
 
 Then, from Claude Code:
@@ -122,6 +122,83 @@ she were one, the assistant could use that.
 4. **The token goes no further.** The server exchanges it (RFC 8693) for a token
    aimed at the API. The incoming token is never forwarded.
 
+## The audit log
+
+Scopes and roles decide what happens. The audit log is how you find out afterwards
+what did: which user, through which client, which tool, and how it ended. The
+server writes one JSON record per event, to its log (category
+`DocVault.Mcp.Audit`) and, when `Audit:File` is set, to a JSON Lines file that
+only its owner can read. `make mcp` writes `.lab/mcp-audit.jsonl`.
+
+alice asks the assistant to delete a document. She consented to
+`docvault:delete`, and she is not an administrator:
+
+```json
+{"time":"2026-11-17T19:27:48.107Z","seq":7,"event":"tool.call","outcome":"refused",
+ "trace.id":"f6da9c982e69d1eaedba9d4e132c0fa2","client.address":"::1",
+ "user.id":"044bcbe0-893b-46bb-9605-d19c6dc9c1ea","user.name":"alice",
+ "client.id":"docvault-mcp-client",
+ "scope":"openid docvault:delete docvault:write docvault:read email profile",
+ "token.id":"onrtac:983c188e-…","session.id":"r3coYV5Q…",
+ "tool":"delete_document","reason":"api_forbidden",
+ "document.id":"34b57b70-199c-434c-aa4c-c3c665ee32ce"}
+```
+
+| Event | When | Outcome and reason |
+|---|---|---|
+| `tool.call` | a tool ran, or refused inside the tool | `ok`; `refused` (`api_forbidden`: the user's role; `exchange_refused`; `missing_scope`); `rejected` (`invalid_title`, `invalid_id`); `not_found`; `error` |
+| `scope.challenge` | the 403: the token lacks the tool's scope | `refused`, with the tool and `scope.required` |
+| `token.refused` | the 401: a token was presented and refused | `refused` (`invalid_audience`, `expired`, `invalid_issuer`, `invalid_signature`, …) |
+| `request.refused` | a valid token, but a body the server will not read | `rejected` (`unreadable_body`, `too_large`) |
+
+The two layers of permission stay apart in the record: `scope.challenge` means
+the *assistant* was not allowed, `api_forbidden` means the *user* was not.
+
+What a record may contain is decided in one place (`Audit/AuditLog.cs`):
+
+- **Who the caller is comes only from a validated token.** A refused token is
+  recorded with a reason and no name: its claims are whatever the sender wrote.
+  The reason is a fixed word, not the validator's message, which can quote the
+  token.
+- **Never a token or the client secret.** A token is named by its `jti`, which
+  is the `token_id` in Keycloak's `CODE_TO_TOKEN` event and cannot be used as a
+  token.
+- **A rejected title is recorded by its length.** It was rejected for what it
+  might carry. An accepted title is recorded: it has passed the check for control
+  and invisible characters, and the encoder escapes the rest.
+- **`client.id` is the client the assistant signed in through,** not the model
+  behind it. Nothing in a token says which model that was.
+
+### Three logs, one request
+
+Three systems each keep a record. The session id and the token id tie Keycloak's
+to the MCP server's; the trace id ties the MCP server's to the API's:
+
+| Where | What it shows |
+|---|---|
+| Keycloak's events (`events.tf`) | `LOGIN` and `CODE_TO_TOKEN` through `docvault-mcp-client`, with the token's id; `TOKEN_EXCHANGE` by the MCP server's client, naming `docvault-mcp-client` as the client the exchanged token came from |
+| The MCP server's audit log | the tool, the outcome, `user.id`, `client.id`, `session.id`, `token.id`, `trace.id` |
+| The API's access log (`DocVault.Api.Access`) | the request, its status, the user, and `client=http://localhost:5002/mcp` |
+
+The last column answers a question the API could not answer before: **was this
+the user, or an assistant acting for the user?** The token the API receives
+after the exchange is alice's, with her roles, and its `azp` is the MCP server's
+client. The same request from the web app carries `azp=docvault-web`. The API
+logs it, with the trace id .NET passes on in the `traceparent` header:
+
+```text
+access method=GET route=/documents/ status=200 user=alice sub=044bcbe0-… client=http://localhost:5002/mcp trace=5888642b56e1ec92859f0a595d366d0d
+```
+
+`make assert-mcp` reads all three after its own sign-ins and checks that the
+calls it made are on record under the right user, that no record holds a token,
+that Keycloak's events hold the same token id and session, and that the API
+logged alice's list call under the same trace id.
+
+Keycloak keeps successful events in its database (Realm settings, Events, in the
+admin console); its server log gets only the failures unless the listener's
+level is changed. `seq` in the audit file restarts when the server does.
+
 ## Traps this found
 
 Each of these produced no error at the point of the mistake.
@@ -193,6 +270,12 @@ Each of these produced no error at the point of the mistake.
   and a client then uses the metadata's `scopes_supported`, which is `docvault:read`.
 - **Azure.** `10-keycloak-azure` does not enable the feature flag and `30-azure`
   does not host this server.
+- **An audit log you could rely on in production.** It is a local file and a log
+  line. If the file cannot be written the server says so in its log and carries
+  on; records are not signed or chained, so whoever can write the file can change
+  it; and nothing ships it anywhere. A request with no token is not recorded:
+  that is how every client starts. There is no OpenTelemetry export; the trace id
+  is in the records, so one could be added.
 - **Production hardening.** No rate limiting, no token caching, an in-memory
   document store behind it. It is a lab.
 
@@ -203,8 +286,10 @@ tokens: wrong audience (the API's, a sibling server's, a near miss by slash, cas
 or path, one audience of two), `alg: none`, wrong key, wrong realm, expired; every
 scope challenge, on every path the endpoint serves; unreadable bodies;
 that the API receives the exchanged token and never the incoming one; that
-Keycloak's refusal text does not reach the assistant; and that the server refuses
-to start with a missing secret, a resource URL that could never equal `aud`, or a
-plain-HTTP API on another host. `tools/assert-mcp-authz.py` then proves the realm
+Keycloak's refusal text does not reach the assistant; what the audit log records
+for each way a call can end, and that it never holds a token, a refused token's
+claims or a rejected title; and that the server refuses
+to start with a missing secret, a resource URL that could never equal `aud`, a
+plain-HTTP API on another host, or an audit file it cannot open. `tools/assert-mcp-authz.py` then proves the realm
 issues what the server expects, by signing in as the demo users through the real
 login page.

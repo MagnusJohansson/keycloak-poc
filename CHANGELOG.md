@@ -4,6 +4,21 @@ Each release attaches a source archive with a signed build provenance
 attestation; see [Releases](README.md#releases). The release workflow refuses a
 tag that is not on `main`.
 
+## Unreleased
+
+- **An audit log for the MCP server.** One JSON record per tool call, scope
+  challenge and refused token: the user, the client the assistant signed in
+  through, the tool, and how it ended. To the log, and to a JSON Lines file when
+  `Audit:File` is set. Records never hold a token, a refused token's claims or a
+  rejected title.
+- **The API logs each authenticated request with its client (`azp`) and trace
+  id,** so a request an assistant made for a user can be told from one the user
+  made, and matched to the MCP server's record of it.
+- The realm keeps Keycloak's `TOKEN_EXCHANGE` events: the MCP server swapping a
+  user's token for an API token.
+- `make assert-mcp` reads both logs and Keycloak's events after its own sign-ins
+  (34 checks). 182 .NET tests.
+
 ## 1.0.1
 
 - The MCP client's consent screen no longer lists "User roles". Its token never

@@ -38,7 +38,8 @@ public sealed class TestTokenIssuer : IDisposable
         string issuer = DefaultIssuer,
         string audience = DefaultAudience,
         DateTime? expires = null,
-        SecurityKey? overrideKey = null)
+        SecurityKey? overrideKey = null,
+        string? client = null)
     {
         var claims = new List<Claim>
         {
@@ -46,6 +47,12 @@ public sealed class TestTokenIssuer : IDisposable
             new("preferred_username", username),
             new("email", $"{username}@acme.test"),
         };
+
+        if (client is not null)
+        {
+            // azp: the client the token was issued to.
+            claims.Add(new Claim("azp", client));
+        }
 
         if (scope is not null)
         {

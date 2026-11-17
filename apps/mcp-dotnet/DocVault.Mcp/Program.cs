@@ -4,6 +4,7 @@
 // See the LICENSE file for the full licence text.
 
 using DocVault.Mcp;
+using DocVault.Mcp.Audit;
 using DocVault.Mcp.Auth;
 using DocVault.Mcp.Downstream;
 using DocVault.Mcp.Tools;
@@ -16,6 +17,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 var settings = McpSettings.Load(builder.Configuration);
 builder.Services.AddSingleton(settings);
+builder.Services.AddSingleton<IAuditLog, AuditLog>();
 
 builder.Services
     .AddAuthentication(options =>
@@ -70,6 +72,13 @@ builder.Services
                     .GetRequiredService<ILoggerFactory>()
                     .CreateLogger("DocVault.Mcp.Auth")
                     .LogWarning("Token refused: {Reason}", context.Exception.Message);
+
+                // Recorded without an identity: nothing in a refused token is known
+                // to be true. A request with no token at all is not recorded; that
+                // is how every client starts, to find the metadata.
+                context.HttpContext.RequestServices.GetRequiredService<IAuditLog>().Record(
+                    AuditEvents.TokenRefused, AuditOutcomes.Refused, context.HttpContext,
+                    ("reason", TokenRefusal.Reason(context.Exception)));
                 return Task.CompletedTask;
             },
         };
@@ -112,6 +121,9 @@ builder.Services
     .WithHttpTransport(options => options.SessionMode = HttpServerSessionMode.Stateless);
 
 var app = builder.Build();
+
+// Created now, not on first use: a bad Audit:File stops the start.
+app.Services.GetRequiredService<IAuditLog>();
 
 app.UseAuthentication();
 app.UseAuthorization();

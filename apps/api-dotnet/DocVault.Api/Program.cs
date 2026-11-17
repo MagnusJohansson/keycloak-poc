@@ -50,6 +50,7 @@ app.UseCors(SpaCors);
 // Order matters and is a classic source of 401s: authentication must populate the
 // principal before authorization can evaluate it.
 app.UseAuthentication();
+app.UseMiddleware<AccessLogMiddleware>();
 app.UseAuthorization();
 
 app.MapIdentityEndpoints();
