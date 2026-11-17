@@ -19,8 +19,8 @@ make seed        # apply the DocVault realm via Terraform, then print secrets
 make api         # .NET 10 API on :5001
 make web         # React SPA on :5173      (separate shell)
 make mcp         # MCP server on :5002  (separate shell; needs up + seed + api)
-make assert-mcp  # 25 checks of MCP authorization - REQUIRES up + seed + api + mcp running
-make test        # 153 .NET tests (32 API + 64 MCP + 57 desktop-auth) - no Docker, network or cloud
+make assert-mcp  # 34 checks of MCP authorization - REQUIRES up + seed + api + mcp running
+make test        # 190 .NET tests (37 API + 96 MCP + 57 desktop-auth) - no Docker, network or cloud
 make e2e         # 7 Playwright tests - REQUIRES up + seed + api + web running
 make plan        # realm diff; should be EMPTY on an unchanged realm
 make token       # mint a real token and decode its claims
@@ -226,6 +226,19 @@ Every one of these cost real debugging time and is now load-bearing. Do not "sim
   the API's refusal text: without `mcp_server_api_audience` dave fails at the exchange instead,
   which is also an error. It handles cookies by hand: `http.cookiejar` drops Keycloak's cookies
   on plain-HTTP localhost. It must never print a token.
+- **The audit log (`Audit/AuditLog.cs`) decides what a record may hold, not its callers.**
+  Identity comes only from a validated token (`IsAuthenticated`); a refused token is recorded
+  with a fixed reason word and no claims, never the exception message. No token, no secret, no
+  rejected title. A request with no token is deliberately not recorded. Keep these rules there.
+- **A tool call is recorded even when the caller hangs up** (`reason=cancelled`): the API may
+  already have acted. Do not put a cancellation filter back on that `catch`.
+- **The MCP server does not adopt a caller's `traceparent`** (`Audit/OwnTraceContext.cs`), so the
+  trace id in a record is always its own. It still sends its id on to the API.
+- **The API's access log sits between `UseAuthentication` and `UseAuthorization`** so it sees the
+  requests authorization refuses, and writes the route pattern, never the path (a decoded path can
+  contain a line break). `azp` is how the API tells an assistant's request from the user's own.
+- `make api` tees to `.lab/api.log` and `make mcp` writes `.lab/mcp-audit.jsonl`; `make assert-mcp`
+  reads both. `.lab/` is ignored by git.
 
 **Desktop clients (`apps/desktop-winui`, `apps/desktop-electron`):**
 
@@ -382,7 +395,7 @@ A re-run refuses to replace an already-attached archive with different bytes.
 ## Verification status
 
 Proven against real software: 87 Terraform resources applied to the local Keycloak 26.6.3 with a
-clean re-plan (Azure was applied with the 74 that predate the MCP server); 32 API + 64 MCP +
+clean re-plan (Azure was applied with the 74 that predate the MCP server); 37 API + 96 MCP +
 57 desktop-auth .NET tests (including forged `alg:none`, wrong-key,
 wrong-audience, wrong-realm and expired tokens, and 404-not-403 across the tenant
 boundary); 7 Playwright tests in a real browser; 12 Flutter tests; React/Vue build;
@@ -398,10 +411,11 @@ service-account role. Both environments re-plan clean.
 ACR via managed identity (AcrPull, no registry password), and accepts tokens issued by the Azure
 Keycloak. Both Azure modules and the realm re-plan clean.
 
-**The MCP server has been verified against the local lab only**: `make assert-mcp` passes 24
+**The MCP server has been verified against the local lab only**: `make assert-mcp` passes 34
 checks with real sign-ins as alice, bob, carol and dave (audience = the server URL, unknown
 resource refused, exchange to the API, no realm roles for carol, scope challenge, tenant
-isolation). It has also been driven from Claude Code by the user: sign-in, consent, list
+isolation, and the audit log's records of those calls, one of them matched to Keycloak's events and to
+the API's access log). It has also been driven from Claude Code by the user: sign-in, consent, list
 documents, then `create_document` with only the read scope, which produced Claude Code's
 "needs additional permissions (it asked for the scope docvault:write)" prompt, a re-authorization
 with `scope=docvault:read … docvault:write`, `prompt=consent` and the `resource` parameter, and a

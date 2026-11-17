@@ -36,6 +36,10 @@ resource "keycloak_realm_events" "docvault" {
     "CLIENT_LOGIN_ERROR",
     "GRANT_CONSENT",
     "REVOKE_GRANT",
+    # The MCP server swapping a user's token for an API token (RFC 8693): the
+    # moment an assistant starts acting for a user. See docs/13-integration-mcp.md.
+    "TOKEN_EXCHANGE",
+    "TOKEN_EXCHANGE_ERROR",
     "UPDATE_TOTP",
     "REMOVE_TOTP",
   ]

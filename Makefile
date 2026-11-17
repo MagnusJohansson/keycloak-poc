@@ -93,8 +93,11 @@ export-realm: ## Regenerate infra/local/realm-export/docvault-realm.json
 # --- Apps -------------------------------------------------------------------
 .PHONY: api
 api: ## Run the .NET API on :5001
+	@mkdir -p .lab
+	@# Also to a file: `make assert-mcp` matches the API's access log with the
+	@# MCP server's audit log by trace id.
 	ASPNETCORE_URLS=http://localhost:5001 \
-		dotnet run --project apps/api-dotnet/DocVault.Api --no-launch-profile
+		dotnet run --project apps/api-dotnet/DocVault.Api --no-launch-profile 2>&1 | tee .lab/api.log
 
 .PHONY: web
 web: ## Run the React SPA on :5173
@@ -119,7 +122,9 @@ worker: ## Run the background worker (client_credentials demo)
 .PHONY: mcp
 mcp: ## Run the MCP server on :5002 (needs up + seed + api)
 	@cd $(REALM_DIR) && $(WS_LOCAL) >/dev/null
+	@mkdir -p .lab
 	ASPNETCORE_URLS=http://localhost:5002 \
+	Audit__File="$(CURDIR)/.lab/mcp-audit.jsonl" \
 	Mcp__ClientSecret="$$(cd $(REALM_DIR) && $(TF) output -raw mcp_server_client_secret)" \
 		dotnet run --project apps/mcp-dotnet/DocVault.Mcp --no-launch-profile
 
@@ -127,6 +132,8 @@ mcp: ## Run the MCP server on :5002 (needs up + seed + api)
 assert-mcp: ## Check MCP authorization end to end (needs up + seed + api + mcp)
 	@cd $(REALM_DIR) && $(WS_LOCAL) >/dev/null
 	MCP_CLIENT_SECRET="$$(cd $(REALM_DIR) && $(TF) output -raw mcp_server_client_secret)" \
+	MCP_AUDIT_LOG="$(CURDIR)/.lab/mcp-audit.jsonl" \
+	DOCVAULT_API_LOG="$$(test -f .lab/api.log && echo "$(CURDIR)/.lab/api.log")" \
 		python3 tools/assert-mcp-authz.py
 
 # --- Tests ------------------------------------------------------------------

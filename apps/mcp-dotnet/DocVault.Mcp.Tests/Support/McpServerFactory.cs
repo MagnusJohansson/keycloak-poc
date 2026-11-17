@@ -29,6 +29,9 @@ public sealed class McpServerFactory : WebApplicationFactory<Program>
     public TestTokenIssuer Tokens { get; } = new();
     public DownstreamStub Downstream { get; } = new();
 
+    /// <summary>The audit trail the server writes: the real file sink, in a temp directory.</summary>
+    public string AuditFile { get; } = Path.Combine(Path.GetTempPath(), $"docvault-mcp-audit-{Guid.NewGuid():N}.jsonl");
+
     public McpServerFactory()
     {
         // Requests arrive at the server's own URL, as they do in the lab. The
@@ -50,6 +53,7 @@ public sealed class McpServerFactory : WebApplicationFactory<Program>
         builder.UseSetting("Mcp:ClientSecret", ClientSecret);
         builder.UseSetting("DocVault:ApiBaseUrl", "https://api.test.local");
         builder.UseSetting("DocVault:ApiAudience", TestTokenIssuer.ApiAudience);
+        builder.UseSetting("Audit:File", AuditFile);
 
         builder.ConfigureTestServices(services =>
         {
@@ -107,6 +111,24 @@ public sealed class McpServerFactory : WebApplicationFactory<Program>
         return JsonDocument.Parse(data is null ? body : data["data:".Length..]).RootElement.Clone();
     }
 
+    /// <summary>The audit file as written: one line per record.</summary>
+    public string[] AuditLines()
+    {
+        if (!File.Exists(AuditFile))
+        {
+            return [];
+        }
+
+        // The server keeps the file open for writing.
+        using var stream = new FileStream(AuditFile, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+        using var reader = new StreamReader(stream);
+        return reader.ReadToEnd().Split('\n', StringSplitOptions.RemoveEmptyEntries);
+    }
+
+    /// <summary>The audit records written after the first <paramref name="skip"/>.</summary>
+    public JsonElement[] AuditRecords(int skip = 0) =>
+        [.. AuditLines().Skip(skip).Select(line => JsonDocument.Parse(line).RootElement.Clone())];
+
     protected override void Dispose(bool disposing)
     {
         if (disposing)
@@ -116,5 +138,10 @@ public sealed class McpServerFactory : WebApplicationFactory<Program>
         }
 
         base.Dispose(disposing);
+
+        if (disposing)
+        {
+            File.Delete(AuditFile);
+        }
     }
 }

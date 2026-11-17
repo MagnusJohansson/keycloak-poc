@@ -10,7 +10,8 @@ using System.Net.Http.Json;
 namespace DocVault.Mcp.Downstream;
 
 /// <summary>The outcome of an API call, in terms a tool can report.</summary>
-public sealed record ApiResult(bool Ok, string Text);
+/// <param name="Reason">Why it was not Ok, as a fixed word for the audit log.</param>
+public sealed record ApiResult(bool Ok, string Text, string? Reason = null);
 
 /// <summary>
 /// Calls the DocVault API as the signed-in user, with an exchanged token. The API
@@ -39,7 +40,7 @@ public sealed class DocVaultApiClient(HttpClient http, ITokenExchanger exchanger
         }
         catch (TokenExchangeException ex)
         {
-            return new ApiResult(false, ex.Message);
+            return new ApiResult(false, ex.Message, ex.Refused ? "exchange_refused" : "exchange_failed");
         }
 
         using var request = new HttpRequestMessage(method, path) { Content = content };
@@ -55,10 +56,10 @@ public sealed class DocVaultApiClient(HttpClient http, ITokenExchanger exchanger
             // The API's own distinctions, kept: 403 = signed in but not allowed;
             // 404 = no such document in your tenant (never "exists elsewhere").
             HttpStatusCode.Forbidden => new ApiResult(false,
-                "DocVault refused: your account is not allowed to do this. The assistant's permission is not the problem; your DocVault role is."),
-            HttpStatusCode.NotFound => new ApiResult(false, "No such document in your tenant."),
-            HttpStatusCode.Unauthorized => new ApiResult(false, "DocVault did not accept the API token."),
-            _ => new ApiResult(false, $"DocVault returned {(int)response.StatusCode}."),
+                "DocVault refused: your account is not allowed to do this. The assistant's permission is not the problem; your DocVault role is.", "api_forbidden"),
+            HttpStatusCode.NotFound => new ApiResult(false, "No such document in your tenant.", "not_found"),
+            HttpStatusCode.Unauthorized => new ApiResult(false, "DocVault did not accept the API token.", "api_unauthorized"),
+            _ => new ApiResult(false, $"DocVault returned {(int)response.StatusCode}.", $"api_status_{(int)response.StatusCode}"),
         };
     }
 }

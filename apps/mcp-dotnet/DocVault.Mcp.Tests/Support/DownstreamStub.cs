@@ -37,9 +37,19 @@ public sealed class DownstreamStub : HttpMessageHandler
     public (HttpStatusCode Status, string Body) Api { get; set; } =
         (HttpStatusCode.OK, """{"tenant":"acme","documents":[{"id":"7b0c8f0e-4d0a-4c46-9f0a-1f2f3a4b5c6d","title":"Acme Q3 Roadmap"}]}""");
 
+    /// <summary>
+    /// When set, the API does not answer until this completes: the request has
+    /// arrived and the caller is still waiting.
+    /// </summary>
+    public TaskCompletionSource? Hold { get; set; }
+
+    /// <summary>Completes when the API has received a request.</summary>
+    public TaskCompletionSource ApiReached { get; private set; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
     public void Reset()
     {
         lock (_requests) { _requests.Clear(); }
+        ApiReached = new(TaskCreationOptions.RunContinuationsAsynchronously);
     }
 
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
@@ -48,7 +58,18 @@ public sealed class DownstreamStub : HttpMessageHandler
         var seen = new Seen(request.Method.Method, request.RequestUri!.ToString(), request.Headers.Authorization?.ToString(), body);
         lock (_requests) { _requests.Add(seen); }
 
-        var (status, content) = seen.Url.Contains("/protocol/openid-connect/token") ? Exchange : Api;
+        var isExchange = seen.Url.Contains("/protocol/openid-connect/token");
+        if (!isExchange)
+        {
+            ApiReached.TrySetResult();
+            if (Hold is { } hold)
+            {
+                // The API has the request and acts on it whether or not the caller waits.
+                await hold.Task.WaitAsync(cancellationToken);
+            }
+        }
+
+        var (status, content) = isExchange ? Exchange : Api;
         return new HttpResponseMessage(status) { Content = new StringContent(content, Encoding.UTF8, "application/json") };
     }
 }

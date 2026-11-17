@@ -4,6 +4,7 @@
 // See the LICENSE file for the full licence text.
 
 using System.Text.Json;
+using DocVault.Mcp.Audit;
 
 namespace DocVault.Mcp.Auth;
 
@@ -17,7 +18,7 @@ namespace DocVault.Mcp.Auth;
 /// in the JSON-RPC body, so this reads the body. Runs after authentication and
 /// authorization: only requests with a valid token for this server get here.
 /// </summary>
-public sealed class ScopeChallengeMiddleware(RequestDelegate next, McpSettings settings, ILogger<ScopeChallengeMiddleware> logger)
+public sealed class ScopeChallengeMiddleware(RequestDelegate next, McpSettings settings, IAuditLog audit)
 {
     /// <summary>Larger bodies are left to the SDK; no tool here takes large arguments.</summary>
     private const int MaxInspectedBytes = 64 * 1024;
@@ -37,8 +38,7 @@ public sealed class ScopeChallengeMiddleware(RequestDelegate next, McpSettings s
 
         if (context.Request.ContentLength is > MaxInspectedBytes)
         {
-            // Not inspected, so not allowed through to a tool either.
-            context.Response.StatusCode = StatusCodes.Status413PayloadTooLarge;
+            TooLarge(context);
             return;
         }
 
@@ -46,20 +46,31 @@ public sealed class ScopeChallengeMiddleware(RequestDelegate next, McpSettings s
         var missing = await MissingScopesAsync(context);
         context.Request.Body.Position = 0;
 
+        if (missing is { TooLarge: true })
+        {
+            // A chunked body with no Content-Length that turned out to be large.
+            TooLarge(context);
+            return;
+        }
+
         if (missing is null)
         {
             // Fail closed. A body this cannot read (a byte-order mark, UTF-16) might
             // still be one the SDK can, and it would then reach a tool unchecked.
+            audit.Record(AuditEvents.RequestRefused, AuditOutcomes.Rejected, AuditCaller.From(context), ("reason", "unreadable_body"));
             context.Response.StatusCode = StatusCodes.Status400BadRequest;
             return;
         }
 
-        if (missing.Count > 0)
+        if (missing.Scopes.Count > 0)
         {
-            var scopes = string.Join(' ', missing);
-            logger.LogWarning(
-                "Refused {Method}: token of {User} via {Client} lacks scope {Scopes}.",
-                "tools/call", context.User.Identity?.Name, context.User.FindFirst("azp")?.Value, scopes);
+            var scopes = string.Join(' ', missing.Scopes);
+            // The tool names are the server's own (ToolScopes), matched from the
+            // request; nothing else from the body is recorded.
+            audit.Record(AuditEvents.ScopeChallenge, AuditOutcomes.Refused, AuditCaller.From(context),
+                ("reason", "missing_scope"),
+                ("tool", missing.Tools.Count > 0 ? string.Join(' ', missing.Tools) : null),
+                ("scope.required", scopes));
 
             context.Response.StatusCode = StatusCodes.Status403Forbidden;
             context.Response.Headers.WWWAuthenticate =
@@ -72,11 +83,21 @@ public sealed class ScopeChallengeMiddleware(RequestDelegate next, McpSettings s
         await next(context);
     }
 
+    /// <summary>Not inspected, so not allowed through to a tool either.</summary>
+    private void TooLarge(HttpContext context)
+    {
+        audit.Record(AuditEvents.RequestRefused, AuditOutcomes.Rejected, AuditCaller.From(context), ("reason", "too_large"));
+        context.Response.StatusCode = StatusCodes.Status413PayloadTooLarge;
+    }
+
+    /// <summary>The scopes the token lacks, and the tools that needed them.</summary>
+    private sealed record Missing(SortedSet<string> Scopes, SortedSet<string> Tools, bool TooLarge = false);
+
     /// <summary>
     /// The scopes the request's tool calls need and the token lacks: empty when it
     /// lacks none, null when the body is not UTF-8 JSON this can read.
     /// </summary>
-    private static async Task<SortedSet<string>?> MissingScopesAsync(HttpContext context)
+    private static async Task<Missing?> MissingScopesAsync(HttpContext context)
     {
         JsonDocument document;
         try
@@ -88,8 +109,7 @@ public sealed class ScopeChallengeMiddleware(RequestDelegate next, McpSettings s
             {
                 if (limited.Length + read > MaxInspectedBytes)
                 {
-                    // Chunked body with no Content-Length that turned out to be large.
-                    return new SortedSet<string>(ToolScopes.All.Values);
+                    return new Missing([], [], TooLarge: true);
                 }
 
                 limited.Write(buffer, 0, read);
@@ -104,7 +124,7 @@ public sealed class ScopeChallengeMiddleware(RequestDelegate next, McpSettings s
 
         using (document)
         {
-            var missing = new SortedSet<string>(StringComparer.Ordinal);
+            var missing = new Missing(new SortedSet<string>(StringComparer.Ordinal), new SortedSet<string>(StringComparer.Ordinal));
 
             // A JSON-RPC batch is an array; every call in it is checked.
             var messages = document.RootElement.ValueKind == JsonValueKind.Array
@@ -126,10 +146,12 @@ public sealed class ScopeChallengeMiddleware(RequestDelegate next, McpSettings s
                 }
 
                 // An unknown tool needs no scope here; the SDK answers "unknown tool".
-                var required = ToolScopes.RequiredFor(name.GetString()!);
+                var tool = name.GetString()!;
+                var required = ToolScopes.RequiredFor(tool);
                 if (required is not null && !context.User.HasScope(required))
                 {
-                    missing.Add(required);
+                    missing.Scopes.Add(required);
+                    missing.Tools.Add(tool);
                 }
             }
 

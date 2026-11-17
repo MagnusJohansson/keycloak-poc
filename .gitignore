@@ -82,3 +82,7 @@ apps/desktop-electron/config.json
 
 # Python bytecode (tools/*.py)
 __pycache__/
+
+# --- local lab run output ---
+# `make api` and `make mcp` write their log and audit trail here.
+.lab/

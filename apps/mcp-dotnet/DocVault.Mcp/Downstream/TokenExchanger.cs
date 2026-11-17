@@ -22,7 +22,11 @@ public interface ITokenExchanger
     Task<string> ExchangeForApiAsync(string subjectToken, CancellationToken cancellationToken);
 }
 
-public sealed class TokenExchangeException(string message) : Exception(message);
+/// <param name="refused">True when Keycloak said no (4xx); false when it failed to answer properly.</param>
+public sealed class TokenExchangeException(string message, bool refused = false) : Exception(message)
+{
+    public bool Refused { get; } = refused;
+}
 
 public sealed class KeycloakTokenExchanger(HttpClient http, McpSettings settings, ILogger<KeycloakTokenExchanger> logger)
     : ITokenExchanger
@@ -54,7 +58,9 @@ public sealed class KeycloakTokenExchanger(HttpClient http, McpSettings settings
             // Keycloak's reason is for the operator, not the assistant: the log gets it,
             // the caller gets a fixed sentence.
             logger.LogWarning("Token exchange refused: {Status} {Body}", (int)response.StatusCode, Truncate(body));
-            throw new TokenExchangeException("DocVault could not issue an API token for this request.");
+            throw new TokenExchangeException(
+                "DocVault could not issue an API token for this request.",
+                refused: (int)response.StatusCode is >= 400 and < 500);
         }
 
         try
