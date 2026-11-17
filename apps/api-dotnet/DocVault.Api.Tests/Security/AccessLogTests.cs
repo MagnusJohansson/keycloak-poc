@@ -99,7 +99,7 @@ public sealed class AccessLogTests(DocVaultApiFactory factory) : IClassFixture<D
     [Fact]
     public async Task The_log_holds_the_routes_pattern_not_the_callers_path()
     {
-        var token = factory.Tokens.CreateToken(apiRoles: ["doc.admin"], groups: ["/acme"], client: "docvault-web");
+        var token = factory.Tokens.CreateToken(apiRoles: ["doc.admin"], groups: ["/acme"], client: "docvault-web-react");
         var (client, log) = ClientFor(token);
         var id = Guid.NewGuid();
 
@@ -120,7 +120,7 @@ public sealed class AccessLogTests(DocVaultApiFactory factory) : IClassFixture<D
     [Fact]
     public async Task The_log_holds_a_known_method_name_not_the_callers_text()
     {
-        var token = factory.Tokens.CreateToken(apiRoles: ["doc.reader"], groups: ["/acme"], client: "docvault-web");
+        var token = factory.Tokens.CreateToken(apiRoles: ["doc.reader"], groups: ["/acme"], client: "docvault-web-react");
         var (client, log) = ClientFor(token);
 
         await client.SendAsync(new HttpRequestMessage(new HttpMethod("PROPFIND"), "/documents"));
@@ -134,7 +134,7 @@ public sealed class AccessLogTests(DocVaultApiFactory factory) : IClassFixture<D
     public async Task A_request_without_a_valid_token_is_not_in_the_access_log()
     {
         var (anonymous, anonymousLog) = ClientFor(null);
-        var (forged, forgedLog) = ClientFor(factory.Tokens.CreateToken(audience: "something-else", client: "docvault-web"));
+        var (forged, forgedLog) = ClientFor(factory.Tokens.CreateToken(audience: "something-else", client: "docvault-web-react"));
 
         Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.GetAsync("/documents")).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, (await forged.GetAsync("/documents")).StatusCode);
