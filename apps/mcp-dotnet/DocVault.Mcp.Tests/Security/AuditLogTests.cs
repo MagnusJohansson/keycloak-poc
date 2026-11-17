@@ -478,7 +478,7 @@ public sealed class AuditLogTests(McpServerFactory factory) : IClassFixture<McpS
 
             using (var audit = new DocVault.Mcp.Audit.AuditLog(Load(path), loggers))
             {
-                audit.Record("token.refused", "refused", context, ("reason", "invalid"));
+                audit.Record("token.refused", "refused", DocVault.Mcp.Audit.AuditCaller.From(context), ("reason", "invalid"));
             }
 
             var line = Assert.Single(File.ReadAllLines(path));
@@ -506,9 +506,19 @@ public sealed class AuditLogTests(McpServerFactory factory) : IClassFixture<McpS
 
             using (var audit = new DocVault.Mcp.Audit.AuditLog(Load(path), loggers))
             {
-                audit.Record("tool.call", "refused", context,
+                audit.Record("tool.call", "refused", DocVault.Mcp.Audit.AuditCaller.From(context),
                     ("user.id", "sub-carol"), ("event", "nothing"), ("outcome", "ok"), ("seq", 99), ("tool", "delete_document"));
+                // No caller at all, as for a refused token: a call site still cannot name one.
+                audit.Record("token.refused", "refused", null,
+                    ("user.id", "sub-carol"), ("user.name", "carol"), ("client.id", "some-client"), ("reason", "invalid"));
             }
+
+            var lines = File.ReadAllLines(path);
+            Assert.Equal(2, lines.Length);
+            Assert.DoesNotContain("carol", lines[1]);
+            Assert.DoesNotContain("some-client", lines[1]);
+            Assert.Contains("\"reason\":\"invalid\"", lines[1]);
+            File.WriteAllLines(path, [lines[0]]);
 
             var record = JsonDocument.Parse(Assert.Single(File.ReadAllLines(path))).RootElement;
             Assert.Equal("sub-alice", Field(record, "user.id"));

@@ -43,7 +43,7 @@ public sealed class DocumentTools(
         if (string.IsNullOrWhiteSpace(title) || title.Length > MaxTitleLength || HasInvisible(title))
         {
             // The length, not the text: a refused title is refused for what it may carry.
-            audit.Record(AuditEvents.ToolCall, AuditOutcomes.Rejected, accessor.HttpContext,
+            audit.Record(AuditEvents.ToolCall, AuditOutcomes.Rejected, AuditCaller.From(accessor.HttpContext),
                 ("tool", ToolScopes.CreateDocument), ("reason", "invalid_title"), ("document.title.length", title?.Length ?? 0));
             return Task.FromResult(Error($"A title must be 1-{MaxTitleLength} characters with no control or invisible characters."));
         }
@@ -62,7 +62,7 @@ public sealed class DocumentTools(
         // Parsed here rather than by the SDK, so a bad id gets a sentence the model can act on.
         if (!Guid.TryParse(id, out var documentId))
         {
-            audit.Record(AuditEvents.ToolCall, AuditOutcomes.Rejected, accessor.HttpContext,
+            audit.Record(AuditEvents.ToolCall, AuditOutcomes.Rejected, AuditCaller.From(accessor.HttpContext),
                 ("tool", ToolScopes.DeleteDocument), ("reason", "invalid_id"));
             return Task.FromResult(Error("The id must be a GUID, as returned by list_documents."));
         }
@@ -77,13 +77,16 @@ public sealed class DocumentTools(
     {
         var context = accessor.HttpContext ?? throw new McpException("No HTTP request for this call.");
         var user = context.User;
+        // Taken now: the record is written after the API call, and by then the
+        // caller may have hung up.
+        var caller = AuditCaller.From(context);
 
         // Defence in depth. ScopeChallengeMiddleware has already answered a call
         // without the scope with a 403 challenge; this holds if it is ever bypassed.
         var scope = ToolScopes.RequiredFor(tool)!;
         if (!user.HasScope(scope))
         {
-            Audit(context, tool, AuditOutcomes.Refused, "missing_scope", subject, ("scope.required", scope));
+            Audit(caller, tool, AuditOutcomes.Refused, "missing_scope", subject, ("scope.required", scope));
             throw new McpException($"This tool needs the '{scope}' permission.");
         }
 
@@ -101,7 +104,7 @@ public sealed class DocumentTools(
             // record says so instead of saying nothing. No filter on cancellation:
             // a caller can hang up on purpose, and the API may still have acted.
             var reason = cancellationToken.IsCancellationRequested ? "cancelled" : ex.GetType().Name;
-            Audit(context, tool, AuditOutcomes.Error, reason, subject);
+            Audit(caller, tool, AuditOutcomes.Error, reason, subject);
             throw;
         }
 
@@ -112,15 +115,15 @@ public sealed class DocumentTools(
             // Everything else is a fault, not a decision: Keycloak failing, or the
             // API not accepting the token this server obtained for it.
             : AuditOutcomes.Error;
-        Audit(context, tool, outcome, result.Reason, subject, ("document.id", result.Ok ? CreatedId(tool, result.Text) : null));
+        Audit(caller, tool, outcome, result.Reason, subject, ("document.id", result.Ok ? CreatedId(tool, result.Text) : null));
 
         return result.Ok ? Text(result.Text) : Error(result.Text);
     }
 
     private void Audit(
-        HttpContext context, string tool, string outcome, string? reason,
+        AuditCaller? caller, string tool, string outcome, string? reason,
         (string Key, object? Value)[] subject, params (string Key, object? Value)[] more) =>
-        audit.Record(AuditEvents.ToolCall, outcome, context,
+        audit.Record(AuditEvents.ToolCall, outcome, caller,
             [("tool", tool), ("reason", reason), .. subject, .. more]);
 
     /// <summary>The id the API gave a new document, so its later deletion can be matched to it.</summary>

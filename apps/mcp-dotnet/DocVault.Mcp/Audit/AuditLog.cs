@@ -4,6 +4,7 @@
 // See the LICENSE file for the full licence text.
 
 using System.Diagnostics;
+using System.Security.Claims;
 using System.Text;
 using System.Text.Json;
 
@@ -45,7 +46,18 @@ public static class AuditOutcomes
 /// </summary>
 public interface IAuditLog
 {
-    void Record(string eventName, string outcome, HttpContext? context, params (string Key, object? Value)[] fields);
+    void Record(string eventName, string outcome, AuditCaller? caller, params (string Key, object? Value)[] fields);
+}
+
+/// <summary>
+/// Who made a request, taken from the request when it arrives. A record written
+/// later (after the API answered, or after the caller hung up) then does not
+/// depend on the request object still being the same one.
+/// </summary>
+public sealed record AuditCaller(ClaimsPrincipal User, string? Address)
+{
+    public static AuditCaller? From(HttpContext? context) =>
+        context is null ? null : new(context.User, context.Connection.RemoteIpAddress?.ToString());
 }
 
 /// <summary>
@@ -69,6 +81,16 @@ public sealed class AuditLog : IAuditLog, IDisposable
     private readonly ILogger _operations;
     private readonly FileStream? _file;
     private readonly Lock _gate = new();
+
+    /// <summary>
+    /// The fields only this class may set, present or not: a record with no user
+    /// (a refused token) must not get one from a call site either.
+    /// </summary>
+    private static readonly HashSet<string> Reserved = new(StringComparer.Ordinal)
+    {
+        "time", "seq", "event", "outcome", "trace.id", "client.address",
+        "user.id", "user.name", "client.id", "scope", "token.id", "session.id",
+    };
     private long _sequence;
 
     public AuditLog(McpSettings settings, ILoggerFactory loggers)
@@ -114,7 +136,7 @@ public sealed class AuditLog : IAuditLog, IDisposable
         }
     }
 
-    public void Record(string eventName, string outcome, HttpContext? context, params (string Key, object? Value)[] fields)
+    public void Record(string eventName, string outcome, AuditCaller? caller, params (string Key, object? Value)[] fields)
     {
         var record = new Dictionary<string, object?>
         {
@@ -128,11 +150,11 @@ public sealed class AuditLog : IAuditLog, IDisposable
         // as a W3C traceparent header.
         Add(record, "trace.id", Activity.Current?.TraceId.ToString());
 
-        if (context is not null)
+        if (caller is not null)
         {
-            Add(record, "client.address", context.Connection.RemoteIpAddress?.ToString());
+            Add(record, "client.address", caller.Address);
 
-            var user = context.User;
+            var user = caller.User;
             if (user.Identity?.IsAuthenticated == true)
             {
                 Add(record, "user.id", user.FindFirst("sub")?.Value);
@@ -147,8 +169,8 @@ public sealed class AuditLog : IAuditLog, IDisposable
 
         foreach (var (key, value) in fields)
         {
-            // A call site adds to a record; it cannot replace who, when or what.
-            if (!record.ContainsKey(key))
+            // A call site adds to a record; it cannot set who, when or what.
+            if (!Reserved.Contains(key))
             {
                 Add(record, key, value);
             }

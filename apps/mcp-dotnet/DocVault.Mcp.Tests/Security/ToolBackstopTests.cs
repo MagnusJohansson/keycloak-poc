@@ -34,7 +34,7 @@ public sealed class ToolBackstopTests
     {
         public List<(string Event, string Outcome, Dictionary<string, object?> Fields)> Records { get; } = [];
 
-        public void Record(string eventName, string outcome, HttpContext? context, params (string Key, object? Value)[] fields) =>
+        public void Record(string eventName, string outcome, AuditCaller? caller, params (string Key, object? Value)[] fields) =>
             Records.Add((eventName, outcome, fields.Where(f => f.Value is not null).ToDictionary(f => f.Key, f => f.Value)));
     }
 

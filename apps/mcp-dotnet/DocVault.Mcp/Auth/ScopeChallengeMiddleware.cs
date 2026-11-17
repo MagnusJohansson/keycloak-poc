@@ -57,7 +57,7 @@ public sealed class ScopeChallengeMiddleware(RequestDelegate next, McpSettings s
         {
             // Fail closed. A body this cannot read (a byte-order mark, UTF-16) might
             // still be one the SDK can, and it would then reach a tool unchecked.
-            audit.Record(AuditEvents.RequestRefused, AuditOutcomes.Rejected, context, ("reason", "unreadable_body"));
+            audit.Record(AuditEvents.RequestRefused, AuditOutcomes.Rejected, AuditCaller.From(context), ("reason", "unreadable_body"));
             context.Response.StatusCode = StatusCodes.Status400BadRequest;
             return;
         }
@@ -67,7 +67,7 @@ public sealed class ScopeChallengeMiddleware(RequestDelegate next, McpSettings s
             var scopes = string.Join(' ', missing.Scopes);
             // The tool names are the server's own (ToolScopes), matched from the
             // request; nothing else from the body is recorded.
-            audit.Record(AuditEvents.ScopeChallenge, AuditOutcomes.Refused, context,
+            audit.Record(AuditEvents.ScopeChallenge, AuditOutcomes.Refused, AuditCaller.From(context),
                 ("reason", "missing_scope"),
                 ("tool", missing.Tools.Count > 0 ? string.Join(' ', missing.Tools) : null),
                 ("scope.required", scopes));
@@ -86,7 +86,7 @@ public sealed class ScopeChallengeMiddleware(RequestDelegate next, McpSettings s
     /// <summary>Not inspected, so not allowed through to a tool either.</summary>
     private void TooLarge(HttpContext context)
     {
-        audit.Record(AuditEvents.RequestRefused, AuditOutcomes.Rejected, context, ("reason", "too_large"));
+        audit.Record(AuditEvents.RequestRefused, AuditOutcomes.Rejected, AuditCaller.From(context), ("reason", "too_large"));
         context.Response.StatusCode = StatusCodes.Status413PayloadTooLarge;
     }
 

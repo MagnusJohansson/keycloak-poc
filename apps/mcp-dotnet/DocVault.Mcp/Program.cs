@@ -90,7 +90,7 @@ builder.Services
                 }
 
                 context.HttpContext.RequestServices.GetRequiredService<IAuditLog>().Record(
-                    AuditEvents.TokenRefused, outcome, context.HttpContext, ("reason", reason));
+                    AuditEvents.TokenRefused, outcome, AuditCaller.From(context.HttpContext), ("reason", reason));
             },
         };
     })
