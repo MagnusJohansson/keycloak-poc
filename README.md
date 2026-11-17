@@ -250,7 +250,7 @@ The Azure variants read files you create and that are gitignored
 | 4 | Machine-to-machine — `client_credentials`, service accounts | [uc4](docs/use-cases/uc4-service-to-service.md) |
 | 5 | Consent + data minimisation — pairwise subject identifiers | [uc5](docs/use-cases/uc5-consent-and-privacy.md) |
 | 6 | Audit → SIEM → Azure Sentinel | [uc6](docs/use-cases/uc6-audit-siem-sentinel.md) |
-| 7 | An AI assistant as a client — an MCP server with audience-bound tokens, consented scopes and token exchange (local lab; uses an experimental Keycloak feature) | [MCP](docs/13-integration-mcp.md) |
+| 7 | An AI assistant as a client — an MCP server with audience-bound tokens, consented scopes, token exchange, and an audit log of what the assistant did and for whom (local lab; uses an experimental Keycloak feature) | [MCP](docs/13-integration-mcp.md) |
 
 ## Repository map
 
