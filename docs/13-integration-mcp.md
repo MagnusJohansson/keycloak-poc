@@ -199,7 +199,7 @@ to the MCP server's; the trace id ties the MCP server's to the API's:
 The last column answers a question the API could not answer before: **was this
 the user, or an assistant acting for the user?** The token the API receives
 after the exchange is alice's, with her roles, and its `azp` is the MCP server's
-client. The same request from the web app carries `azp=docvault-web`. The API
+client. The same request from the React app carries `azp=docvault-web-react`. The API
 logs it, with the trace id .NET passes on in the `traceparent` header:
 
 ```text

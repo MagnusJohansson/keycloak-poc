@@ -11,7 +11,7 @@ namespace DocVault.Api.Auth;
 /// One line per authenticated request: who, through which client, and how it ended.
 ///
 /// The client (<c>azp</c>) is how the API can tell an assistant from the user's own
-/// hands. A request the user made in the web app arrives with <c>docvault-web</c>;
+/// hands. A request the user made in the React app arrives with <c>docvault-web-react</c>;
 /// one an assistant made for them arrives with the MCP server's client, because the
 /// MCP server exchanged the token. Same user, same roles, a different client.
 ///
