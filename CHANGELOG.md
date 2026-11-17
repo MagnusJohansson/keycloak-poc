@@ -4,7 +4,7 @@ Each release attaches a source archive with a signed build provenance
 attestation; see [Releases](README.md#releases). The release workflow refuses a
 tag that is not on `main`.
 
-## Unreleased
+## 1.1.0
 
 - **An audit log for the MCP server.** One JSON record per tool call, scope
   challenge and refused token: the user, the client the assistant signed in
