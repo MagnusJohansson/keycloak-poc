@@ -20,7 +20,7 @@ on a laptop and complete enough to show the decisions an identity platform needs
   consented scopes and token exchange, so an assistant can do only what the user
   consented to, as that user. An audit log records each call: who, through which
   client, which tool, and how it ended.
-- **Tested against the real thing.** 189 .NET tests with forged tokens, browser
+- **Tested against the real thing.** 190 .NET tests with forged tokens, browser
   tests against a real Keycloak, and end-to-end checks that sign in as the demo users.
 
 It is a lab, not a product: the demo passwords are published, and the MCP part

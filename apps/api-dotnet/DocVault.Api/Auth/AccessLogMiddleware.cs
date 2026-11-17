@@ -56,8 +56,24 @@ public sealed class AccessLogMiddleware(RequestDelegate next, ILoggerFactory log
 
         _logger.LogInformation(
             "access method={Method} route={Route} status={Status} user={User} sub={Subject} client={Client} trace={TraceId}",
-            context.Request.Method, route, status,
+            MethodName(context.Request.Method), route, status,
             user.Identity.Name, user.FindFirst("sub")?.Value, user.FindFirst("azp")?.Value,
             Activity.Current?.TraceId.ToString());
     }
+
+    /// <summary>
+    /// The method as one of a fixed set of names. Like the path, the method is the
+    /// caller's text, and the log gets none of it.
+    /// </summary>
+    private static string MethodName(string method) => method.ToUpperInvariant() switch
+    {
+        "GET" => "GET",
+        "POST" => "POST",
+        "PUT" => "PUT",
+        "DELETE" => "DELETE",
+        "PATCH" => "PATCH",
+        "HEAD" => "HEAD",
+        "OPTIONS" => "OPTIONS",
+        _ => "OTHER",
+    };
 }

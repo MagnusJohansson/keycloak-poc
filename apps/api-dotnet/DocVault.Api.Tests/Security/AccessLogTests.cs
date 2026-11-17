@@ -118,6 +118,19 @@ public sealed class AccessLogTests(DocVaultApiFactory factory) : IClassFixture<D
     }
 
     [Fact]
+    public async Task The_log_holds_a_known_method_name_not_the_callers_text()
+    {
+        var token = factory.Tokens.CreateToken(apiRoles: ["doc.reader"], groups: ["/acme"], client: "docvault-web");
+        var (client, log) = ClientFor(token);
+
+        await client.SendAsync(new HttpRequestMessage(new HttpMethod("PROPFIND"), "/documents"));
+
+        var line = Assert.Single(log.Lines);
+        Assert.Contains("method=OTHER", line);
+        Assert.DoesNotContain("PROPFIND", line);
+    }
+
+    [Fact]
     public async Task A_request_without_a_valid_token_is_not_in_the_access_log()
     {
         var (anonymous, anonymousLog) = ClientFor(null);
