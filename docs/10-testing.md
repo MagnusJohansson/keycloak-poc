@@ -106,7 +106,8 @@ are worth an explicit check.
 - `ci.yml` — build, unit, integration, security. Runs against Docker Keycloak, so
   **no cloud account and no secrets are needed**.
 - `e2e.yml` — compose up, seed, Playwright.
-- `deploy-azure.yml` — GitHub OIDC federation; no stored credentials.
+- `deploy-azure.yml` — GitHub OIDC federation; no stored credentials. Manual only, and not set up
+  for this repository: it has not been run successfully.
 
 ## Not covered here
 
