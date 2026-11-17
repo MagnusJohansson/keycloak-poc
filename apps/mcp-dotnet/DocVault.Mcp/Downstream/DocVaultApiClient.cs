@@ -40,7 +40,7 @@ public sealed class DocVaultApiClient(HttpClient http, ITokenExchanger exchanger
         }
         catch (TokenExchangeException ex)
         {
-            return new ApiResult(false, ex.Message, "exchange_refused");
+            return new ApiResult(false, ex.Message, ex.Refused ? "exchange_refused" : "exchange_failed");
         }
 
         using var request = new HttpRequestMessage(method, path) { Content = content };

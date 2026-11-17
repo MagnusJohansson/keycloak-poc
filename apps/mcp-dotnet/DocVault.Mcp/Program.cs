@@ -8,6 +8,7 @@ using DocVault.Mcp.Audit;
 using DocVault.Mcp.Auth;
 using DocVault.Mcp.Downstream;
 using DocVault.Mcp.Tools;
+using System.Diagnostics;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using ModelContextProtocol.AspNetCore;
@@ -18,6 +19,8 @@ var builder = WebApplication.CreateBuilder(args);
 var settings = McpSettings.Load(builder.Configuration);
 builder.Services.AddSingleton(settings);
 builder.Services.AddSingleton<IAuditLog, AuditLog>();
+// Every request starts a new trace here; a caller's traceparent is not adopted.
+builder.Services.AddSingleton<DistributedContextPropagator>(new OwnTraceContext());
 
 builder.Services
     .AddAuthentication(options =>
@@ -66,7 +69,7 @@ builder.Services
 
         options.Events = new JwtBearerEvents
         {
-            OnAuthenticationFailed = context =>
+            OnAuthenticationFailed = async context =>
             {
                 context.HttpContext.RequestServices
                     .GetRequiredService<ILoggerFactory>()
@@ -76,10 +79,18 @@ builder.Services
                 // Recorded without an identity: nothing in a refused token is known
                 // to be true. A request with no token at all is not recorded; that
                 // is how every client starts, to find the metadata.
+                var reason = TokenRefusal.Reason(context.Exception);
+                var outcome = AuditOutcomes.Refused;
+                if (reason == "invalid_signature"
+                    && await TokenRefusal.KeysUnavailableAsync(context.Options, context.HttpContext.RequestAborted))
+                {
+                    // Keycloak could not be reached for its keys. The token may be a
+                    // good one; this is a fault here, not a forgery there.
+                    (reason, outcome) = ("signing_keys_unavailable", AuditOutcomes.Error);
+                }
+
                 context.HttpContext.RequestServices.GetRequiredService<IAuditLog>().Record(
-                    AuditEvents.TokenRefused, AuditOutcomes.Refused, context.HttpContext,
-                    ("reason", TokenRefusal.Reason(context.Exception)));
-                return Task.CompletedTask;
+                    AuditEvents.TokenRefused, outcome, context.HttpContext, ("reason", reason));
             },
         };
     })

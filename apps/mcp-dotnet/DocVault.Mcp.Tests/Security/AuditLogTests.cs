@@ -129,7 +129,7 @@ public sealed class AuditLogTests(McpServerFactory factory) : IClassFixture<McpS
     [Theory]
     [InlineData(HttpStatusCode.NotFound, "not_found", "not_found")]
     [InlineData(HttpStatusCode.InternalServerError, "error", "api_status_500")]
-    [InlineData(HttpStatusCode.Unauthorized, "refused", "api_unauthorized")]
+    [InlineData(HttpStatusCode.Unauthorized, "error", "api_unauthorized")]
     public async Task Each_way_the_API_can_say_no_has_its_own_outcome(HttpStatusCode status, string outcome, string reason)
     {
         var token = factory.Tokens.CreateToken(scope: "openid docvault:delete");
@@ -146,6 +146,143 @@ public sealed class AuditLogTests(McpServerFactory factory) : IClassFixture<McpS
         {
             factory.Downstream.Api = new DownstreamStub().Api;
         }
+    }
+
+    [Fact]
+    public async Task Keycloak_failing_at_the_exchange_is_an_error_not_a_refusal()
+    {
+        var token = factory.Tokens.CreateToken();
+        factory.Downstream.Exchange = (HttpStatusCode.ServiceUnavailable, "upstream down");
+        try
+        {
+            var record = Assert.Single(await RecordsOf(() => factory.CallToolAsync(token, "list_documents")));
+
+            Assert.Equal("error", Field(record, "outcome"));
+            Assert.Equal("exchange_failed", Field(record, "reason"));
+        }
+        finally
+        {
+            factory.Downstream.Exchange = new DownstreamStub().Exchange;
+        }
+    }
+
+    [Fact]
+    public async Task A_call_the_caller_hangs_up_on_is_still_recorded()
+    {
+        // The API has the request and may act on it. A caller can hang up on
+        // purpose; that must not be a way to act without a record.
+        var token = factory.Tokens.CreateToken(username: "alice", scope: "openid docvault:delete");
+        var id = Guid.NewGuid();
+        factory.Downstream.Reset();
+        factory.Downstream.Hold = new TaskCompletionSource();
+        var before = factory.AuditLines().Length;
+        try
+        {
+            using var hangUp = new CancellationTokenSource();
+            var client = factory.CreateClient();
+            using var request = new HttpRequestMessage(HttpMethod.Post, "/mcp")
+            {
+                Content = new StringContent(
+                    JsonSerializer.Serialize(new { jsonrpc = "2.0", id = 1, method = "tools/call", @params = new { name = "delete_document", arguments = new { id = id.ToString() } } }),
+                    Encoding.UTF8, "application/json"),
+            };
+            request.Headers.Accept.ParseAdd("application/json");
+            request.Headers.Accept.ParseAdd("text/event-stream");
+            request.Headers.Authorization = new("Bearer", token);
+
+            var call = client.SendAsync(request, hangUp.Token);
+            await factory.Downstream.ApiReached.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            hangUp.Cancel();
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => call);
+
+            // The server notices the hang-up a moment later.
+            JsonElement[] records = [];
+            for (var i = 0; i < 100 && records.Length == 0; i++)
+            {
+                await Task.Delay(50);
+                records = factory.AuditRecords(before);
+            }
+
+            var record = Assert.Single(records);
+            Assert.Equal("tool.call", Field(record, "event"));
+            Assert.Equal("error", Field(record, "outcome"));
+            Assert.Equal("cancelled", Field(record, "reason"));
+            Assert.Equal("delete_document", Field(record, "tool"));
+            Assert.Equal(id.ToString(), Field(record, "document.id"));
+            Assert.Equal("sub-alice", Field(record, "user.id"));
+        }
+        finally
+        {
+            factory.Downstream.Hold = null;
+        }
+    }
+
+    [Fact]
+    public async Task The_trace_id_is_the_servers_own_not_one_the_caller_sent()
+    {
+        var token = factory.Tokens.CreateToken();
+        var chosen = new string('a', 32);
+        var before = factory.AuditLines().Length;
+
+        var client = factory.CreateClient();
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/mcp")
+        {
+            Content = new StringContent(
+                JsonSerializer.Serialize(new { jsonrpc = "2.0", id = 1, method = "tools/call", @params = new { name = "list_documents", arguments = new { } } }),
+                Encoding.UTF8, "application/json"),
+        };
+        request.Headers.Accept.ParseAdd("application/json");
+        request.Headers.Accept.ParseAdd("text/event-stream");
+        request.Headers.Authorization = new("Bearer", token);
+        request.Headers.Add("traceparent", $"00-{chosen}-bbbbbbbbbbbbbbbb-01");
+        (await client.SendAsync(request)).Dispose();
+
+        var record = Assert.Single(factory.AuditRecords(before));
+        Assert.Matches("^[0-9a-f]{32}$", Field(record, "trace.id"));
+        Assert.NotEqual(chosen, Field(record, "trace.id"));
+    }
+
+    [Fact]
+    public async Task A_chunked_body_too_large_to_inspect_is_refused_as_too_large_not_as_a_missing_scope()
+    {
+        // No Content-Length, so the size is known only while reading.
+        var token = factory.Tokens.CreateToken(username: "alice", scope: "openid docvault:read docvault:write docvault:delete");
+        var json = JsonSerializer.Serialize(new
+        {
+            jsonrpc = "2.0", id = 1, method = "tools/call",
+            @params = new { name = "create_document", arguments = new { title = new string('x', 70_000) } },
+        });
+        var body = new StreamContent(new MemoryStream(Encoding.UTF8.GetBytes(json)));
+        body.Headers.ContentType = new("application/json");
+        factory.Downstream.Reset();
+        var before = factory.AuditLines().Length;
+
+        var client = factory.CreateClient();
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/mcp") { Content = body };
+        request.Headers.TransferEncodingChunked = true;
+        request.Headers.Authorization = new("Bearer", token);
+        using var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.RequestEntityTooLarge, response.StatusCode);
+        var record = Assert.Single(factory.AuditRecords(before));
+        Assert.Equal("request.refused", Field(record, "event"));
+        Assert.Equal("too_large", Field(record, "reason"));
+        Assert.Empty(factory.Downstream.Requests);
+    }
+
+    [Fact]
+    public async Task With_no_signing_keys_a_refused_token_is_not_called_a_forgery()
+    {
+        // What the server has when it could not reach Keycloak for its keys.
+        var none = new Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerOptions
+        {
+            Configuration = new Microsoft.IdentityModel.Protocols.OpenIdConnect.OpenIdConnectConfiguration(),
+        };
+        var some = new Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerOptions();
+        some.TokenValidationParameters.IssuerSigningKey = factory.Tokens.SigningKey;
+
+        Assert.True(await DocVault.Mcp.Audit.TokenRefusal.KeysUnavailableAsync(none, CancellationToken.None));
+        Assert.False(await DocVault.Mcp.Audit.TokenRefusal.KeysUnavailableAsync(some, CancellationToken.None));
     }
 
     [Fact]
@@ -347,6 +484,72 @@ public sealed class AuditLogTests(McpServerFactory factory) : IClassFixture<McpS
             var line = Assert.Single(File.ReadAllLines(path));
             Assert.DoesNotContain("mallory", line);
             Assert.DoesNotContain("some-client", line);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void A_call_site_cannot_replace_who_when_or_what()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"docvault-mcp-audit-{Guid.NewGuid():N}.jsonl");
+        try
+        {
+            using var loggers = Microsoft.Extensions.Logging.LoggerFactory.Create(_ => { });
+            var context = new Microsoft.AspNetCore.Http.DefaultHttpContext
+            {
+                User = new System.Security.Claims.ClaimsPrincipal(new System.Security.Claims.ClaimsIdentity(
+                    [new System.Security.Claims.Claim("sub", "sub-alice")], "test")),
+            };
+
+            using (var audit = new DocVault.Mcp.Audit.AuditLog(Load(path), loggers))
+            {
+                audit.Record("tool.call", "refused", context,
+                    ("user.id", "sub-carol"), ("event", "nothing"), ("outcome", "ok"), ("seq", 99), ("tool", "delete_document"));
+            }
+
+            var record = JsonDocument.Parse(Assert.Single(File.ReadAllLines(path))).RootElement;
+            Assert.Equal("sub-alice", Field(record, "user.id"));
+            Assert.Equal("tool.call", Field(record, "event"));
+            Assert.Equal("refused", Field(record, "outcome"));
+            Assert.Equal("1", Field(record, "seq"));
+            Assert.Equal("delete_document", Field(record, "tool"));
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void An_audit_file_that_already_exists_is_narrowed_to_its_owner_and_appended_to()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        var path = Path.Combine(Path.GetTempPath(), $"docvault-mcp-audit-{Guid.NewGuid():N}.jsonl");
+        try
+        {
+            File.WriteAllText(path, "{\"earlier\":true}\n");
+            File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.GroupRead | UnixFileMode.OtherRead);
+            using var loggers = Microsoft.Extensions.Logging.LoggerFactory.Create(_ => { });
+
+            using (var audit = new DocVault.Mcp.Audit.AuditLog(Load(path), loggers))
+            {
+                Assert.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite, File.GetUnixFileMode(path));
+                audit.Record("tool.call", "ok", null);
+                // Emptied from outside, as log rotation does: the next record starts the file.
+                File.WriteAllText(path, string.Empty);
+                audit.Record("tool.call", "ok", null);
+            }
+
+            var line = Assert.Single(File.ReadAllLines(path));
+            Assert.DoesNotContain('\0', line);
+            Assert.Equal("2", Field(JsonDocument.Parse(line).RootElement, "seq"));
         }
         finally
         {

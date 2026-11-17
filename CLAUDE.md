@@ -20,7 +20,7 @@ make api         # .NET 10 API on :5001
 make web         # React SPA on :5173      (separate shell)
 make mcp         # MCP server on :5002  (separate shell; needs up + seed + api)
 make assert-mcp  # 34 checks of MCP authorization - REQUIRES up + seed + api + mcp running
-make test        # 182 .NET tests (36 API + 89 MCP + 57 desktop-auth) - no Docker, network or cloud
+make test        # 189 .NET tests (36 API + 96 MCP + 57 desktop-auth) - no Docker, network or cloud
 make e2e         # 7 Playwright tests - REQUIRES up + seed + api + web running
 make plan        # realm diff; should be EMPTY on an unchanged realm
 make token       # mint a real token and decode its claims
@@ -230,6 +230,10 @@ Every one of these cost real debugging time and is now load-bearing. Do not "sim
   Identity comes only from a validated token (`IsAuthenticated`); a refused token is recorded
   with a fixed reason word and no claims, never the exception message. No token, no secret, no
   rejected title. A request with no token is deliberately not recorded. Keep these rules there.
+- **A tool call is recorded even when the caller hangs up** (`reason=cancelled`): the API may
+  already have acted. Do not put a cancellation filter back on that `catch`.
+- **The MCP server does not adopt a caller's `traceparent`** (`Audit/OwnTraceContext.cs`), so the
+  trace id in a record is always its own. It still sends its id on to the API.
 - **The API's access log sits between `UseAuthentication` and `UseAuthorization`** so it sees the
   requests authorization refuses, and writes the route pattern, never the path (a decoded path can
   contain a line break). `azp` is how the API tells an assistant's request from the user's own.
@@ -391,7 +395,7 @@ A re-run refuses to replace an already-attached archive with different bytes.
 ## Verification status
 
 Proven against real software: 87 Terraform resources applied to the local Keycloak 26.6.3 with a
-clean re-plan (Azure was applied with the 74 that predate the MCP server); 36 API + 89 MCP +
+clean re-plan (Azure was applied with the 74 that predate the MCP server); 36 API + 96 MCP +
 57 desktop-auth .NET tests (including forged `alg:none`, wrong-key,
 wrong-audience, wrong-realm and expired tokens, and 404-not-403 across the tenant
 boundary); 7 Playwright tests in a real browser; 12 Flutter tests; React/Vue build;

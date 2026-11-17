@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // See the LICENSE file for the full licence text.
 
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 
 namespace DocVault.Mcp.Audit;
@@ -25,4 +26,33 @@ public static class TokenRefusal
         SecurityTokenMalformedException => "malformed",
         _ => "invalid",
     };
+
+    /// <summary>
+    /// True when this server has no signing keys to check a token against, because
+    /// it could not fetch them from the issuer. A token refused then is not known to
+    /// be forged, and the record must not read as if it were.
+    /// </summary>
+    public static async Task<bool> KeysUnavailableAsync(JwtBearerOptions options, CancellationToken cancellationToken)
+    {
+        var parameters = options.TokenValidationParameters;
+        if (parameters.IssuerSigningKey is not null || parameters.IssuerSigningKeys?.Any() == true)
+        {
+            return false;
+        }
+
+        var configuration = options.Configuration;
+        if (configuration is null && options.ConfigurationManager is not null)
+        {
+            try
+            {
+                configuration = await options.ConfigurationManager.GetConfigurationAsync(cancellationToken);
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or IOException or HttpRequestException or OperationCanceledException)
+            {
+                return true;
+            }
+        }
+
+        return configuration is null || configuration.SigningKeys.Count == 0;
+    }
 }

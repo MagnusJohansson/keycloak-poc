@@ -146,13 +146,24 @@ alice asks the assistant to delete a document. She consented to
 
 | Event | When | Outcome and reason |
 |---|---|---|
-| `tool.call` | a tool ran, or refused inside the tool | `ok`; `refused` (`api_forbidden`: the user's role; `exchange_refused`; `missing_scope`); `rejected` (`invalid_title`, `invalid_id`); `not_found`; `error` |
+| `tool.call` | a tool ran, or refused inside the tool | `ok`; `refused` (`api_forbidden`: the user's role; `exchange_refused`; `missing_scope`); `rejected` (`invalid_title`, `invalid_id`); `not_found`; `error` (`cancelled`, `exchange_failed`, `api_unauthorized`, `api_status_500`, …) |
 | `scope.challenge` | the 403: the token lacks the tool's scope | `refused`, with the tool and `scope.required` |
-| `token.refused` | the 401: a token was presented and refused | `refused` (`invalid_audience`, `expired`, `invalid_issuer`, `invalid_signature`, …) |
+| `token.refused` | the 401: a token was presented and refused | `refused` (`invalid_audience`, `expired`, `invalid_issuer`, `invalid_signature`, …); `error` (`signing_keys_unavailable`) |
 | `request.refused` | a valid token, but a body the server will not read | `rejected` (`unreadable_body`, `too_large`) |
 
 The two layers of permission stay apart in the record: `scope.challenge` means
 the *assistant* was not allowed, `api_forbidden` means the *user* was not.
+
+`refused` is kept for a decision. A fault is an `error`, so that it does not read
+as an attack or a denial:
+
+- **`cancelled`**: the caller hung up while the API was working. The API may
+  have acted, so the call is recorded with what was asked. Hanging up is
+  something a client can do on purpose.
+- **`signing_keys_unavailable`**: the server could not fetch Keycloak's keys, so
+  it could not check the token. That is not a forged token.
+- **`exchange_failed`**, **`api_unauthorized`**: Keycloak failed to answer, or the
+  API did not accept the token this server obtained for it.
 
 What a record may contain is decided in one place (`Audit/AuditLog.cs`):
 
@@ -168,6 +179,11 @@ What a record may contain is decided in one place (`Audit/AuditLog.cs`):
   and invisible characters, and the encoder escapes the rest.
 - **`client.id` is the client the assistant signed in through,** not the model
   behind it. Nothing in a token says which model that was.
+- **The trace id is the server's own.** ASP.NET Core adopts a caller's
+  `traceparent` header by default; a caller could then give every call the same
+  id. This server ignores it and starts a trace per request.
+- **A call site adds fields; it cannot replace** the user, the event, the outcome
+  or the number.
 
 ### Three logs, one request
 
@@ -271,11 +287,23 @@ Each of these produced no error at the point of the mistake.
 - **Azure.** `10-keycloak-azure` does not enable the feature flag and `30-azure`
   does not host this server.
 - **An audit log you could rely on in production.** It is a local file and a log
-  line. If the file cannot be written the server says so in its log and carries
-  on; records are not signed or chained, so whoever can write the file can change
-  it; and nothing ships it anywhere. A request with no token is not recorded:
-  that is how every client starts. There is no OpenTelemetry export; the trace id
-  is in the records, so one could be added.
+  line, and nothing ships it anywhere.
+  - *The file can fail without the server stopping.* If a write fails the server
+    says so in its log and carries on. If the file is deleted while the server
+    runs, writes go on succeeding to a file nobody can see. Two servers writing
+    the same path can tear each other's lines. Records are not signed or chained,
+    so whoever can write the file can change it. The log line is the copy that
+    does not depend on the file.
+  - *Not every request leaves a record.* A request with no token does not: that
+    is how every client starts. Nor does a call the SDK answers before a tool
+    runs: an unknown tool name, or arguments missing or of the wrong type. None
+    of those reaches the API.
+  - *The API's access line is plain `key=value`.* It relies on Keycloak not
+    issuing a username with a space or `=` in it; registration is off in this
+    realm. The API also adopts a caller's trace id, so match on trace id together
+    with the user.
+  - *No OpenTelemetry export.* The trace id is in the records, so one could be
+    added.
 - **Production hardening.** No rate limiting, no token caching, an in-memory
   document store behind it. It is a lab.
 
@@ -288,7 +316,8 @@ scope challenge, on every path the endpoint serves; unreadable bodies;
 that the API receives the exchanged token and never the incoming one; that
 Keycloak's refusal text does not reach the assistant; what the audit log records
 for each way a call can end, and that it never holds a token, a refused token's
-claims or a rejected title; and that the server refuses
+claims or a rejected title, and that hanging up on a call does not avoid the
+record; and that the server refuses
 to start with a missing secret, a resource URL that could never equal `aud`, a
 plain-HTTP API on another host, or an audit file it cannot open. `tools/assert-mcp-authz.py` then proves the realm
 issues what the server expects, by signing in as the demo users through the real

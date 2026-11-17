@@ -20,7 +20,7 @@ on a laptop and complete enough to show the decisions an identity platform needs
   consented scopes and token exchange, so an assistant can do only what the user
   consented to, as that user. An audit log records each call: who, through which
   client, which tool, and how it ended.
-- **Tested against the real thing.** 182 .NET tests with forged tokens, browser
+- **Tested against the real thing.** 189 .NET tests with forged tokens, browser
   tests against a real Keycloak, and end-to-end checks that sign in as the demo users.
 
 It is a lab, not a product: the demo passwords are published, and the MCP part
@@ -315,7 +315,7 @@ Built and checked against real software, not just written down:
 - Keycloak on Azure and the API on Container Apps are both applied and running,
   not merely planned.
 - 7 Playwright tests pass in a real browser against real Keycloak.
-- MCP server: 89 tests pass with forged tokens (wrong audience, `alg:none`,
+- MCP server: 96 tests pass with forged tokens (wrong audience, `alg:none`,
   wrong key, wrong realm, expired), every scope challenge and the audit log, and
   `make assert-mcp` passes 34 checks against the local Keycloak, API and MCP
   server, signing in as the demo users. The last eight read the audit log the

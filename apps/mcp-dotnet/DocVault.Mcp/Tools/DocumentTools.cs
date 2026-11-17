@@ -94,18 +94,23 @@ public sealed class DocumentTools(
         {
             result = await call(token);
         }
-        catch (Exception ex) when (!cancellationToken.IsCancellationRequested)
+        catch (Exception ex)
         {
-            // Keycloak or the API could not be reached. Whether the API acted is not
-            // known here, and the record says so instead of saying nothing.
-            Audit(context, tool, AuditOutcomes.Error, ex.GetType().Name, subject);
+            // Keycloak or the API could not be reached, or the caller hung up while
+            // the API was working. Whether the API acted is not known here, and the
+            // record says so instead of saying nothing. No filter on cancellation:
+            // a caller can hang up on purpose, and the API may still have acted.
+            var reason = cancellationToken.IsCancellationRequested ? "cancelled" : ex.GetType().Name;
+            Audit(context, tool, AuditOutcomes.Error, reason, subject);
             throw;
         }
 
         // One record per tool call: who, through which client, what, and how it ended.
         var outcome = result.Ok ? AuditOutcomes.Ok
             : result.Reason == "not_found" ? AuditOutcomes.NotFound
-            : result.Reason is "exchange_refused" or "api_forbidden" or "api_unauthorized" ? AuditOutcomes.Refused
+            : result.Reason is "exchange_refused" or "api_forbidden" ? AuditOutcomes.Refused
+            // Everything else is a fault, not a decision: Keycloak failing, or the
+            // API not accepting the token this server obtained for it.
             : AuditOutcomes.Error;
         Audit(context, tool, outcome, result.Reason, subject, ("document.id", result.Ok ? CreatedId(tool, result.Text) : null));
 

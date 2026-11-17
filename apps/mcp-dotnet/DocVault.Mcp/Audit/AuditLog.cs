@@ -83,9 +83,12 @@ public sealed class AuditLog : IAuditLog, IDisposable
 
         // Opened at startup, so a path that cannot be written stops the server
         // instead of running with the trail silently missing.
+        // Not FileMode.Append: .NET then keeps its own offset instead of asking the
+        // system to append, and refuses to continue after the file was truncated.
+        // Each write seeks to the end instead (see Record).
         var options = new FileStreamOptions
         {
-            Mode = FileMode.Append,
+            Mode = FileMode.OpenOrCreate,
             Access = FileAccess.Write,
             Share = FileShare.Read,
         };
@@ -98,6 +101,12 @@ public sealed class AuditLog : IAuditLog, IDisposable
         try
         {
             _file = new FileStream(settings.AuditFile, options);
+            if (!OperatingSystem.IsWindows())
+            {
+                // UnixCreateMode applies only when the file is created. One that
+                // already existed keeps its mode, so narrow it.
+                File.SetUnixFileMode(_file.SafeFileHandle, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+            }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException)
         {
@@ -110,7 +119,7 @@ public sealed class AuditLog : IAuditLog, IDisposable
         var record = new Dictionary<string, object?>
         {
             ["time"] = DateTime.UtcNow.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'", System.Globalization.CultureInfo.InvariantCulture),
-            ["seq"] = Interlocked.Increment(ref _sequence),
+            ["seq"] = 0L, // numbered when written, below
             ["event"] = eventName,
             ["outcome"] = outcome,
         };
@@ -138,36 +147,44 @@ public sealed class AuditLog : IAuditLog, IDisposable
 
         foreach (var (key, value) in fields)
         {
-            Add(record, key, value);
-        }
-
-        // The default encoder escapes control characters and everything outside
-        // ASCII, so a value cannot start a new line or a new record.
-        var json = JsonSerializer.Serialize(record);
-
-        var level = outcome == AuditOutcomes.Ok ? LogLevel.Information : LogLevel.Warning;
-        _logger.Log(level, "audit {Record}", json);
-
-        if (_file is null)
-        {
-            return;
-        }
-
-        try
-        {
-            var line = Encoding.UTF8.GetBytes(json + "\n");
-            lock (_gate)
+            // A call site adds to a record; it cannot replace who, when or what.
+            if (!record.ContainsKey(key))
             {
-                _file.Write(line);
-                _file.Flush();
+                Add(record, key, value);
             }
         }
-        catch (Exception ex) when (ex is IOException or ObjectDisposedException)
+
+        var level = outcome == AuditOutcomes.Ok ? LogLevel.Information : LogLevel.Warning;
+
+        // Numbered and written under one lock, so the order in the file is the
+        // order of the numbers.
+        lock (_gate)
         {
-            // The call this record describes has already happened; refusing now would
-            // undo nothing. Say loudly that the file is incomplete. The record is
-            // still in the log above.
-            _operations.LogError(ex, "Audit record {Sequence} could not be written to the audit file.", record["seq"]);
+            record["seq"] = ++_sequence;
+
+            // The default encoder escapes control characters and everything outside
+            // ASCII, so a value cannot start a new line or a new record.
+            var json = JsonSerializer.Serialize(record);
+            _logger.Log(level, "audit {Record}", json);
+
+            if (_file is null)
+            {
+                return;
+            }
+
+            try
+            {
+                _file.Seek(0, SeekOrigin.End);
+                _file.Write(Encoding.UTF8.GetBytes(json + "\n"));
+                _file.Flush();
+            }
+            catch (Exception ex) when (ex is IOException or ObjectDisposedException)
+            {
+                // The call this record describes has already happened; refusing now
+                // would undo nothing. Say loudly that the file is incomplete. The
+                // record is still in the log above.
+                _operations.LogError(ex, "Audit record {Sequence} could not be written to the audit file.", record["seq"]);
+            }
         }
     }
 

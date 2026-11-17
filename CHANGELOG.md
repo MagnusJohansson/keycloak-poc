@@ -17,7 +17,7 @@ tag that is not on `main`.
 - The realm keeps Keycloak's `TOKEN_EXCHANGE` events: the MCP server swapping a
   user's token for an API token.
 - `make assert-mcp` reads both logs and Keycloak's events after its own sign-ins
-  (34 checks). 182 .NET tests.
+  (34 checks). 189 .NET tests.
 
 ## 1.0.1
 
