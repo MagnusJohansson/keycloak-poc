@@ -10,12 +10,18 @@
 # there is no service-principal secret to leak, rotate, or accidentally print.
 # It is the same idea as the worker's client_credentials grant - replace a
 # standing secret with a short-lived, attested token.
+#
+# MANUAL ONLY, AND NOT SET UP IN THIS REPOSITORY. It needs the Azure deployment
+# to be up (infra/terraform/30-azure creates the registry and the container
+# app), an app registration with a federated credential for this repository
+# (nothing here creates one), and the repository variables AZURE_CLIENT_ID,
+# AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID and ACR_NAME. None of that is in place,
+# so it does not run on a release tag, where it could only fail. It has not
+# been run successfully.
 name: Deploy to Azure
 
 on:
   workflow_dispatch:
-  push:
-    tags: ['v*']
 
 permissions:
   id-token: write   # required to request the OIDC token
