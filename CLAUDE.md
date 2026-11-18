@@ -23,7 +23,7 @@ make assert-mcp  # 34 checks of MCP authorization - REQUIRES up + seed + api + m
 make assert-ldap # 53 checks of LDAP federation - REQUIRES up + seed + api; changes the directory and restores it
 make assert-saml # 43 checks of the brokered SAML provider - REQUIRES up + seed + api
 make test        # 190 .NET tests (37 API + 96 MCP + 57 desktop-auth) - no Docker, network or cloud
-make e2e         # 7 Playwright tests - REQUIRES up + seed + api + web running
+make e2e         # 9 Playwright tests - REQUIRES up + seed + api + web running
 make plan        # realm diff; should be EMPTY on an unchanged realm
 make token       # mint a real token and decode its claims
 make down        # stop (keeps data)   /   make clean = also wipe volume + tfstate
@@ -464,7 +464,7 @@ Proven against real software: 121 Terraform resources applied to the local Keycl
 clean re-plan (Azure was applied with the 74 that predate the MCP server); 37 API + 96 MCP +
 57 desktop-auth .NET tests (including forged `alg:none`, wrong-key,
 wrong-audience, wrong-realm and expired tokens, and 404-not-403 across the tenant
-boundary); 7 Playwright tests in a real browser; 12 Flutter tests; React/Vue build;
+boundary); 9 Playwright tests in a real browser (two of them a directory person and a SAML person); 12 Flutter tests; React/Vue build;
 Flutter analyzes clean.
 
 **`10-keycloak-azure` has been applied for real** (Azure, swedencentral) and works: Keycloak came

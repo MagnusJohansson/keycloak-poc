@@ -16,6 +16,8 @@ tag that is not on `main`.
 - A first sign-in through the provider can no longer link to an existing
   account. Keycloak's built-in flow offered that by email address, and emailed
   the existing user a confirmation link.
+- Two more browser tests (9): a person from the LDAP directory and one from
+  the legacy SAML provider sign in through the React app.
 - Local lab and CI only. The legacy provider is a stand-in, a second Keycloak
   realm. 121 Terraform resources locally.
 

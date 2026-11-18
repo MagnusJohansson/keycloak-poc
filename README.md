@@ -328,7 +328,9 @@ Built and checked against real software, not just written down:
   also compiled by the `windows-latest` CI job.
 - Keycloak on Azure and the API on Container Apps are both applied and running,
   not merely planned.
-- 7 Playwright tests pass in a real browser against real Keycloak.
+- 9 Playwright tests pass in a real browser against real Keycloak, two of them
+  signing in as a person from the LDAP directory and as one from the legacy SAML
+  provider.
 - MCP server: 96 tests pass with forged tokens (wrong audience, `alg:none`,
   wrong key, wrong realm, expired), every scope challenge and the audit log, and
   `make assert-mcp` passes 34 checks against the local Keycloak, API and MCP

@@ -137,6 +137,9 @@ from the legacy provider, changed afterwards.
 
 CI runs it in the realm job, against a Keycloak that is new on every run.
 
+The script imitates a browser. `make e2e` has one test that does the same
+sign-in in a real one, through the React app; it is not run in CI.
+
 ## Traps this found
 
 - **Keycloak's built-in first-sign-in flow offers to link accounts by email.**
