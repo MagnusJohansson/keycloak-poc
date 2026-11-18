@@ -42,7 +42,7 @@ unmaintained or ship an OpenLDAP that is out of support.
 
 | Person | Directory groups | In Keycloak | Shows |
 |---|---|---|---|
-| `erin` | `engineering`, which is a member of `acme` | `/acme/engineering` | the happy path: editor in Acme |
+| `erin` | `engineering` | `/acme/engineering` | the happy path: editor in Acme |
 | `frank` | `globex` | `/globex` | tenant isolation still holds |
 | `grace` | none | no group | signs in, and the API answers 403 |
 
@@ -60,7 +60,8 @@ It is deliberately closed:
   the network unencrypted even by misconfiguration. The certificate and key are
   made on first start, in the container. The key stays in a volume only the
   directory mounts; the certificate goes to a second volume that Keycloak mounts
-  as a truststore.
+  as a truststore. The certificate is not a CA: its key cannot sign a
+  certificate for another name.
 - **No port is published.** Only Keycloak, on the compose network, reaches it.
 - **No administrator password.** Root inside the container, over a local socket,
   is the administrator. Nothing on the network can be.
@@ -92,8 +93,11 @@ resource "keycloak_ldap_user_federation" "directory" {
 }
 ```
 
-Groups are mapped by one mapper. It reads a person's groups from the directory
-each time; it does not copy them:
+Keycloak takes a person's username and email address once, when it first meets
+them, and reads their names from the directory each time (see the traps).
+
+Groups are mapped by one mapper. It reads a person's directory groups each
+time; it does not copy them:
 
 ```hcl
 resource "keycloak_ldap_group_mapper" "directory" {
@@ -101,22 +105,28 @@ resource "keycloak_ldap_group_mapper" "directory" {
   group_object_classes      = ["groupOfNames"]
   membership_ldap_attribute = "member"
 
+  # only these directory groups count
+  groups_ldap_filter = "(|(cn=acme)(cn=engineering)(cn=globex))"
+
   mode                       = "READ_ONLY"
   preserve_group_inheritance = true
   groups_path                = "/"
 }
 ```
 
-The groups themselves stay this realm's. Nothing is synced from the directory:
-`/acme/engineering` already exists, with its roles, and the directory's
-`engineering` (a member of its `acme`) resolves to it. A directory group with
-no counterpart in the realm grants nothing.
+The realm's groups are made by Terraform, with their roles. A directory group
+is matched to a realm group **by name alone**: the directory's `engineering` is
+the realm's `/acme/engineering`, wherever it sits in the directory. So whoever
+can put a person in the directory's `engineering` decides who is an Acme
+editor. That is the point of a directory, and it is worth saying plainly. The
+filter limits which directory groups are looked at, and with it a directory
+group the realm does not list grants nothing.
 
 ## Verify
 
 ```bash
 make up && make seed && make api
-make assert-ldap        # 42 checks; changes the directory and puts it back
+make assert-ldap        # 51 checks; changes the directory and puts it back
 ```
 
 It signs in through the real login page as people who exist only in the
@@ -131,13 +141,18 @@ directory, and then changes the directory under Keycloak:
 - **A leaver:** erin is deleted. Her session cannot be refreshed, she cannot
   sign in, and Keycloak drops its copy of her.
 - **No takeover:** a directory entry named `alice`, or one carrying alice's
-  email address, cannot sign in as the realm's alice.
-- **Outage:** with the directory stopped, its people are refused and local
-  users sign in as usual.
+  email address, cannot sign in as the realm's alice. A person Keycloak already
+  knows, who then takes alice's email address or is renamed `alice` in the
+  directory, keeps her own name and address in her token.
+- **Groups:** a directory group the realm does not list adds nothing to a token
+  and creates nothing in the realm, also when it is named like a realm group.
+- **Lockout:** the realm's brute-force protection covers directory people.
+- **Outage:** with the directory not answering, its people are refused and
+  local users sign in as usual. When it answers again, so does sign-in.
 - **The directory's own doors:** anonymous access, a write by Keycloak's
   account, and a connection without TLS are all refused.
 - **The certificate is checked:** Keycloak refuses the same server under a
-  second name its certificate does not carry.
+  second name its certificate does not carry, and the certificate is not a CA.
 
 CI runs it in the realm job, against a Keycloak and a directory that are both
 new on every run.
@@ -166,6 +181,30 @@ Each of these produced no error at the point of the mistake.
   (`keycloak_user_groups`, not exhaustive), and the old resources are dropped
   from state with `removed` blocks so that an existing realm upgrades without
   alice leaving her group on the way.
+- **Without a filter, the directory can create groups in the realm.** A person
+  in a directory group the realm had never heard of got that group created in
+  the realm at her next sign-in, outside Terraform, and `make plan` stayed
+  empty. With two top-level groups in her token the API answered 403
+  "Ambiguous tenant". A directory group named `legal` gave its member a realm
+  group of that name. One sequence left a second, top-level `/engineering`
+  behind that outlived the directory being put back. `groups_ldap_filter`
+  names the three groups that count. Removing the filter again with Terraform
+  did not clear it in Keycloak; it had to be cleared through the admin API.
+- **Re-reading the username and email lets a person borrow someone else's.**
+  Keycloak refuses to import a directory person whose email belongs to a local
+  user. It did not refuse the same change afterwards: with
+  `always_read_value_from_ldap`, a person already imported who then took
+  alice's address in the directory carried it in her token, marked verified,
+  and one renamed to `alice` carried that as `preferred_username`. She could
+  not sign in as alice and gained no access, but anything that names a person
+  by email or username, such as a log line, would name the wrong one. The
+  username and email are now taken once, at import. The cost is the other side
+  of the same coin: a legitimate change of address in the directory does not
+  reach Keycloak.
+- **`openssl req -x509` makes a CA certificate.** Keycloak trusts the
+  directory's certificate file directly, so with `CA:TRUE` the directory's key
+  could have signed a certificate for any name and Keycloak accepted it. The
+  certificate is now made with `CA:FALSE` and server-authentication usage only.
 - **Keycloak's default mapper takes the first name from `cn`.** In a directory
   `cn` is the full name, so erin's first name was "Erin Eriksson". The default
   mappers are deleted and four explicit ones replace them.
@@ -178,11 +217,17 @@ Each of these produced no error at the point of the mistake.
   cautious default and makes the server exit at start with `Permission denied`.
 - **A directory outage looks like wrong passwords in Keycloak's events.** The
   event is `LOGIN_ERROR` with `invalid_user_credentials`. Only the server log
-  says `LDAP server is unavailable`. A sign-in during the outage also takes
-  about ten seconds to fail: two connection timeouts of five. And recovery is
-  not always immediate: in roughly one local run in five, the first sign-in
-  after the directory returned still failed, and it took about ten seconds
-  more. I have not established why.
+  says `LDAP server is unavailable`. While the directory's name resolves and it
+  does not answer, a sign-in takes about ten seconds to fail: two connection
+  timeouts of five.
+- **Stopping the container is not the same outage.** `docker compose stop` also
+  removes the directory's name from Docker's DNS. Java caches a failed lookup
+  for ten seconds, so sign-ins went on failing for up to ten seconds after the
+  directory was back. That looked like slow recovery in Keycloak and was not.
+  The check freezes the container instead, which keeps the name.
+- **The realm's lockout trips on a check that fails sign-ins on purpose.** Two
+  failed sign-ins within a second lock an account for a minute. The check
+  clears the counters before each sign-in that is meant to succeed.
 
 ## What it does not do
 
@@ -192,14 +237,22 @@ Each of these produced no error at the point of the mistake.
 - **Keep a person's identity across a delete and restore.** Deleted and added
   back with the same `entryUUID`, erin signs in again and is a new user to
   Keycloak, with a new `sub`. Anything keyed on the old one no longer matches.
+- **Follow a change of username or email.** Both are taken once, when Keycloak
+  first meets a person (see the traps).
+- **End a session when a password changes.** A password changed in the
+  directory is needed for the next sign-in; an existing session still
+  refreshes.
+- **Undo what an administrator grants in Keycloak.** A directory person can be
+  added to a realm group, or given a role, in Keycloak itself. That grant is
+  Keycloak's and stays when the directory takes her out of her groups.
 - **Write to the directory.** No password change, no self-registration, no
   profile edits from Keycloak.
 - **Account state from the directory.** OpenLDAP has no "disabled" flag that
   Keycloak reads here, and no password policy or lockout is configured in it.
   A leaver in this lab is someone deleted or removed from their groups.
-- **Scheduled sync.** People are imported the first time Keycloak meets them: at
-  sign-in, or when an administrator lists a group's members. No periodic sync
-  runs, so the admin console does not list everyone in the directory.
+- **Scheduled sync.** No periodic sync runs. People are imported the first time
+  Keycloak meets them: at sign-in, or when an administrator lists users or a
+  group's members.
 - **Active Directory.** This is OpenLDAP with `inetOrgPerson` and
   `groupOfNames`. AD differs in attributes, in how accounts are disabled, and
   in Kerberos, none of which is here.

@@ -17,8 +17,15 @@ CERT=/tls/public/ldap.crt
 
 if [ ! -s "$KEY" ] || [ ! -s "$CERT" ]; then
   # The name must be the one Keycloak connects to: Java checks it.
+  #
+  # CA:FALSE matters. `openssl req -x509` makes a CA certificate by default, and
+  # Keycloak trusts this file: with CA:TRUE, whoever held this key could sign a
+  # certificate for any name and Keycloak would accept it.
   openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes \
     -days 825 -subj "/CN=ldap" -addext "subjectAltName=DNS:ldap" \
+    -addext "basicConstraints=critical,CA:FALSE" \
+    -addext "keyUsage=critical,digitalSignature" \
+    -addext "extendedKeyUsage=serverAuth" \
     -keyout "$KEY" -out "$CERT" 2>/dev/null
 fi
 # slapd gives up root before it reads the key, so the key is the ldap user's.

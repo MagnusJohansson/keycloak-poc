@@ -15,9 +15,10 @@ group, or leaves altogether, and Keycloak goes on issuing the old token. So
 this signs in through the real login page as people who exist only in the
 directory, then changes the directory under Keycloak and looks again.
 
-It changes the lab's directory and puts it back, also when a check fails. It
-stops the directory once, for a few seconds. Do not point it at a directory
-you care about.
+It changes the lab's directory and puts it back, also when a check fails or
+the run is interrupted. It freezes the directory once, for a few seconds. Do
+not point it at a directory you care about. If a run is killed outright,
+`docker compose up -d --force-recreate ldap` resets the directory to its seed.
 
 Standard library only, plus `docker compose` to reach inside the containers.
 """
@@ -28,6 +29,7 @@ import json
 import os
 import re
 import secrets
+import signal
 import subprocess
 import sys
 import time
@@ -189,6 +191,16 @@ def admin(method, path, data=None):
         return status, body
 
 
+def forgive():
+    """Clear the realm's brute-force counters.
+
+    The realm locks an account for a minute after two failed sign-ins within a
+    second. This script fails sign-ins on purpose, in quick succession, so it
+    clears the counters before a sign-in that is meant to succeed.
+    """
+    admin("DELETE", "/attack-detection/brute-force/users")
+
+
 def keycloak_user(username):
     _, users = admin("GET", "/users?exact=true&username=" + urllib.parse.quote(username))
     return users[0] if users else None
@@ -203,6 +215,32 @@ def compose(*args, stdin=None):
 def directory(command, stdin=None):
     """Run an LDAP client command inside the directory's container."""
     return compose("exec", "-T", "ldap", "sh", "-c", command, stdin=stdin)
+
+
+def restore(what, command, stdin=None):
+    """A clean-up step in the directory. A failure here is said out loud."""
+    code, out = directory(command, stdin)
+    if code != 0:
+        print(f"  WARNING  could not {what}: {out.strip()[:120]}. Reset the directory with "
+              f"`docker compose -f infra/local/docker-compose.yml up -d --force-recreate ldap`.")
+    return code == 0
+
+
+def group_ldif(cn, member_uid):
+    return (f"dn: cn={cn},ou=groups,{BASE}\nobjectClass: groupOfNames\ncn: {cn}\n"
+            f"member: uid={member_uid},{PEOPLE}\n")
+
+
+def realm_group_paths():
+    paths = []
+
+    def walk(groups):
+        for group in groups or []:
+            paths.append(group["path"])
+            walk(admin("GET", f"/groups/{group['id']}/children")[1])
+
+    walk(admin("GET", "/groups")[1])
+    return sorted(paths)
 
 
 def person_ldif(uid, mail, password):
@@ -246,6 +284,9 @@ def main():
     code, out = directory(
         f"ldapmodify {AS_KEYCLOAK}", f"dn: uid=erin,{PEOPLE}\nchangetype: modify\nreplace: sn\nsn: Changed\n")
     check("Keycloak's account cannot write", code != 0 and "Insufficient access" in out, out.strip()[-60:])
+    if code == 0:
+        restore("undo that write", f"ldapmodify {AS_ADMIN}",
+                f"dn: uid=erin,{PEOPLE}\nchangetype: modify\nreplace: sn\nsn: Eriksson\n")
 
     code, out = directory(f"ldapwhoami -x -H ldap://localhost -D {BIND_DN} -w {BIND_PASSWORD}")
     check("the directory does not listen without TLS", code != 0, out.strip()[:80])
@@ -267,7 +308,8 @@ def main():
         status, answer = admin("POST", "/testLDAPConnection", {
             "action": "testAuthentication", "connectionUrl": url, "bindDn": BIND_DN,
             "bindCredential": "**********", "componentId": federation["id"], "authType": "simple",
-            "useTruststoreSpi": "always", "startTls": "false", "connectionTimeout": "5000",
+            "useTruststoreSpi": config.get("useTruststoreSpi") or "ldapsOnly", "startTls": "false",
+            "connectionTimeout": "5000",
         })
         return status, (answer or {}).get("errorMessage") if isinstance(answer, dict) else None
 
@@ -277,6 +319,11 @@ def main():
     status, error = test_connection("ldaps://ldap-under-another-name:636")
     check("Keycloak refuses the directory under a name its certificate lacks",
           status == 400 and error == "SSLHandshakeFailed", f"HTTP {status} {error}")
+
+    # Keycloak trusts this certificate file. Were it a CA, whoever held its key
+    # could sign a certificate for any name and Keycloak would accept that too.
+    code, out = directory("openssl x509 -in /tls/public/ldap.crt -noout -ext basicConstraints")
+    check("the directory's certificate is not a CA", code == 0 and "CA:FALSE" in out, out.strip()[-40:])
 
     # ------------------------------------------------------------------ #
     print("\nPeople from the directory sign in")
@@ -312,6 +359,16 @@ def main():
     wildcards = [name for name in ("*", "er*", "erin)(uid=*", "*)(uid=erin") if "access_token" in sign_in(name)]
     check("a wildcard or a filter in the username signs nobody in", not wildcards, str(wildcards))
 
+    # The realm's lockout (realm.tf) is Keycloak's, so it covers directory people.
+    forgive()
+    sign_in("grace", "wrong-1")
+    sign_in("grace", "wrong-2")
+    locked = sign_in("grace")
+    state = admin("GET", f"/attack-detection/brute-force/users/{keycloak_user('grace')['id']}")[1]
+    check("two quick wrong passwords lock a directory person out, even with the right one after",
+          "access_token" not in locked and state.get("disabled") is True, str(state.get("numFailures")))
+    forgive()
+
     # ------------------------------------------------------------------ #
     print("\nKeycloak holds a link to the person, not her password")
     user = keycloak_user("erin")
@@ -328,6 +385,7 @@ def main():
                       {"type": "password", "value": "Another!Password2026", "temporary": False})
     check("Keycloak refuses to set her password", status == 400, f"HTTP {status}")
     check("and the refused password does not work", "access_token" not in sign_in("erin", "Another!Password2026"))
+    forgive()
 
     # ------------------------------------------------------------------ #
     print("\nA directory entry cannot take over a local account")
@@ -336,13 +394,14 @@ def main():
         directory(f"ldapadd {AS_ADMIN}", person_ldif("alice", "another-alice@acme.test", "Directory!Password2026"))
         check("a directory 'alice' cannot sign in as the realm's alice",
               "access_token" not in sign_in("alice", "Directory!Password2026"))
+        forgive()
         alice = sign_in("alice")
         alice_after = keycloak_user("alice")
         check("the realm's alice still signs in, and is still a local user",
               "access_token" in alice and alice_after["id"] == alice_before["id"]
               and not alice_after.get("federationLink"), describe(alice))
     finally:
-        directory(f"ldapdelete {AS_ADMIN} uid=alice,{PEOPLE}")
+        restore("remove the directory's alice", f"ldapdelete {AS_ADMIN} uid=alice,{PEOPLE}")
     try:
         directory(f"ldapadd {AS_ADMIN}", person_ldif("mallory", "alice@acme.test", "Directory!Password2026"))
         check("a directory entry with alice's email address is refused at sign-in",
@@ -350,9 +409,56 @@ def main():
               and "access_token" not in sign_in("alice@acme.test", "Directory!Password2026")
               and keycloak_user("mallory") is None)
     finally:
-        directory(f"ldapdelete {AS_ADMIN} uid=mallory,{PEOPLE}")
+        restore("remove mallory", f"ldapdelete {AS_ADMIN} uid=mallory,{PEOPLE}")
+    forgive()
+
+    # The same two moves by someone Keycloak already knows. Keycloak takes a
+    # username and an email address once, when it first meets a person; were it
+    # to re-read them, mallory's token would carry alice's address, verified.
+    mallory_dn = f"uid=mallory,{PEOPLE}"
+    try:
+        directory(f"ldapadd {AS_ADMIN}", person_ldif("mallory", "mallory@acme.test", "Directory!Password2026"))
+        session = sign_in("mallory", "Directory!Password2026")
+        directory(f"ldapmodify {AS_ADMIN}",
+                  f"dn: {mallory_dn}\nchangetype: modify\nreplace: mail\nmail: alice@acme.test\n")
+        _, refreshed = refresh(session.get("refresh_token", ""))
+        again = sign_in("mallory", "Directory!Password2026")
+        emails = [claims(r["access_token"]).get("email") for r in (refreshed, again) if "access_token" in r]
+        check("a known directory person who takes alice's email address does not get it in her token",
+              emails == ["mallory@acme.test"] * 2, str(emails))
+        directory(f"ldapmodrdn {AS_ADMIN} -r {mallory_dn} uid=alice")
+        mallory_dn = f"uid=alice,{PEOPLE}"
+        _, refreshed = refresh(again.get("refresh_token", ""))
+        names = [claims(r["access_token"]).get("preferred_username") for r in (refreshed,) if "access_token" in r]
+        check("renamed to 'alice' in the directory, she is still 'mallory' in her token",
+              names == ["mallory"], str(names))
+        check("and she still cannot sign in as alice",
+              "access_token" not in sign_in("alice", "Directory!Password2026"))
+        forgive()
+        named_alice = admin("GET", "/users?exact=true&username=alice")[1]
+        check("the realm still has exactly one alice, the local one",
+              len(named_alice) == 1 and named_alice[0]["id"] == alice_before["id"], str(len(named_alice)))
+    finally:
+        restore("remove mallory", f"ldapdelete {AS_ADMIN} {mallory_dn}")
 
     # ------------------------------------------------------------------ #
+    print("\nA directory group is only what the realm says it is")
+    groups_before = realm_group_paths()
+    try:
+        directory(f"ldapadd {AS_ADMIN}", group_ldif("contractors", "erin"))
+        directory(f"ldapadd {AS_ADMIN}", group_ldif("legal", "grace"))
+        groups, _ = groups_and_roles(sign_in("erin"))
+        check("a directory group the realm does not list adds nothing to erin's token",
+              groups == ["/acme/engineering"], str(groups))
+        check("and creates no group in the realm", realm_group_paths() == groups_before, str(realm_group_paths()))
+        groups, roles = groups_and_roles(sign_in("grace"))
+        check("a directory group named like the realm's /acme/legal does not put grace in it",
+              groups == [] and roles == [], f"{groups}, {roles}")
+    finally:
+        restore("remove the test groups", f"ldapdelete {AS_ADMIN} cn=contractors,ou=groups,{BASE} cn=legal,ou=groups,{BASE}")
+
+    # ------------------------------------------------------------------ #
+    forgive()
     print("\nA mover: erin leaves engineering")
     session = sign_in("erin")
     try:
@@ -367,13 +473,17 @@ def main():
         status, _ = api(session["access_token"])
         check("the token from before the change works until it expires (5 minutes)", status == 200, f"HTTP {status}")
     finally:
-        set_engineering("erin")
+        if set_engineering("erin")[0] != 0:
+            print("  WARNING  could not put erin back in engineering; recreate the ldap container")
     groups, _ = groups_and_roles(sign_in("erin"))
     check("back in the group, she has it again", groups == ["/acme/engineering"], str(groups))
 
     # ------------------------------------------------------------------ #
     print("\nA leaver: erin is deleted from the directory")
-    _, saved = directory(f"ldapsearch -LLL {AS_ADMIN} -o ldif-wrap=no -b uid=erin,{PEOPLE} -s base '*' entryUUID")
+    code, saved = directory(f"ldapsearch -LLL {AS_ADMIN} -o ldif-wrap=no -b uid=erin,{PEOPLE} -s base '*' entryUUID")
+    if code != 0 or f"dn: uid=erin,{PEOPLE}" not in saved or "userPassword" not in saved:
+        check("erin's entry could be saved before deleting it", False, saved.strip()[:80])
+        return
     session = sign_in("erin")
     id_before = keycloak_user("erin")["id"]
     try:
@@ -382,9 +492,10 @@ def main():
         check("her session cannot be refreshed", status == 400 and "access_token" not in refreshed, f"HTTP {status}")
         check("she cannot sign in", "access_token" not in sign_in("erin"))
         check("Keycloak has dropped its copy of her", keycloak_user("erin") is None)
+        forgive()
     finally:
         # -e relax: lets the entry keep its entryUUID, as a restore from backup would.
-        directory(f"ldapadd {AS_ADMIN} -e relax", saved)
+        restore("put erin back", f"ldapadd {AS_ADMIN} -e relax", saved)
     again = sign_in("erin")
     groups, _ = groups_and_roles(again)
     check("restored to the directory, she signs in again", groups == ["/acme/engineering"], describe(again))
@@ -394,31 +505,38 @@ def main():
           f"{'changed' if id_after != id_before else 'did not change'} across the delete and restore")
 
     # ------------------------------------------------------------------ #
-    print("\nThe directory is down")
+    # Frozen, not stopped: stopping the container also removes its name from
+    # Docker's DNS, and Java then caches the failed lookup for ten seconds, so a
+    # sign-in can go on failing after the directory is back. That is a property
+    # of this lab's outage, not of Keycloak's recovery. A frozen directory keeps
+    # its name and simply does not answer, which is what an outage looks like.
+    print("\nThe directory does not answer")
     session = sign_in("erin")
     try:
-        compose("stop", "ldap")
+        compose("pause", "ldap")
         check("a directory person cannot sign in", "access_token" not in sign_in("erin"))
         status, refreshed = refresh(session["refresh_token"])
         check("or refresh a session", status != 200 and "access_token" not in refreshed, f"HTTP {status}")
         alice = sign_in("alice")
         check("a local user is not affected", "access_token" in alice, describe(alice))
     finally:
-        compose("start", "ldap")
-        wait_for_directory()
-    # Recovery is not always immediate: in roughly one local run in five the
-    # first sign-in after the directory returned still failed, and it took about
-    # ten seconds more. Why is not established. The check waits and says how long.
+        forgive()
+        compose("unpause", "ldap")
+        if not wait_for_directory():
+            print("  WARNING  the directory did not come back; recreate the ldap container")
     started = time.time()
     groups, _ = groups_and_roles(sign_in("erin"))
-    while groups != ["/acme/engineering"] and time.time() - started < 30:
-        time.sleep(2)
-        groups, _ = groups_and_roles(sign_in("erin"))
-    check("with the directory back, erin signs in again", groups == ["/acme/engineering"],
-          f"{groups}, after {time.time() - started:.0f}s")
+    check("with the directory back, erin signs in again at once", groups == ["/acme/engineering"],
+          f"{groups}, after {time.time() - started:.1f}s")
+
+
+def interrupted(signum, _frame):
+    # As an exception, so that every `finally` above still puts the directory back.
+    raise SystemExit(f"interrupted by signal {signum}")
 
 
 if __name__ == "__main__":
+    signal.signal(signal.SIGTERM, interrupted)
     try:
         main()
     finally:

@@ -105,11 +105,11 @@ LDAP federation has its own check, for the same reason. A sign-in proves little;
 what matters is what Keycloak does after the directory changes:
 
 ```bash
-make assert-ldap   # 42 checks; needs up + seed + api
+make assert-ldap   # 51 checks; needs up + seed + api
 ```
 
 It changes the lab's directory (takes a person out of a group, deletes one,
-stops the directory) and puts it back. See
+freezes the directory) and puts it back. See
 [UC7](use-cases/uc7-ldap-directory.md).
 
 ## CI

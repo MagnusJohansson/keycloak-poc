@@ -128,7 +128,7 @@ make seed-azure                        # Keycloak on Azure, same module
 make plan                              # diff without applying
 ```
 
-Around 93 resources on the local lab — `terraform -chdir=infra/terraform/20-realm state list | wc -l`
+Around 94 resources on the local lab — `terraform -chdir=infra/terraform/20-realm state list | wc -l`
 is the authoritative count, since it grows as clients are added. Two ordering rules
 the module encodes for you:
 

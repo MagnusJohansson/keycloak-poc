@@ -20,7 +20,7 @@ make api         # .NET 10 API on :5001
 make web         # React SPA on :5173      (separate shell)
 make mcp         # MCP server on :5002  (separate shell; needs up + seed + api)
 make assert-mcp  # 34 checks of MCP authorization - REQUIRES up + seed + api + mcp running
-make assert-ldap # 42 checks of LDAP federation - REQUIRES up + seed + api; changes the directory and restores it
+make assert-ldap # 51 checks of LDAP federation - REQUIRES up + seed + api; changes the directory and restores it
 make test        # 190 .NET tests (37 API + 96 MCP + 57 desktop-auth) - no Docker, network or cloud
 make e2e         # 7 Playwright tests - REQUIRES up + seed + api + web running
 make plan        # realm diff; should be EMPTY on an unchanged realm
@@ -144,18 +144,30 @@ Every one of these cost real debugging time and is now load-bearing. Do not "sim
   checks without it.
 - **Never use `keycloak_group_memberships` again.** It is authoritative per group; directory people
   are members too, so every plan removes them and every apply fails (`mapper mode is READ_ONLY`).
-  Local users get groups through `keycloak_user_groups` with `exhaustive = false`. The `removed`
-  blocks in `users.tf` let an old realm upgrade without destroying memberships; leave them.
+  Local users get groups through `keycloak_user_groups` for EVERY local user (dave too) with
+  `exhaustive = true`, so a membership added by hand shows in `make plan`. The `removed` blocks in
+  `users.tf` let an old realm upgrade without destroying memberships; leave them.
 - `delete_default_mappers = true`: Keycloak's default maps first name from `cn` (the full name).
-- The realm's groups are NOT synced from the directory. A directory group resolves to a realm
-  group of the same name and nesting; do not add a group sync, and do not set `groups_path` to
-  anything but `/` (the API takes the tenant from the first path segment).
+- **`groups_ldap_filter` is load-bearing.** A directory group is matched to a realm group by NAME
+  alone (nesting in the directory is ignored), and without the filter an unknown directory group is
+  CREATED in the realm at sign-in, outside Terraform, with `make plan` still empty. A new realm
+  group that directory people should get needs its name in `local.ldap_groups`. Removing the
+  filter through Terraform did not clear it in Keycloak (clear it via the admin API). Do not set
+  `groups_path` to anything but `/` (the API takes the tenant from the first path segment).
+- **Username and email are NOT re-read from the directory** (`always_read_value_from_ldap = false`
+  for those two). Re-read, an imported person who took a local user's email in the directory
+  carried it in her token, verified. Do not "fix" the stale-email trade-off by turning it back on.
+- The directory's certificate must be `CA:FALSE` (`entrypoint.sh`): Keycloak trusts the file
+  directly, and `openssl req -x509` makes a CA by default.
+- `assert-ldap.py` calls `forgive()` (clears brute-force counters) before sign-ins meant to
+  succeed, and freezes the directory with `docker compose pause`, not `stop`: stopping removes the
+  DNS name and Java caches the failed lookup for 10 s, which looks like slow recovery.
 - The directory is TLS-only with no published port and no admin password (root over `ldapi://` in
   the container is the administrator). Its key and certificate are made on first start
   (`entrypoint.sh`), never committed. Keycloak reads its truststore once at start, hence
   `depends_on: ldap: service_healthy`.
-- `ldap.tf` is optional by variable (`ldap_connection_url`). Azure does not set it. Local = 93
-  resources, without a directory = 87. Do not claim LDAP on Azure, and do not claim Active
+- `ldap.tf` is optional by variable (`ldap_connection_url`). Azure does not set it. Local = 94
+  resources, without a directory = 88. Do not claim LDAP on Azure, and do not claim Active
   Directory: this is OpenLDAP.
 - `make assert-ldap` restores the directory in `finally` blocks. If it is killed midway,
   `docker compose -f infra/local/docker-compose.yml up -d --force-recreate ldap` resets the
@@ -420,7 +432,7 @@ A re-run refuses to replace an already-attached archive with different bytes.
 
 ## Verification status
 
-Proven against real software: 93 Terraform resources applied to the local Keycloak 26.6.3 with a
+Proven against real software: 94 Terraform resources applied to the local Keycloak 26.6.3 with a
 clean re-plan (Azure was applied with the 74 that predate the MCP server); 37 API + 96 MCP +
 57 desktop-auth .NET tests (including forged `alg:none`, wrong-key,
 wrong-audience, wrong-realm and expired tokens, and 404-not-403 across the tenant

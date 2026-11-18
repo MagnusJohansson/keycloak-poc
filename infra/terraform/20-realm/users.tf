@@ -71,8 +71,9 @@ resource "keycloak_user" "demo" {
 }
 
 # Group membership is managed per USER, and only for the users this file
-# creates. `exhaustive = false` means "make sure they are in these groups", not
-# "these are all their groups".
+# creates. `exhaustive = true` means "these are all of this user's groups": a
+# membership added by hand shows up in `make plan`, and dave, who has none, is
+# checked too.
 #
 # It used to be managed per group, with keycloak_group_memberships, which is
 # authoritative: it owns the group's whole member list. That stopped working the
@@ -80,14 +81,15 @@ resource "keycloak_user" "demo" {
 # /acme/engineering and /globex too, so every plan wanted to remove them, and
 # every apply failed: Keycloak refuses to change a read-only directory's
 # memberships. A realm with two sources of people cannot have one of them own
-# the list.
+# the list. Owning each local user's own list is still possible, and is what
+# this does.
 resource "keycloak_user_groups" "demo" {
-  for_each = { for k, v in local.users : k => v if length(v.groups) > 0 }
+  for_each = local.users
 
   realm_id   = keycloak_realm.docvault.id
   user_id    = keycloak_user.demo[each.key].id
   group_ids  = [for g in each.value.groups : local.group_ids[g]]
-  exhaustive = false
+  exhaustive = true
 }
 
 # The old per-group resources are dropped from state without being destroyed.

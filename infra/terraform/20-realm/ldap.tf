@@ -57,6 +57,11 @@ resource "keycloak_ldap_user_federation" "directory" {
 }
 
 locals {
+  # The directory groups this realm accepts membership from. Matching is by
+  # NAME alone: the directory's `engineering` is the realm's /acme/engineering
+  # wherever it sits in the directory.
+  ldap_groups = ["acme", "engineering", "globex"]
+
   ldap_attributes = {
     username  = "uid"
     email     = "mail"
@@ -72,16 +77,22 @@ resource "keycloak_ldap_user_attribute_mapper" "directory" {
   ldap_user_federation_id = keycloak_ldap_user_federation.directory[0].id
   name                    = each.key
 
-  user_model_attribute        = each.key
-  ldap_attribute              = each.value
-  read_only                   = true
-  always_read_value_from_ldap = true
+  user_model_attribute = each.key
+  ldap_attribute       = each.value
+  read_only            = true
+
+  # A username and an email address are taken once, when Keycloak first meets
+  # the person. Re-read each time, a person who later took a local user's email
+  # address in the directory carried it in her token, marked verified. Names
+  # are re-read: they identify nobody.
+  always_read_value_from_ldap = !contains(["username", "email"], each.key)
 }
 
-# A person's groups are read from the directory each time, never copied. The
-# groups themselves are this realm's: /acme, /acme/engineering, /globex. The
-# directory's "engineering" is a member of its "acme", and that is what makes
-# it /acme/engineering here.
+# A person's directory groups are read each time, never copied. The groups
+# themselves are this realm's, made in roles-groups.tf. A directory group is
+# matched to one of them by NAME alone (see local.ldap_groups above), which is
+# what preserve_group_inheritance buys here: Keycloak looks for the name among
+# all of the realm's groups, not only the top-level ones.
 resource "keycloak_ldap_group_mapper" "directory" {
   count = local.ldap ? 1 : 0
 
@@ -95,6 +106,11 @@ resource "keycloak_ldap_group_mapper" "directory" {
   membership_ldap_attribute      = "member"
   membership_attribute_type      = "DN"
   membership_user_ldap_attribute = "uid"
+
+  # Only these directory groups count. Without the filter, a directory group
+  # this realm has never heard of is CREATED here at the person's next sign-in,
+  # outside Terraform, and a group named like any realm group maps onto it.
+  groups_ldap_filter = "(|${join("", [for g in local.ldap_groups : "(cn=${g})"])})"
 
   mode                         = "READ_ONLY"
   user_roles_retrieve_strategy = "LOAD_GROUPS_BY_MEMBER_ATTRIBUTE"

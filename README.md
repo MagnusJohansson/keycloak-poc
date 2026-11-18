@@ -306,7 +306,7 @@ rather than asserted.
 
 Built and checked against real software, not just written down:
 
-- 93 Terraform resources applied to the local Keycloak 26.6.3, with a clean re-plan
+- 94 Terraform resources applied to the local Keycloak 26.6.3, with a clean re-plan
   (the Azure deployment was applied with the 74 that existed before the MCP server
   and the directory);
   `acr_values_supported`, the audience mapper and service-account roles confirmed
@@ -333,10 +333,10 @@ Built and checked against real software, not just written down:
   needed `docvault:write`. **Local lab and CI only**: it needs
   Keycloak's experimental `resource-indicators` feature, which the Azure module
   does not enable.
-- LDAP federation: `make assert-ldap` passes 42 checks against the local
+- LDAP federation: `make assert-ldap` passes 51 checks against the local
   Keycloak, API and an OpenLDAP container, signing in as people who exist only
   in the directory and then changing the directory under Keycloak (a mover, a
-  leaver, an outage). Run from an empty Keycloak as well as on an upgraded
+  leaver, an outage, a person taking someone else's name or address). Run from an empty Keycloak as well as on an upgraded
   realm. **Local lab and CI only**, and OpenLDAP only: nothing here has been run
   against Active Directory.
 - React and Vue build; Flutter analyzes clean and its tests pass.
