@@ -57,10 +57,15 @@ resource "keycloak_ldap_user_federation" "directory" {
 }
 
 locals {
-  # The directory groups this realm accepts membership from. Matching is by
-  # NAME alone: the directory's `engineering` is the realm's /acme/engineering
-  # wherever it sits in the directory.
-  ldap_groups = ["acme", "engineering", "globex"]
+  # The directory groups this realm accepts membership from, by the realm group
+  # they sit under. A directory group is matched by NAME, so each name is looked
+  # for in one place only: `engineering` means /acme/engineering and nothing
+  # else. Kept by hand: a name listed here with no realm group of that name in
+  # that place would be created by Keycloak at a person's first sign-in.
+  ldap_groups = {
+    top  = { under = "/", names = ["acme", "globex"] }
+    acme = { under = "/acme", names = ["engineering"] }
+  }
 
   ldap_attributes = {
     username  = "uid"
@@ -81,24 +86,28 @@ resource "keycloak_ldap_user_attribute_mapper" "directory" {
   ldap_attribute       = each.value
   read_only            = true
 
-  # A username and an email address are taken once, when Keycloak first meets
-  # the person. Re-read each time, a person who later took a local user's email
-  # address in the directory carried it in her token, marked verified. Names
+  # A username and an email address are not re-read at each sign-in. Re-read, a
+  # person who later took a local user's email address in the directory carried
+  # it in her token, marked verified. They still change: at a sync, or when she
+  # signs in under a new uid, and Keycloak checks for a duplicate then. Names
   # are re-read: they identify nobody.
   always_read_value_from_ldap = !contains(["username", "email"], each.key)
 }
 
 # A person's directory groups are read each time, never copied. The groups
-# themselves are this realm's, made in roles-groups.tf. A directory group is
-# matched to one of them by NAME alone (see local.ldap_groups above), which is
-# what preserve_group_inheritance buys here: Keycloak looks for the name among
-# all of the realm's groups, not only the top-level ones.
+# themselves are this realm's, made in roles-groups.tf.
+#
+# One mapper per place in the realm's tree, each with its own filter. A single
+# mapper over the whole tree (preserve_group_inheritance = true) also worked,
+# and matched a name ANYWHERE: a second realm group called `engineering`
+# captured Acme's engineers, and a manual group sync rebuilt the tree from the
+# directory's nesting. Here the directory's nesting is not used at all.
 resource "keycloak_ldap_group_mapper" "directory" {
-  count = local.ldap ? 1 : 0
+  for_each = local.ldap ? local.ldap_groups : {}
 
   realm_id                = keycloak_realm.docvault.id
   ldap_user_federation_id = keycloak_ldap_user_federation.directory[0].id
-  name                    = "groups"
+  name                    = "groups-${each.key}"
 
   ldap_groups_dn                 = "ou=groups,${var.ldap_base_dn}"
   group_object_classes           = ["groupOfNames"]
@@ -107,16 +116,19 @@ resource "keycloak_ldap_group_mapper" "directory" {
   membership_attribute_type      = "DN"
   membership_user_ldap_attribute = "uid"
 
-  # Only these directory groups count. Without the filter, a directory group
-  # this realm has never heard of is CREATED here at the person's next sign-in,
-  # outside Terraform, and a group named like any realm group maps onto it.
-  groups_ldap_filter = "(|${join("", [for g in local.ldap_groups : "(cn=${g})"])})"
+  # Only these directory groups count. Without a filter, a directory group this
+  # realm has never heard of is CREATED here at the person's next sign-in,
+  # outside Terraform.
+  groups_ldap_filter = "(|${join("", [for g in each.value.names : "(cn=${g})"])})"
+  groups_path        = each.value.under
 
   mode                         = "READ_ONLY"
   user_roles_retrieve_strategy = "LOAD_GROUPS_BY_MEMBER_ATTRIBUTE"
-  preserve_group_inheritance   = true
-  groups_path                  = "/"
+  preserve_group_inheritance   = false
 
   # Never delete one of this realm's groups because the directory lacks it.
   drop_non_existing_groups_during_sync = false
+
+  # groups_path must exist before Keycloak accepts the mapper.
+  depends_on = [keycloak_group.acme, keycloak_group.globex, keycloak_group.acme_engineering]
 }

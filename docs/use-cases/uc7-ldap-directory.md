@@ -93,40 +93,49 @@ resource "keycloak_ldap_user_federation" "directory" {
 }
 ```
 
-Keycloak takes a person's username and email address once, when it first meets
-them, and reads their names from the directory each time (see the traps).
+Keycloak takes a person's username and email address when it first meets them,
+and does not re-read them at each sign-in (see the traps). Names are re-read.
 
-Groups are mapped by one mapper. It reads a person's directory groups each
-time; it does not copy them:
+Groups are mapped by one mapper for each place in the realm's group tree. Each
+reads a person's directory groups every time; nothing is copied:
 
 ```hcl
+locals {
+  ldap_groups = {
+    top  = { under = "/",     names = ["acme", "globex"] }
+    acme = { under = "/acme", names = ["engineering"] }
+  }
+}
+
 resource "keycloak_ldap_group_mapper" "directory" {
+  for_each = local.ldap_groups
+
   ldap_groups_dn            = "ou=groups,${var.ldap_base_dn}"
   group_object_classes      = ["groupOfNames"]
   membership_ldap_attribute = "member"
 
-  # only these directory groups count
-  groups_ldap_filter = "(|(cn=acme)(cn=engineering)(cn=globex))"
+  groups_ldap_filter = "(|(cn=…)(cn=…))"   # only each.value.names
+  groups_path        = each.value.under
 
   mode                       = "READ_ONLY"
-  preserve_group_inheritance = true
-  groups_path                = "/"
+  preserve_group_inheritance = false
 }
 ```
 
 The realm's groups are made by Terraform, with their roles. A directory group
-is matched to a realm group **by name alone**: the directory's `engineering` is
-the realm's `/acme/engineering`, wherever it sits in the directory. So whoever
-can put a person in the directory's `engineering` decides who is an Acme
-editor. That is the point of a directory, and it is worth saying plainly. The
-filter limits which directory groups are looked at, and with it a directory
-group the realm does not list grants nothing.
+is matched to a realm group **by name**, and each name is looked for in one
+place only: the directory's `engineering` is the realm's `/acme/engineering`
+and nothing else. How groups are nested in the directory plays no part.
+
+So whoever can put a person in the directory's `engineering` decides who is an
+Acme editor. That is the point of a directory, and it is worth saying plainly.
+A directory group that is not listed grants nothing.
 
 ## Verify
 
 ```bash
 make up && make seed && make api
-make assert-ldap        # 51 checks; changes the directory and puts it back
+make assert-ldap        # 53 checks; changes the directory and puts it back
 ```
 
 It signs in through the real login page as people who exist only in the
@@ -146,6 +155,8 @@ directory, and then changes the directory under Keycloak:
   directory, keeps her own name and address in her token.
 - **Groups:** a directory group the realm does not list adds nothing to a token
   and creates nothing in the realm, also when it is named like a realm group.
+  Other realm groups named `engineering` do not capture erin, and a manual
+  group sync changes nothing.
 - **Lockout:** the realm's brute-force protection covers directory people.
 - **Outage:** with the directory not answering, its people are refused and
   local users sign in as usual. When it answers again, so does sign-in.
@@ -185,11 +196,17 @@ Each of these produced no error at the point of the mistake.
   in a directory group the realm had never heard of got that group created in
   the realm at her next sign-in, outside Terraform, and `make plan` stayed
   empty. With two top-level groups in her token the API answered 403
-  "Ambiguous tenant". A directory group named `legal` gave its member a realm
-  group of that name. One sequence left a second, top-level `/engineering`
-  behind that outlived the directory being put back. `groups_ldap_filter`
-  names the three groups that count. Removing the filter again with Terraform
-  did not clear it in Keycloak; it had to be cleared through the admin API.
+  "Ambiguous tenant". `groups_ldap_filter` names the groups that count.
+  Removing a filter again with Terraform did not clear it in Keycloak; it had
+  to be cleared through the admin API.
+- **One mapper over the whole tree matches a name anywhere.** The first version
+  used a single mapper with `preserve_group_inheritance = true`. It found
+  `engineering` wherever the realm had a group of that name: a second one,
+  made by hand at the top level, took erin out of Acme without a word. A manual
+  group sync was worse, because a sync does follow the directory's nesting:
+  with `engineering` not under `acme` in the directory it created a top-level
+  `/engineering` that outlived the directory being put back. One mapper per
+  place, without inheritance, has neither problem.
 - **Re-reading the username and email lets a person borrow someone else's.**
   Keycloak refuses to import a directory person whose email belongs to a local
   user. It did not refuse the same change afterwards: with
@@ -197,17 +214,21 @@ Each of these produced no error at the point of the mistake.
   alice's address in the directory carried it in her token, marked verified,
   and one renamed to `alice` carried that as `preferred_username`. She could
   not sign in as alice and gained no access, but anything that names a person
-  by email or username, such as a log line, would name the wrong one. The
-  username and email are now taken once, at import. The cost is the other side
-  of the same coin: a legitimate change of address in the directory does not
-  reach Keycloak.
-- **A refused import can lock the person out after the conflict is fixed.** On
-  a new Keycloak, after `mallory` was refused for carrying alice's email
-  address, a corrected `mallory` entry still could not sign in: Keycloak
-  answered "invalid credentials" without asking the directory. Clearing
-  Keycloak's user cache let her in. It fails closed, and it happens with the
-  federation's own cache off. It did not happen on my longer-lived lab, and I
-  have not established what differs.
+  by email or username, such as a log line, would name the wrong one. The two
+  are no longer re-read at each sign-in. They are not frozen either: a person
+  renamed to a free uid signs in under the new one and Keycloak follows, and a
+  full sync brings a changed address across. Keycloak checks for a duplicate
+  each time, and refuses. What is lost is immediacy: a legitimate change of
+  address reaches Keycloak at the next sync, and no sync is scheduled here.
+- **A refused import can lock the person out after the conflict is fixed.**
+  After `mallory` was refused at sign-in for carrying alice's email address, a
+  corrected `mallory` entry still could not sign in: Keycloak answered "invalid
+  credentials" without asking the directory. What it holds is the half-made
+  user, cached before the import was rolled back: a username with no password
+  and no link to the directory. It locks out only that person, and nothing
+  worse was found. It goes when the user cache is cleared (Realm settings,
+  Cache), when an administrator looks the user up, or at a restart. It happens
+  with the federation's own cache off.
 - **`openssl req -x509` makes a CA certificate.** Keycloak trusts the
   directory's certificate file directly, so with `CA:TRUE` the directory's key
   could have signed a certificate for any name and Keycloak accepted it. The
@@ -225,8 +246,7 @@ Each of these produced no error at the point of the mistake.
 - **A directory outage looks like wrong passwords in Keycloak's events.** The
   event is `LOGIN_ERROR` with `invalid_user_credentials`. Only the server log
   says `LDAP server is unavailable`. While the directory's name resolves and it
-  does not answer, a sign-in takes about ten seconds to fail: two connection
-  timeouts of five.
+  does not answer, a sign-in takes about ten seconds to fail: the read timeout.
 - **Stopping the container is not the same outage.** `docker compose stop` also
   removes the directory's name from Docker's DNS. Java caches a failed lookup
   for ten seconds, so sign-ins went on failing for up to ten seconds after the
@@ -244,8 +264,8 @@ Each of these produced no error at the point of the mistake.
 - **Keep a person's identity across a delete and restore.** Deleted and added
   back with the same `entryUUID`, erin signs in again and is a new user to
   Keycloak, with a new `sub`. Anything keyed on the old one no longer matches.
-- **Follow a change of username or email.** Both are taken once, when Keycloak
-  first meets a person (see the traps).
+- **Follow a change of email address at once.** It reaches Keycloak at a sync,
+  and none is scheduled (see the traps).
 - **End a session when a password changes.** A password changed in the
   directory is needed for the next sign-in; an existing session still
   refreshes.

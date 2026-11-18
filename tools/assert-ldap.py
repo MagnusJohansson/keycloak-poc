@@ -263,6 +263,7 @@ def wait_for_directory():
 
 
 def main():
+    compose("unpause", "ldap")  # left frozen if an earlier run was killed mid-outage; harmless otherwise
     code, out = directory(f"ldapwhoami {AS_ADMIN}")
     if code != 0:
         sys.exit(f"The directory is not running (make up): {out.strip()[:200]}")
@@ -360,13 +361,20 @@ def main():
     check("a wildcard or a filter in the username signs nobody in", not wildcards, str(wildcards))
 
     # The realm's lockout (realm.tf) is Keycloak's, so it covers directory people.
+    # The lock needs two failures within a second. A slow machine may need a few
+    # more tries to land two that close; it stays well under the ten that lock
+    # an account outright.
     forgive()
-    sign_in("grace", "wrong-1")
-    sign_in("grace", "wrong-2")
+    grace_id = keycloak_user("grace")["id"]
+    state = {}
+    for attempt in range(1, 7):
+        sign_in("grace", f"wrong-{attempt}")
+        state = admin("GET", f"/attack-detection/brute-force/users/{grace_id}")[1]
+        if attempt > 1 and state.get("disabled"):
+            break
     locked = sign_in("grace")
-    state = admin("GET", f"/attack-detection/brute-force/users/{keycloak_user('grace')['id']}")[1]
-    check("two quick wrong passwords lock a directory person out, even with the right one after",
-          "access_token" not in locked and state.get("disabled") is True, str(state.get("numFailures")))
+    check("quick wrong passwords lock a directory person out, even with the right one after",
+          "access_token" not in locked and state.get("disabled") is True, f"{state.get('numFailures')} failures")
     forgive()
 
     # ------------------------------------------------------------------ #
@@ -445,6 +453,10 @@ def main():
               len(named_alice) == 1 and named_alice[0]["id"] == alice_before["id"], str(len(named_alice)))
     finally:
         restore("remove mallory", f"ldapdelete {AS_ADMIN} {mallory_dn}")
+    # Asking Keycloak for her by name makes it look in the directory, find her
+    # gone, and drop its own copy. Without this each run left a Keycloak user
+    # "mallory" behind, and the next run behaved differently from a first one.
+    keycloak_user("mallory")
 
     # ------------------------------------------------------------------ #
     print("\nA directory group is only what the realm says it is")
@@ -459,6 +471,41 @@ def main():
         groups, roles = groups_and_roles(sign_in("grace"))
         check("a directory group named like the realm's /acme/legal does not put grace in it",
               groups == [] and roles == [], f"{groups}, {roles}")
+        # Two more realm groups named 'engineering': one at the top, one under
+        # /globex. Matched by name alone, the top-level one took erin out of Acme.
+        decoys = []
+        globex = [g for g in admin("GET", "/groups")[1] if g["path"] == "/globex"][0]
+        try:
+            admin("POST", "/groups", {"name": "engineering"})
+            admin("POST", f"/groups/{globex['id']}/children", {"name": "engineering"})
+            decoys = ([g["id"] for g in admin("GET", "/groups")[1] if g["path"] == "/engineering"]
+                      + [g["id"] for g in admin("GET", f"/groups/{globex['id']}/children")[1] or []
+                         if g["name"] == "engineering"])
+            groups, _ = groups_and_roles(sign_in("erin"))
+            check("other realm groups named 'engineering' do not capture erin",
+                  len(decoys) == 2 and groups == ["/acme/engineering"], f"{len(decoys)} decoys, {groups}")
+        finally:
+            for group_id in decoys:
+                admin("DELETE", f"/groups/{group_id}")
+        # An administrator's "sync groups" button, with the directory's nesting
+        # taken apart first: engineering no longer a member of acme. Nothing in
+        # the realm may move.
+        acme_dn = f"cn=acme,ou=groups,{BASE}"
+        try:
+            directory(f"ldapmodify {AS_ADMIN}",
+                      f"dn: {acme_dn}\nchangetype: modify\nreplace: member\nmember: uid=nobody,{PEOPLE}\n")
+            mappers = [m for m in admin("GET", f"/components?parent={federation['id']}")[1]
+                       if m.get("providerId") == "group-ldap-mapper"]
+            statuses = [admin("POST", f"/user-storage/{federation['id']}/mappers/{m['id']}/sync?direction=fedToKeycloak")[0]
+                        for m in mappers]
+            groups, _ = groups_and_roles(sign_in("erin"))
+            check("a group sync, with the directory's nesting taken apart, changes nothing in the realm",
+                  len(mappers) >= 1 and set(statuses) == {200} and realm_group_paths() == groups_before
+                  and groups == ["/acme/engineering"], f"{statuses}, {groups}")
+        finally:
+            restore("put engineering back under acme", f"ldapmodify {AS_ADMIN}", (
+                f"dn: {acme_dn}\nchangetype: modify\nreplace: member\n"
+                f"member: cn=engineering,ou=groups,{BASE}\n"))
     finally:
         restore("remove the test groups", f"ldapdelete {AS_ADMIN} cn=contractors,ou=groups,{BASE} cn=legal,ou=groups,{BASE}")
 
@@ -525,10 +572,10 @@ def main():
         alice = sign_in("alice")
         check("a local user is not affected", "access_token" in alice, describe(alice))
     finally:
-        forgive()
-        compose("unpause", "ldap")
+        compose("unpause", "ldap")  # first: nothing after it may leave the directory frozen
         if not wait_for_directory():
             print("  WARNING  the directory did not come back; recreate the ldap container")
+        forgive()
     started = time.time()
     groups, _ = groups_and_roles(sign_in("erin"))
     check("with the directory back, erin signs in again at once", groups == ["/acme/engineering"],

@@ -291,7 +291,7 @@ make seed-azure   # Keycloak on Azure
 ```
 
 Same realm; only a URL and a credential differ. (The local lab also sets one
-optional variable, the address of its LDAP directory, which adds six resources.
+optional variable, the address of its LDAP directory, which adds seven resources.
 Azure has no directory.) Two consequences worth having:
 
 - **The local lab is faithful.** If it stops being so, `make seed` fails
@@ -306,7 +306,7 @@ rather than asserted.
 
 Built and checked against real software, not just written down:
 
-- 94 Terraform resources applied to the local Keycloak 26.6.3, with a clean re-plan
+- 95 Terraform resources applied to the local Keycloak 26.6.3, with a clean re-plan
   (the Azure deployment was applied with the 74 that existed before the MCP server
   and the directory);
   `acr_values_supported`, the audience mapper and service-account roles confirmed
@@ -333,7 +333,7 @@ Built and checked against real software, not just written down:
   needed `docvault:write`. **Local lab and CI only**: it needs
   Keycloak's experimental `resource-indicators` feature, which the Azure module
   does not enable.
-- LDAP federation: `make assert-ldap` passes 51 checks against the local
+- LDAP federation: `make assert-ldap` passes 53 checks against the local
   Keycloak, API and an OpenLDAP container, signing in as people who exist only
   in the directory and then changing the directory under Keycloak (a mover, a
   leaver, an outage, a person taking someone else's name or address). Run from an empty Keycloak as well as on an upgraded

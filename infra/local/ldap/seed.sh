@@ -68,8 +68,8 @@ person grace Grace  Gomez     grace@acme.test   0e1d0001-d0c0-4a01-8000-00000000
 # Groups say who belongs where. What a group may do is decided in Keycloak
 # (roles-groups.tf), not here. Keycloak matches these to its own groups by name
 # and accepts only the names listed in ldap.tf. "engineering" is a member of
-# "acme" because that is how a directory is usually laid out; Keycloak does not
-# use the nesting.
+# "acme" because that is how a directory is usually laid out; the realm's
+# mappers do not use the nesting.
 cat <<LDIF
 dn: cn=engineering,ou=groups,$BASE
 objectClass: groupOfNames

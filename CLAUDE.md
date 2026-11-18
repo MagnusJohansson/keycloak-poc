@@ -20,7 +20,7 @@ make api         # .NET 10 API on :5001
 make web         # React SPA on :5173      (separate shell)
 make mcp         # MCP server on :5002  (separate shell; needs up + seed + api)
 make assert-mcp  # 34 checks of MCP authorization - REQUIRES up + seed + api + mcp running
-make assert-ldap # 51 checks of LDAP federation - REQUIRES up + seed + api; changes the directory and restores it
+make assert-ldap # 53 checks of LDAP federation - REQUIRES up + seed + api; changes the directory and restores it
 make test        # 190 .NET tests (37 API + 96 MCP + 57 desktop-auth) - no Docker, network or cloud
 make e2e         # 7 Playwright tests - REQUIRES up + seed + api + web running
 make plan        # realm diff; should be EMPTY on an unchanged realm
@@ -148,15 +148,22 @@ Every one of these cost real debugging time and is now load-bearing. Do not "sim
   `exhaustive = true`, so a membership added by hand shows in `make plan`. The `removed` blocks in
   `users.tf` let an old realm upgrade without destroying memberships; leave them.
 - `delete_default_mappers = true`: Keycloak's default maps first name from `cn` (the full name).
-- **`groups_ldap_filter` is load-bearing.** A directory group is matched to a realm group by NAME
-  alone (nesting in the directory is ignored), and without the filter an unknown directory group is
-  CREATED in the realm at sign-in, outside Terraform, with `make plan` still empty. A new realm
-  group that directory people should get needs its name in `local.ldap_groups`. Removing the
-  filter through Terraform did not clear it in Keycloak (clear it via the admin API). Do not set
-  `groups_path` to anything but `/` (the API takes the tenant from the first path segment).
+- **One group mapper per place in the realm's tree, each with a filter, `preserve_group_inheritance
+  = false`** (`local.ldap_groups`). Do not merge them back into one mapper over `/`: that matched a
+  name ANYWHERE (a hand-made top-level `/engineering` captured Acme's engineers), and a manual
+  group sync rebuilt the tree from the directory's nesting. Without a filter an unknown directory
+  group is CREATED in the realm at sign-in, outside Terraform, with `make plan` still empty. A new
+  realm group that directory people should get needs its name under the right parent in
+  `local.ldap_groups`; a name listed there with no such realm group would be created by Keycloak.
+  Removing a filter through Terraform did not clear it in Keycloak (clear it via the admin API).
 - **Username and email are NOT re-read from the directory** (`always_read_value_from_ldap = false`
   for those two). Re-read, an imported person who took a local user's email in the directory
-  carried it in her token, verified. Do not "fix" the stale-email trade-off by turning it back on.
+  carried it in her token, verified. Do not "fix" the stale-email trade-off by turning it back on;
+  a full sync is the remedy. Not frozen: a rename to a free uid is followed at her next sign-in.
+- A sign-in refused at import (duplicate email) leaves a half-made user in Keycloak's user cache,
+  and that person stays locked out after the directory is fixed until the cache is cleared.
+  `assert-ldap.py` clears it (`/clear-user-cache`) and ends by looking `mallory` up so that no
+  Keycloak copy of her is left; leave both, or a second run differs from a first.
 - The directory's certificate must be `CA:FALSE` (`entrypoint.sh`): Keycloak trusts the file
   directly, and `openssl req -x509` makes a CA by default.
 - `assert-ldap.py` calls `forgive()` (clears brute-force counters) before sign-ins meant to
@@ -166,7 +173,7 @@ Every one of these cost real debugging time and is now load-bearing. Do not "sim
   the container is the administrator). Its key and certificate are made on first start
   (`entrypoint.sh`), never committed. Keycloak reads its truststore once at start, hence
   `depends_on: ldap: service_healthy`.
-- `ldap.tf` is optional by variable (`ldap_connection_url`). Azure does not set it. Local = 94
+- `ldap.tf` is optional by variable (`ldap_connection_url`). Azure does not set it. Local = 95
   resources, without a directory = 88. Do not claim LDAP on Azure, and do not claim Active
   Directory: this is OpenLDAP.
 - `make assert-ldap` restores the directory in `finally` blocks. If it is killed midway,
@@ -432,7 +439,7 @@ A re-run refuses to replace an already-attached archive with different bytes.
 
 ## Verification status
 
-Proven against real software: 94 Terraform resources applied to the local Keycloak 26.6.3 with a
+Proven against real software: 95 Terraform resources applied to the local Keycloak 26.6.3 with a
 clean re-plan (Azure was applied with the 74 that predate the MCP server); 37 API + 96 MCP +
 57 desktop-auth .NET tests (including forged `alg:none`, wrong-key,
 wrong-audience, wrong-realm and expired tokens, and 404-not-403 across the tenant
