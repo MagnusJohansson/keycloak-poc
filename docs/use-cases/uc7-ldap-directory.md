@@ -227,8 +227,8 @@ Each of these produced no error at the point of the mistake.
   user, cached before the import was rolled back: a username with no password
   and no link to the directory. It locks out only that person, and nothing
   worse was found. It goes when the user cache is cleared (Realm settings,
-  Cache), when an administrator looks the user up, or at a restart. It happens
-  with the federation's own cache off.
+  Cache), after an admin call on that user, or at a restart. It happens with
+  the federation's own cache off.
 - **`openssl req -x509` makes a CA certificate.** Keycloak trusts the
   directory's certificate file directly, so with `CA:TRUE` the directory's key
   could have signed a certificate for any name and Keycloak accepted it. The

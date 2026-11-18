@@ -507,6 +507,16 @@ def main():
                 f"dn: {acme_dn}\nchangetype: modify\nreplace: member\n"
                 f"member: cn=engineering,ou=groups,{BASE}\n"))
     finally:
+        # Anything these checks let into the realm goes too, also when one of
+        # them failed: a group a sync created would otherwise outlive the run,
+        # with `make plan` none the wiser.
+        strays = set(realm_group_paths()) - set(groups_before)
+        for path in sorted(strays, key=len, reverse=True):  # children before parents
+            status, found = admin("GET", "/group-by-path/" + urllib.parse.quote(path.lstrip("/")))
+            if status == 200:
+                admin("DELETE", f"/groups/{found['id']}")
+        if strays:
+            print(f"  WARNING  removed realm groups these checks let in: {sorted(strays)}")
         restore("remove the test groups", f"ldapdelete {AS_ADMIN} cn=contractors,ou=groups,{BASE} cn=legal,ou=groups,{BASE}")
 
     # ------------------------------------------------------------------ #
