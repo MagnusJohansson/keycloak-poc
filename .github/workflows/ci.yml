@@ -223,6 +223,13 @@ jobs:
       - name: LDAP federation works end to end
         run: python3 tools/assert-ldap.py
 
+      # The brokered SAML provider: a sign-in that works proves only that the two
+      # sides can talk. This hands DocVault responses that were stripped,
+      # altered, wrapped, replayed or issued for someone else, and expects each
+      # one refused.
+      - name: Brokered SAML provider works end to end
+        run: python3 tools/assert-saml.py
+
       - name: Server logs (on failure)
         if: failure()
         run: |

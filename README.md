@@ -20,6 +20,10 @@ on a laptop and complete enough to show the decisions an identity platform needs
   container, read-only and over TLS: the directory says who someone is and where
   they belong, the realm says what that allows. Checked for what happens when a
   person moves or leaves.
+- **A legacy SAML provider, brokered.** People who still sign in at an older
+  SAML identity provider reach the same API with the same tokens; SAML stops at
+  Keycloak. Checked with responses that were stripped, altered, wrapped,
+  replayed or issued for someone else.
 - **An AI assistant as a client.** An MCP server with audience-bound tokens,
   consented scopes and token exchange, so an assistant can do only what the user
   consented to, as that user. An audit log records each call: who, through which
@@ -28,8 +32,9 @@ on a laptop and complete enough to show the decisions an identity platform needs
   tests against a real Keycloak, and end-to-end checks that sign in as the demo users.
 
 It is a lab, not a product: the demo passwords are published, the MCP part
-relies on an experimental Keycloak feature, and the directory is a small
-OpenLDAP container, not Active Directory.
+relies on an experimental Keycloak feature, the directory is a small OpenLDAP
+container, not Active Directory, and the legacy SAML provider is a second
+Keycloak realm, not another vendor's product.
 [What has and has not been verified](#verified) is listed below.
 
 ---
@@ -256,7 +261,8 @@ The Azure variants read files you create and that are gitignored
 | 5 | Consent + data minimisation — pairwise subject identifiers | [uc5](docs/use-cases/uc5-consent-and-privacy.md) |
 | 6 | Audit → SIEM → Azure Sentinel | [uc6](docs/use-cases/uc6-audit-siem-sentinel.md) |
 | 7 | People from an LDAP directory — read-only user federation over TLS, directory groups mapped onto the realm's groups, and what happens when someone moves or leaves (local lab; OpenLDAP) | [uc7](docs/use-cases/uc7-ldap-directory.md) |
-| 8 | An AI assistant as a client — an MCP server with audience-bound tokens, consented scopes, token exchange, and an audit log of what the assistant did and for whom (local lab; uses an experimental Keycloak feature) | [MCP](docs/13-integration-mcp.md) |
+| 8 | Moving off a legacy SAML identity provider — Keycloak brokers it, maps its groups, and refuses responses that were stripped, altered, wrapped or replayed (local lab; the provider is a stand-in realm) | [uc8](docs/use-cases/uc8-saml-legacy-idp.md) |
+| 9 | An AI assistant as a client — an MCP server with audience-bound tokens, consented scopes, token exchange, and an audit log of what the assistant did and for whom (local lab; uses an experimental Keycloak feature) | [MCP](docs/13-integration-mcp.md) |
 
 ## Repository map
 
@@ -277,7 +283,7 @@ apps/
   desktop-electron/       runnable-lite  (loopback PKCE, tokens never in the renderer)
   desktop-winui/          WinUI 3 / .NET 10 (Duende OidcClient, DPAPI) + cross-platform auth lib
 tests/e2e-playwright/     browser login -> API call
-tools/                    export-realm.sh, decode-token.sh, assert-mcp-authz.py, assert-ldap.py
+tools/                    export-realm.sh, decode-token.sh, assert-mcp-authz.py, assert-ldap.py, assert-saml.py
 ```
 
 ## The idea worth stealing
@@ -290,9 +296,9 @@ make seed         # local Docker Keycloak
 make seed-azure   # Keycloak on Azure
 ```
 
-Same realm; only a URL and a credential differ. (The local lab also sets one
-optional variable, the address of its LDAP directory, which adds seven resources.
-Azure has no directory.) Two consequences worth having:
+Same realm; only a URL and a credential differ. (The local lab also switches on
+two optional parts, its LDAP directory and a stand-in legacy SAML provider,
+which add 33 resources. Azure has neither.) Two consequences worth having:
 
 - **The local lab is faithful.** If it stops being so, `make seed` fails
   immediately instead of during a migration.
@@ -306,9 +312,9 @@ rather than asserted.
 
 Built and checked against real software, not just written down:
 
-- 95 Terraform resources applied to the local Keycloak 26.6.3, with a clean re-plan
-  (the Azure deployment was applied with the 74 that existed before the MCP server
-  and the directory);
+- 121 Terraform resources applied to the local Keycloak 26.6.3, with a clean re-plan
+  (the Azure deployment was applied with the 74 that existed before the MCP server,
+  the directory and the SAML provider);
   `acr_values_supported`, the audience mapper and service-account roles confirmed
   in a real token.
 - .NET 10 API: 37 tests pass, including forged `alg:none`, wrong-key,
@@ -339,6 +345,12 @@ Built and checked against real software, not just written down:
   leaver, an outage, a person taking someone else's name or address). Run from an empty Keycloak as well as on an upgraded
   realm. **Local lab and CI only**, and OpenLDAP only: nothing here has been run
   against Active Directory.
+- Brokered SAML provider: `make assert-saml` passes 43 checks against the local
+  Keycloak and API, signing in through a stand-in legacy SAML provider and then
+  handing DocVault responses that were stripped of their signatures, altered,
+  wrapped, replayed, or issued for another service. **Local lab and CI only**,
+  and the provider is a second Keycloak realm: nothing here has been run
+  against another vendor's SAML product.
 - React and Vue build; Flutter analyzes clean and its tests pass.
 - The Flutter client has been driven end-to-end on an Android emulator against the
   local lab, and React against the full Azure stack (cloud Keycloak *and* cloud API).

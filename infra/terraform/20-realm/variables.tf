@@ -152,3 +152,10 @@ variable "ldap_bind_credential" {
   default     = null
   sensitive   = true
 }
+
+# --- A legacy SAML identity provider, brokered (optional). See saml-broker.tf. --
+variable "saml_legacy_idp_enabled" {
+  description = "Create a stand-in legacy SAML identity provider (a second realm) and broker it from the DocVault realm. Local lab only."
+  type        = bool
+  default     = false
+}

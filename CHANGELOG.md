@@ -4,6 +4,21 @@ Each release attaches a source archive with a signed build provenance
 attestation; see [Releases](README.md#releases). The release workflow refuses a
 tag that is not on `main`.
 
+## 1.3.0
+
+- **A legacy SAML identity provider, brokered.** People who still sign in at an
+  older SAML provider reach DocVault through Keycloak, which checks the signed
+  assertion, maps the provider's groups onto the realm's, and issues its own
+  token. The API does not change. `make assert-saml` (43 checks) plays the
+  browser between the two and hands DocVault responses that were stripped,
+  altered, wrapped, replayed or issued for another service. See
+  [UC8](docs/use-cases/uc8-saml-legacy-idp.md).
+- A first sign-in through the provider can no longer link to an existing
+  account. Keycloak's built-in flow offered that by email address, and emailed
+  the existing user a confirmation link.
+- Local lab and CI only. The legacy provider is a stand-in, a second Keycloak
+  realm. 121 Terraform resources locally.
+
 ## 1.2.0
 
 - **People from an LDAP directory.** The local lab gains an OpenLDAP container

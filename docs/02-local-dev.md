@@ -38,6 +38,11 @@ password: `erin` (`/acme/engineering`), `frank` (`/globex`) and `grace` (no
 group). Keycloak reads them through LDAP federation; see
 [UC7](use-cases/uc7-ldap-directory.md). `make ldap-search` prints the directory.
 
+Three more sign in at a stand-in legacy SAML provider, through the **Legacy
+sign-in (SAML)** button on the login page: `heidi` (`/acme/engineering`),
+`ivan` (`/globex`) and `judy` (no group), same password. See
+[UC8](use-cases/uc8-saml-legacy-idp.md).
+
 ## Why this is worth having
 
 Beyond costing nothing, it makes the central claim testable. `20-realm` applies
