@@ -345,7 +345,7 @@ Built and checked against real software, not just written down:
   leaver, an outage, a person taking someone else's name or address). Run from an empty Keycloak as well as on an upgraded
   realm. **Local lab and CI only**, and OpenLDAP only: nothing here has been run
   against Active Directory.
-- Brokered SAML provider: `make assert-saml` passes 41 checks against the local
+- Brokered SAML provider: `make assert-saml` passes 43 checks against the local
   Keycloak and API, signing in through a stand-in legacy SAML provider and then
   handing DocVault responses that were stripped of their signatures, altered,
   wrapped, replayed, or issued for another service. **Local lab and CI only**,

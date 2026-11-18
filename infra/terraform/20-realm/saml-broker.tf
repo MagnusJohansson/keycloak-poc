@@ -43,10 +43,13 @@ resource "keycloak_saml_identity_provider" "legacy" {
   name_id_policy_format = "Persistent"
   principal_type        = "SUBJECT"
 
-  # Re-apply the mappers at every sign-in, so a change of group in the legacy
-  # system reaches DocVault at the person's next sign-in. The default (IMPORT)
-  # sets them once, at the first.
-  sync_mode = "FORCE"
+  # What is taken from the legacy system once, and what at every sign-in, is
+  # decided per mapper below. The provider-wide setting is IMPORT because FORCE
+  # here also re-writes the person's email address at every sign-in, whatever
+  # the email mapper says, and that ran into the realm's unique-email rule: a
+  # brokered person whose address in the legacy system later became a DocVault
+  # user's got a bare HTTP 500 at her next sign-in.
+  sync_mode = "IMPORT"
 
   # The legacy provider's word is not enough to tie a person to an existing
   # DocVault account by email address. See the use case.
@@ -120,7 +123,7 @@ resource "keycloak_user_template_importer_identity_provider_mapper" "legacy_user
   template                = "$${ALIAS}.$${ATTRIBUTE.uid}"
 
   extra_config = {
-    syncMode = "INHERIT"
+    syncMode = "IMPORT" # a username is for life
   }
 }
 
@@ -144,7 +147,9 @@ resource "keycloak_attribute_importer_identity_provider_mapper" "legacy" {
   user_attribute          = each.key
 
   extra_config = {
-    syncMode = "INHERIT"
+    # The email address is taken at the first sign-in and not again. Names
+    # follow the legacy system.
+    syncMode = each.key == "email" ? "IMPORT" : "FORCE"
   }
 }
 
@@ -157,7 +162,10 @@ resource "keycloak_custom_identity_provider_mapper" "legacy_groups" {
   identity_provider_mapper = "saml-advanced-group-idp-mapper"
 
   extra_config = {
-    syncMode                     = "INHERIT"
+    # At EVERY sign-in, so that a person moved to another group in the legacy
+    # system moves here too, and one taken out of a group loses it. With
+    # IMPORT the mapper runs once and a mover never moves.
+    syncMode                     = "FORCE"
     attributes                   = jsonencode([{ key = "memberOf", value = each.key }])
     "are.attribute.values.regex" = "false"
     group                        = each.value

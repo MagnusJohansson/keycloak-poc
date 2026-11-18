@@ -116,7 +116,7 @@ The brokered SAML provider has one too. It plays the browser between DocVault
 and the legacy provider, and changes real SAML responses on their way:
 
 ```bash
-make assert-saml   # 41 checks; needs up + seed + api
+make assert-saml   # 43 checks; needs up + seed + api
 ```
 
 See [UC8](use-cases/uc8-saml-legacy-idp.md).

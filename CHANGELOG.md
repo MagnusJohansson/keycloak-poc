@@ -9,7 +9,7 @@ tag that is not on `main`.
 - **A legacy SAML identity provider, brokered.** People who still sign in at an
   older SAML provider reach DocVault through Keycloak, which checks the signed
   assertion, maps the provider's groups onto the realm's, and issues its own
-  token. The API does not change. `make assert-saml` (41 checks) plays the
+  token. The API does not change. `make assert-saml` (43 checks) plays the
   browser between the two and hands DocVault responses that were stripped,
   altered, wrapped, replayed or issued for another service. See
   [UC8](docs/use-cases/uc8-saml-legacy-idp.md).

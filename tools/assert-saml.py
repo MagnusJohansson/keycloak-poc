@@ -153,6 +153,7 @@ def sign_in(username, password=PASSWORD, change_response=None, change_request=No
     if not link:
         return {"error": "no_provider_button", "page": page_text(body)}
     status, headers, body = browser.request("GET", urllib.parse.urljoin(KEYCLOAK, html.unescape(link.group(1))))
+    typed = False
     for _ in range(14):
         if status in (302, 303):
             if not headers["Location"].startswith(KEYCLOAK):
@@ -176,8 +177,9 @@ def sign_in(username, password=PASSWORD, change_response=None, change_request=No
             # Keycloak's built-in first-sign-in flow asks "Account already exists.
             # Add to existing account?" An attacker says yes.
             fields = {"submitAction": "linkAccount"}
-        elif 'name="password"' in body:
+        elif 'name="password"' in body and not typed:
             fields = {"username": username, "password": password}
+            typed = True  # once: the form coming back means the password was refused
         else:
             break  # a page this script does not answer: a refusal, or a question
         status, headers, body = browser.request("POST", urllib.parse.urljoin(KEYCLOAK, action), fields)
@@ -364,7 +366,14 @@ def main():
     check("it checks signatures, and wants the assertion itself signed",
           config.get("validateSignature") == "true" and config.get("wantAssertionsSigned") == "true")
     check("it signs its own requests", config.get("wantAuthnRequestsSigned") == "true")
-    check("it re-applies the mappers at every sign-in", config.get("syncMode") == "FORCE", str(config.get("syncMode")))
+    _, mappers = admin("GET", f"/identity-provider/instances/{ALIAS}/mappers")
+    modes = {m["name"]: m["config"].get("syncMode") for m in mappers or []}
+    group_modes = {name: mode for name, mode in modes.items() if name.startswith("group ")}
+    check("the group mappers run at every sign-in", len(group_modes) == 2 and set(group_modes.values()) == {"FORCE"},
+          str(group_modes))
+    check("a username and an email address are taken once",
+          config.get("syncMode") == "IMPORT" and modes.get("username") == "IMPORT" and modes.get("email") == "IMPORT",
+          f"provider {config.get('syncMode')}, username {modes.get('username')}, email {modes.get('email')}")
     check("it does not take the provider's word for an email address", provider.get("trustEmail") is False)
     check("a first sign-in cannot link to an existing account",
           provider.get("firstBrokerLoginFlowAlias") == "first-broker-login-no-link",
@@ -497,6 +506,20 @@ def main():
         # Keycloak's built-in flow emails alice a "link your account" confirmation here.
         check("DocVault does not email alice a link to confirm",
               mail_before is not None and mail_after == mail_before, f"{mail_before} before, {mail_after} after")
+    finally:
+        remove_user("mallory", LEGACY)
+        remove_user(f"{ALIAS}.mallory", REALM)
+    # The same address, taken later by someone DocVault already knows.
+    try:
+        add_legacy_person("mallory", "mallory@acme.test")
+        first = sign_in("mallory", OTHER_PASSWORD)
+        admin("PUT", f"/users/{user('mallory', LEGACY)['id']}", {"email": "alice@acme.test"}, realm=LEGACY)
+        again = sign_in("mallory", OTHER_PASSWORD)
+        emails = [claims(r["access_token"]).get("email") for r in (first, again) if "access_token" in r]
+        check("a known legacy person who later takes alice's address still signs in, as herself, with her own",
+              emails == ["mallory@acme.test"] * 2
+              and admin("GET", f"/users/{alice_before['id']}/federated-identity")[1] == [],
+              f"{emails} {describe(again)}")
     finally:
         remove_user("mallory", LEGACY)
         remove_user(f"{ALIAS}.mallory", REALM)

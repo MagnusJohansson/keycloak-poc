@@ -21,7 +21,7 @@ make web         # React SPA on :5173      (separate shell)
 make mcp         # MCP server on :5002  (separate shell; needs up + seed + api)
 make assert-mcp  # 34 checks of MCP authorization - REQUIRES up + seed + api + mcp running
 make assert-ldap # 53 checks of LDAP federation - REQUIRES up + seed + api; changes the directory and restores it
-make assert-saml # 41 checks of the brokered SAML provider - REQUIRES up + seed + api
+make assert-saml # 43 checks of the brokered SAML provider - REQUIRES up + seed + api
 make test        # 190 .NET tests (37 API + 96 MCP + 57 desktop-auth) - no Docker, network or cloud
 make e2e         # 7 Playwright tests - REQUIRES up + seed + api + web running
 make plan        # realm diff; should be EMPTY on an unchanged realm
@@ -189,7 +189,10 @@ Every one of these cost real debugging time and is now load-bearing. Do not "sim
   offers to link a brokered person to an existing user with the same email and EMAILS that user a
   confirmation link, also with `trust_email = false`. The custom flow has no linking; its
   executions carry `priority` like every other flow here.
-- **`sync_mode = "FORCE"`** or a mover never moves (mappers run once with the default `IMPORT`).
+- **Sync is set PER MAPPER; the provider's `sync_mode` stays `IMPORT`.** Group and name mappers are
+  `FORCE` (or a mover never moves). Username and email are `IMPORT`. Do not set `FORCE` on the
+  provider: it re-writes the email at every sign-in whatever the mapper says, and a brokered person
+  whose legacy address later equals a local user's gets an HTTP 500 (unique-email constraint).
 - `validate_signature = false` still refuses a response with no signature and ACCEPTS an altered
   one with stale signatures. Do not judge signature checking by a strip-only test.
 - Brokered usernames are `legacy-saml.<uid>` on purpose: no collision with local usernames.

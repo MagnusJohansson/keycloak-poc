@@ -75,7 +75,7 @@ resource "keycloak_saml_identity_provider" "legacy" {
   name_id_policy_format = "Persistent"
   principal_type        = "SUBJECT"
 
-  sync_mode   = "FORCE"                # see the traps
+  sync_mode   = "IMPORT"               # per mapper instead: see the traps
   trust_email = false
 
   first_broker_login_flow_alias = "first-broker-login-no-link"   # see the traps
@@ -93,6 +93,10 @@ Three kinds of mapper turn an assertion into a DocVault user:
   until a mapper says so, and what a DocVault group allows is still decided in
   DocVault (`roles-groups.tf`).
 
+Each mapper says how often it runs. Groups and names are applied at every
+sign-in. The username and the email address are taken at the first and not
+again.
+
 Each side checks the other with a certificate. Terraform reads each realm's
 signing certificate and gives it to the other side. In a real migration those
 come from the two parties' SAML metadata; DocVault's is at
@@ -102,7 +106,7 @@ come from the two parties' SAML metadata; DocVault's is at
 
 ```bash
 make up && make seed && make api
-make assert-saml        # 41 checks
+make assert-saml        # 43 checks
 ```
 
 The script plays the browser between the two sides, so it can change a SAML
@@ -123,8 +127,10 @@ from the legacy provider, changed afterwards.
   put into judy's sign-in, the same response posted out of the blue, and a
   signed response the provider issued for a different service.
 - **No takeover:** a legacy person carrying alice's email address is refused,
-  nothing is linked to alice, and alice gets no email. A legacy person named
-  `alice` becomes a separate DocVault user with no access.
+  nothing is linked to alice, and alice gets no email. A person DocVault already
+  knows, who takes alice's address later, still signs in as herself with her
+  own address. A legacy person named `alice` becomes a separate DocVault user
+  with no access.
 - **A mover and a leaver:** moved to another legacy group, heidi is in the new
   DocVault group at her next sign-in. Disabled in the legacy system, she cannot
   sign in.
@@ -144,12 +150,21 @@ CI runs it in the realm job, against a Keycloak that is new on every run.
   no linking: a brokered person becomes a new DocVault user or is refused.
   Linking a legacy identity to an existing account is then an administrator's
   job. With the built-in flow back in place, the check sees the email arrive.
-- **`sync_mode` decides whether a mover moves.** With the default, `IMPORT`,
-  the mappers run once, at a person's first sign-in. Moved from `ACME-ENG` to
-  `GLOBEX` in the legacy system, heidi was still an Acme editor in DocVault at
-  her next sign-in, and nothing complained. `FORCE` re-applies the mappers at every
-  sign-in. (The same trap as in [UC2](uc2-enterprise-sso-entra.md), now with a
-  check that fails when it is wrong.)
+- **The sync mode decides whether a mover moves.** A mapper that runs in
+  `IMPORT` mode runs once, at a person's first sign-in. With the group mappers
+  left at that, heidi, moved from `ACME-ENG` to `GLOBEX` in the legacy system,
+  was still an Acme editor in DocVault at her next sign-in, and nothing
+  complained. They run in `FORCE` mode: at every sign-in. (The same trap as in
+  [UC2](uc2-enterprise-sso-entra.md), now with a check that fails when it is
+  wrong.)
+- **`sync_mode = "FORCE"` on the provider re-writes the email address too, and
+  can end in a 500.** The first version set `FORCE` for the whole provider. It
+  then re-applied a person's email address at every sign-in, whatever the email
+  mapper's own mode said. A brokered person whose address in the legacy system
+  later became a DocVault user's ran into the realm's unique-email rule, and
+  her next sign-in was a bare HTTP 500 from Keycloak. It failed closed: nothing
+  was linked and only her own account was affected. The provider is now
+  `IMPORT`, and each mapper carries its own mode.
 - **`validate_signature = false` still refuses an unsigned response, and
   accepts an altered one.** With validation off and `want_assertions_signed`
   on, a response with its signatures removed was refused, which looks like
@@ -170,7 +185,14 @@ CI runs it in the realm job, against a Keycloak that is new on every run.
   has not been exercised.
 - **Check the outer signature when the assertion is signed.** A response with
   only its outer signature removed is accepted: the signed assertion is what
-  DocVault relies on. The check states this.
+  DocVault relies on. The check states this. In the review of this change, a
+  response accepted that way was still refused when its `Destination` was
+  altered or removed.
+- **Follow a changed email address.** It is taken at the first sign-in. A
+  change in the legacy system does not reach DocVault.
+- **Undo what an administrator grants in DocVault.** The group mappers manage
+  the groups they map. A group given to a brokered person by hand in DocVault
+  stays.
 - **Test what it cannot make.** An expired assertion, a clock that is off, and
   an assertion signed with the wrong key all need a key the script does not
   have. They are not checked.
