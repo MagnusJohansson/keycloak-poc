@@ -201,6 +201,13 @@ Each of these produced no error at the point of the mistake.
   username and email are now taken once, at import. The cost is the other side
   of the same coin: a legitimate change of address in the directory does not
   reach Keycloak.
+- **A refused import can lock the person out after the conflict is fixed.** On
+  a new Keycloak, after `mallory` was refused for carrying alice's email
+  address, a corrected `mallory` entry still could not sign in: Keycloak
+  answered "invalid credentials" without asking the directory. Clearing
+  Keycloak's user cache let her in. It fails closed, and it happens with the
+  federation's own cache off. It did not happen on my longer-lived lab, and I
+  have not established what differs.
 - **`openssl req -x509` makes a CA certificate.** Keycloak trusts the
   directory's certificate file directly, so with `CA:TRUE` the directory's key
   could have signed a certificate for any name and Keycloak accepted it. The

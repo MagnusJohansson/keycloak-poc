@@ -411,6 +411,11 @@ def main():
     finally:
         restore("remove mallory", f"ldapdelete {AS_ADMIN} uid=mallory,{PEOPLE}")
     forgive()
+    # The refused import leaves something behind in Keycloak's user cache: on a
+    # new Keycloak, "mallory" then could not sign in at all, even as a fresh and
+    # valid directory entry, and Keycloak did not ask the directory. Clearing the
+    # user cache (Realm settings, Cache, in the console) is what let her in.
+    admin("POST", "/clear-user-cache")
 
     # The same two moves by someone Keycloak already knows. Keycloak takes a
     # username and an email address once, when it first meets a person; were it
@@ -425,7 +430,7 @@ def main():
         again = sign_in("mallory", "Directory!Password2026")
         emails = [claims(r["access_token"]).get("email") for r in (refreshed, again) if "access_token" in r]
         check("a known directory person who takes alice's email address does not get it in her token",
-              emails == ["mallory@acme.test"] * 2, str(emails))
+              emails == ["mallory@acme.test"] * 2, f"{emails} {describe(session)} / {describe(again)}")
         directory(f"ldapmodrdn {AS_ADMIN} -r {mallory_dn} uid=alice")
         mallory_dn = f"uid=alice,{PEOPLE}"
         _, refreshed = refresh(again.get("refresh_token", ""))
