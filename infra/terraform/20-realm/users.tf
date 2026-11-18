@@ -70,24 +70,49 @@ resource "keycloak_user" "demo" {
   }
 }
 
-# Group membership is managed per-group (keycloak_group_memberships is
-# authoritative for that group's member list).
-resource "keycloak_group_memberships" "acme_engineering" {
-  realm_id = keycloak_realm.docvault.id
-  group_id = keycloak_group.acme_engineering.id
-  members  = [for k, v in local.users : keycloak_user.demo[k].username if contains(v.groups, "acme_engineering")]
+# Group membership is managed per USER, and only for the users this file
+# creates. `exhaustive = true` means "these are all of this user's groups": a
+# membership added by hand shows up in `make plan`, and dave, who has none, is
+# checked too.
+#
+# It used to be managed per group, with keycloak_group_memberships, which is
+# authoritative: it owns the group's whole member list. That stopped working the
+# moment the realm got a directory (ldap.tf). People from LDAP are members of
+# /acme/engineering and /globex too, so every plan wanted to remove them, and
+# every apply failed: Keycloak refuses to change a read-only directory's
+# memberships. A realm with two sources of people cannot have one of them own
+# the list. Owning each local user's own list is still possible, and is what
+# this does.
+resource "keycloak_user_groups" "demo" {
+  for_each = local.users
+
+  realm_id   = keycloak_realm.docvault.id
+  user_id    = keycloak_user.demo[each.key].id
+  group_ids  = [for g in each.value.groups : local.group_ids[g]]
+  exhaustive = true
 }
 
-resource "keycloak_group_memberships" "acme_legal" {
-  realm_id = keycloak_realm.docvault.id
-  group_id = keycloak_group.acme_legal.id
-  members  = [for k, v in local.users : keycloak_user.demo[k].username if contains(v.groups, "acme_legal")]
+# The old per-group resources are dropped from state without being destroyed.
+# Destroying them would take alice, bob and carol out of their groups first.
+removed {
+  from = keycloak_group_memberships.acme_engineering
+  lifecycle {
+    destroy = false
+  }
 }
 
-resource "keycloak_group_memberships" "globex" {
-  realm_id = keycloak_realm.docvault.id
-  group_id = keycloak_group.globex.id
-  members  = [for k, v in local.users : keycloak_user.demo[k].username if contains(v.groups, "globex")]
+removed {
+  from = keycloak_group_memberships.acme_legal
+  lifecycle {
+    destroy = false
+  }
+}
+
+removed {
+  from = keycloak_group_memberships.globex
+  lifecycle {
+    destroy = false
+  }
 }
 
 # Carol also operates the platform.

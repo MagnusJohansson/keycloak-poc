@@ -16,3 +16,8 @@ api_origin        = "http://localhost:5001"
 
 smtp_host = "mailpit"
 smtp_port = "1025"
+
+# The directory in infra/local/docker-compose.yml, as the Keycloak container
+# reaches it. The bind password is the lab's, set in infra/local/ldap/Dockerfile.
+ldap_connection_url  = "ldaps://ldap:636"
+ldap_bind_credential = "keycloak-bind-lab"

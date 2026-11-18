@@ -4,6 +4,26 @@ Each release attaches a source archive with a signed build provenance
 attestation; see [Releases](README.md#releases). The release workflow refuses a
 tag that is not on `main`.
 
+## 1.2.0
+
+- **People from an LDAP directory.** The local lab gains an OpenLDAP container
+  and the realm a read-only LDAP user federation over TLS. The directory says
+  who someone is and where they belong; the realm's groups still say what that
+  allows. `make assert-ldap` (53 checks) signs in as directory people and then
+  changes the directory: a mover, a leaver, an outage, a person taking
+  someone else's name or address. See
+  [UC7](docs/use-cases/uc7-ldap-directory.md).
+- Keycloak's cache is off for directory people. With the default, a person
+  removed from a group, or deleted, kept getting tokens.
+- The demo users are put in their groups one user at a time. The earlier
+  per-group resource owned the whole member list and could not coexist with a
+  directory. An existing realm upgrades with `make seed`.
+- Only named directory groups count, each in one place in the realm's group
+  tree, and a username and email address are not re-read at each sign-in: a
+  directory cannot create groups in the realm, or lend a person someone else's
+  address.
+- Local lab and CI only, and OpenLDAP only. 95 Terraform resources locally.
+
 ## 1.1.0
 
 - **An audit log for the MCP server.** One JSON record per tool call, scope

@@ -44,6 +44,10 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      # Not for the directory's sake: Keycloak reads its truststore once, at
+      # start, and the directory writes its certificate there on first start.
+      ldap:
+        condition: service_healthy
     environment:
       KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN:-admin}
       KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
@@ -82,6 +86,9 @@ services:
       # To import this export by hand instead, use the admin console or
       # `kc.sh import`, and skip `make seed`.
       - ./realm-export:/opt/keycloak/data/import:ro
+      # The directory's certificate. Keycloak trusts every PEM file in this
+      # folder, which is how it accepts ldaps://ldap:636 and nothing posing as it.
+      - ldapcert:/opt/keycloak/conf/truststores:ro
     healthcheck:
       # The Keycloak image ships no curl or wget, so probe with bash's /dev/tcp.
       # Note the CRLF: HTTP requires \r\n line endings, and bare \n gets a 400
@@ -93,6 +100,28 @@ services:
       retries: 30
       start_period: 30s
 
+  # The lab's directory: OpenLDAP with a few people and groups, which Keycloak
+  # reads through LDAP user federation (20-realm/ldap.tf, docs/use-cases/uc7).
+  # Built from ./ldap. No port is published: only Keycloak, on this network,
+  # talks to it, and only over TLS. To look inside or change it, use the socket in the container:
+  #   make ldap-search
+  ldap:
+    build: ./ldap
+    image: docvault-ldap:local
+    networks:
+      default:
+        # A second name for the same server, which its certificate does not
+        # carry. `make assert-ldap` uses it to prove Keycloak checks the name.
+        aliases: [ldap-under-another-name]
+    volumes:
+      - ldapkey:/tls/private    # the private key: this container only
+      - ldapcert:/tls/public    # the certificate: Keycloak reads it, below
+    healthcheck:
+      test: ["CMD-SHELL", "ldapwhoami -Q -Y EXTERNAL -H ldapi://%2Frun%2Fopenldap%2Fldapi"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
   # Catches password-reset / verification mail so the email flows in
   # docs/use-cases are actually demonstrable. UI at http://localhost:8025
   mailpit:
@@ -103,3 +132,5 @@ services:
 
 volumes:
   pgdata:
+  ldapkey:
+  ldapcert:

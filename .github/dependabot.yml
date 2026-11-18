@@ -70,7 +70,9 @@ updates:
         patterns: ["*"]
 
   - package-ecosystem: docker
-    directory: /apps/api-dotnet
+    directories:
+      - /apps/api-dotnet
+      - /infra/local/ldap
     schedule:
       interval: weekly
     cooldown:

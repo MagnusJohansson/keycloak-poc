@@ -16,6 +16,10 @@ on a laptop and complete enough to show the decisions an identity platform needs
   and an AI assistant.
 - **Access control in layers.** Role-based access, tenant isolation, step-up MFA
   (RFC 9470), service-to-service calls, consent, and an audit trail to Azure Sentinel.
+- **People from a directory.** LDAP user federation against an OpenLDAP
+  container, read-only and over TLS: the directory says who someone is and where
+  they belong, the realm says what that allows. Checked for what happens when a
+  person moves or leaves.
 - **An AI assistant as a client.** An MCP server with audience-bound tokens,
   consented scopes and token exchange, so an assistant can do only what the user
   consented to, as that user. An audit log records each call: who, through which
@@ -23,8 +27,9 @@ on a laptop and complete enough to show the decisions an identity platform needs
 - **Tested against the real thing.** 190 .NET tests with forged tokens, browser
   tests against a real Keycloak, and end-to-end checks that sign in as the demo users.
 
-It is a lab, not a product: the demo passwords are published, and the MCP part
-relies on an experimental Keycloak feature.
+It is a lab, not a product: the demo passwords are published, the MCP part
+relies on an experimental Keycloak feature, and the directory is a small
+OpenLDAP container, not Active Directory.
 [What has and has not been verified](#verified) is listed below.
 
 ---
@@ -65,7 +70,7 @@ For the local lab — everything in the Quickstart below:
 
 | Tool | Version | Why |
 |---|---|---|
-| **Docker** | with Compose v2 | runs Keycloak, Postgres and Mailpit |
+| **Docker** | with Compose v2 | runs Keycloak, Postgres, the LDAP directory and Mailpit |
 | **Terraform** | **≥ 1.9** | applies the realm — `make seed` *is* Terraform, not a script |
 | **.NET SDK** | **10.0** | the API, the worker and the test suite |
 | **Node** | **20.19+ or 22.12+** | the React and Vue clients (Vite 8 requires it) |
@@ -122,7 +127,7 @@ subscription.
 ## Quickstart
 
 ```bash
-make up      # Keycloak + Postgres + Mailpit  (~30s)
+make up      # Keycloak + Postgres + the directory + Mailpit  (~30s)
 make seed    # apply the DocVault realm via Terraform
 make api     # .NET 10 API on :5001
 make web     # React SPA on :5173   (in another shell)
@@ -250,7 +255,8 @@ The Azure variants read files you create and that are gitignored
 | 4 | Machine-to-machine — `client_credentials`, service accounts | [uc4](docs/use-cases/uc4-service-to-service.md) |
 | 5 | Consent + data minimisation — pairwise subject identifiers | [uc5](docs/use-cases/uc5-consent-and-privacy.md) |
 | 6 | Audit → SIEM → Azure Sentinel | [uc6](docs/use-cases/uc6-audit-siem-sentinel.md) |
-| 7 | An AI assistant as a client — an MCP server with audience-bound tokens, consented scopes, token exchange, and an audit log of what the assistant did and for whom (local lab; uses an experimental Keycloak feature) | [MCP](docs/13-integration-mcp.md) |
+| 7 | People from an LDAP directory — read-only user federation over TLS, directory groups mapped onto the realm's groups, and what happens when someone moves or leaves (local lab; OpenLDAP) | [uc7](docs/use-cases/uc7-ldap-directory.md) |
+| 8 | An AI assistant as a client — an MCP server with audience-bound tokens, consented scopes, token exchange, and an audit log of what the assistant did and for whom (local lab; uses an experimental Keycloak feature) | [MCP](docs/13-integration-mcp.md) |
 
 ## Repository map
 
@@ -260,7 +266,7 @@ infra/
   terraform/10-keycloak-azure/  Keycloak on Azure       (azurerm)
   terraform/20-realm/           realm config            (keycloak/keycloak)  <- source of truth
   terraform/30-azure/           your apps on Azure      (azurerm)
-  local/                        docker-compose lab
+  local/                        docker-compose lab, and the OpenLDAP directory it builds
 apps/
   api-dotnet/             .NET 10 resource server + worker + tests
   mcp-dotnet/             MCP server for AI assistants (resource indicators, token exchange) + tests
@@ -271,7 +277,7 @@ apps/
   desktop-electron/       runnable-lite  (loopback PKCE, tokens never in the renderer)
   desktop-winui/          WinUI 3 / .NET 10 (Duende OidcClient, DPAPI) + cross-platform auth lib
 tests/e2e-playwright/     browser login -> API call
-tools/                    export-realm.sh, decode-token.sh, assert-mcp-authz.py
+tools/                    export-realm.sh, decode-token.sh, assert-mcp-authz.py, assert-ldap.py
 ```
 
 ## The idea worth stealing
@@ -284,8 +290,9 @@ make seed         # local Docker Keycloak
 make seed-azure   # Keycloak on Azure
 ```
 
-Same 87 resources, same realm; only a URL and a credential differ. Two
-consequences worth having:
+Same realm; only a URL and a credential differ. (The local lab also sets one
+optional variable, the address of its LDAP directory, which adds seven resources.
+Azure has no directory.) Two consequences worth having:
 
 - **The local lab is faithful.** If it stops being so, `make seed` fails
   immediately instead of during a migration.
@@ -299,11 +306,12 @@ rather than asserted.
 
 Built and checked against real software, not just written down:
 
-- 87 Terraform resources applied to the local Keycloak 26.6.3, with a clean re-plan
-  (the Azure deployment was applied with the 74 that existed before the MCP server);
+- 95 Terraform resources applied to the local Keycloak 26.6.3, with a clean re-plan
+  (the Azure deployment was applied with the 74 that existed before the MCP server
+  and the directory);
   `acr_values_supported`, the audience mapper and service-account roles confirmed
   in a real token.
-- .NET 10 API: 32 tests pass, including forged `alg:none`, wrong-key,
+- .NET 10 API: 37 tests pass, including forged `alg:none`, wrong-key,
   wrong-audience, wrong-realm and expired tokens, 403-vs-401 for an
   authenticated-but-unauthorized caller, and 404-not-403 across the tenant
   boundary.
@@ -325,6 +333,12 @@ Built and checked against real software, not just written down:
   needed `docvault:write`. **Local lab and CI only**: it needs
   Keycloak's experimental `resource-indicators` feature, which the Azure module
   does not enable.
+- LDAP federation: `make assert-ldap` passes 53 checks against the local
+  Keycloak, API and an OpenLDAP container, signing in as people who exist only
+  in the directory and then changing the directory under Keycloak (a mover, a
+  leaver, an outage, a person taking someone else's name or address). Run from an empty Keycloak as well as on an upgraded
+  realm. **Local lab and CI only**, and OpenLDAP only: nothing here has been run
+  against Active Directory.
 - React and Vue build; Flutter analyzes clean and its tests pass.
 - The Flutter client has been driven end-to-end on an Android emulator against the
   local lab, and React against the full Azure stack (cloud Keycloak *and* cloud API).
