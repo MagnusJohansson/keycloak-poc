@@ -37,7 +37,7 @@ help: ## Show this help
 
 # --- Local lab --------------------------------------------------------------
 .PHONY: up
-up: ## Start Keycloak + Postgres + Mailpit, wait for readiness
+up: ## Start Keycloak + Postgres + the directory + Mailpit, wait for readiness
 	$(COMPOSE) up -d
 	@echo "Waiting for Keycloak..."
 	@for i in $$(seq 1 60); do \
@@ -135,6 +135,16 @@ assert-mcp: ## Check MCP authorization end to end (needs up + seed + api + mcp)
 	MCP_AUDIT_LOG="$(CURDIR)/.lab/mcp-audit.jsonl" \
 	DOCVAULT_API_LOG="$$(test -f .lab/api.log && echo "$(CURDIR)/.lab/api.log")" \
 		python3 tools/assert-mcp-authz.py
+
+# --- The directory (LDAP) -----------------------------------------------------
+.PHONY: assert-ldap
+assert-ldap: ## Check LDAP federation end to end (needs up + seed + api). Changes the lab's directory and puts it back.
+	python3 tools/assert-ldap.py
+
+.PHONY: ldap-search
+ldap-search: ## Print the lab directory's people and groups (as its administrator)
+	@$(COMPOSE) exec -T ldap ldapsearch -Q -LLL -Y EXTERNAL -H ldapi://%2Frun%2Fopenldap%2Fldapi \
+		-b dc=docvault,dc=test '(|(objectClass=inetOrgPerson)(objectClass=groupOfNames))' uid cn mail member
 
 # --- Tests ------------------------------------------------------------------
 .PHONY: test

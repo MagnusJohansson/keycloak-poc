@@ -3,7 +3,7 @@
 The whole lab runs on your machine, free, against upstream Keycloak.
 
 ```bash
-make up      # Keycloak 26.6.3 + Postgres + Mailpit
+make up      # Keycloak 26.6.3 + Postgres + the LDAP directory + Mailpit
 make seed    # apply the DocVault realm
 ```
 
@@ -32,6 +32,11 @@ Demo users, each chosen to make one authorization outcome visible:
 | `bob` | `/globex` | `doc.reader` | tenant isolation — cannot see Acme documents |
 | `carol` | `/acme/legal` | `doc.admin`, `platform-admin` | needs OTP step-up for classified |
 | `dave` | *(none)* | *(none)* | authenticated but unauthorized → **403, not 401** |
+
+Three more people exist only in the lab's LDAP directory, with the same
+password: `erin` (`/acme/engineering`), `frank` (`/globex`) and `grace` (no
+group). Keycloak reads them through LDAP federation; see
+[UC7](use-cases/uc7-ldap-directory.md). `make ldap-search` prints the directory.
 
 ## Why this is worth having
 

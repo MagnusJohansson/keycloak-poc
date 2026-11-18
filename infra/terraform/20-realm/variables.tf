@@ -126,3 +126,29 @@ variable "smtp_port" {
   type    = string
   default = "1025"
 }
+
+# --- LDAP user federation (optional). See ldap.tf. ---------------------------
+variable "ldap_connection_url" {
+  description = "URL of an LDAP directory to federate, as Keycloak reaches it (e.g. ldaps://ldap:636). Null leaves the realm without one."
+  type        = string
+  default     = null
+}
+
+variable "ldap_base_dn" {
+  description = "Base DN of the directory. People are read from ou=people under it, groups from ou=groups."
+  type        = string
+  default     = "dc=docvault,dc=test"
+}
+
+variable "ldap_bind_dn" {
+  description = "DN of the account Keycloak binds with. It needs to read people and groups, and nothing more."
+  type        = string
+  default     = "cn=keycloak,ou=services,dc=docvault,dc=test"
+}
+
+variable "ldap_bind_credential" {
+  description = "Password of the bind account."
+  type        = string
+  default     = null
+  sensitive   = true
+}

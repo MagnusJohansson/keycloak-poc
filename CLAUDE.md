@@ -14,12 +14,13 @@ identity and access management server — OIDC, OAuth 2.0, SAML, MFA, RBAC, fede
 ## Commands
 
 ```bash
-make up          # Keycloak + Postgres + Mailpit (~30s, waits for readiness)
+make up          # Keycloak + Postgres + the LDAP directory + Mailpit (~30s, waits for readiness)
 make seed        # apply the DocVault realm via Terraform, then print secrets
 make api         # .NET 10 API on :5001
 make web         # React SPA on :5173      (separate shell)
 make mcp         # MCP server on :5002  (separate shell; needs up + seed + api)
 make assert-mcp  # 34 checks of MCP authorization - REQUIRES up + seed + api + mcp running
+make assert-ldap # 42 checks of LDAP federation - REQUIRES up + seed + api; changes the directory and restores it
 make test        # 190 .NET tests (37 API + 96 MCP + 57 desktop-auth) - no Docker, network or cloud
 make e2e         # 7 Playwright tests - REQUIRES up + seed + api + web running
 make plan        # realm diff; should be EMPTY on an unchanged realm
@@ -134,6 +135,31 @@ Every one of these cost real debugging time and is now load-bearing. Do not "sim
   trust the deployed site AND localhost. `api_origin` is deliberately **singular**: the analytics
   client carries a pairwise `sub`, and Keycloak rejects such a client with redirect URIs spanning
   multiple hosts unless a Sector Identifier URI is set. Do not "make it consistent".
+
+**LDAP federation (`ldap.tf`, `infra/local/ldap/`, `docs/use-cases/uc7-ldap-directory.md`):**
+
+- **`cache { policy = "NO_CACHE" }` is load-bearing.** With Keycloak's default, a person taken out
+  of a directory group keeps the group and its roles (on refresh AND on a new sign-in), and a
+  deleted person's session keeps refreshing. Silent: sign-in works. `make assert-ldap` fails six
+  checks without it.
+- **Never use `keycloak_group_memberships` again.** It is authoritative per group; directory people
+  are members too, so every plan removes them and every apply fails (`mapper mode is READ_ONLY`).
+  Local users get groups through `keycloak_user_groups` with `exhaustive = false`. The `removed`
+  blocks in `users.tf` let an old realm upgrade without destroying memberships; leave them.
+- `delete_default_mappers = true`: Keycloak's default maps first name from `cn` (the full name).
+- The realm's groups are NOT synced from the directory. A directory group resolves to a realm
+  group of the same name and nesting; do not add a group sync, and do not set `groups_path` to
+  anything but `/` (the API takes the tenant from the first path segment).
+- The directory is TLS-only with no published port and no admin password (root over `ldapi://` in
+  the container is the administrator). Its key and certificate are made on first start
+  (`entrypoint.sh`), never committed. Keycloak reads its truststore once at start, hence
+  `depends_on: ldap: service_healthy`.
+- `ldap.tf` is optional by variable (`ldap_connection_url`). Azure does not set it. Local = 93
+  resources, without a directory = 87. Do not claim LDAP on Azure, and do not claim Active
+  Directory: this is OpenLDAP.
+- `make assert-ldap` restores the directory in `finally` blocks. If it is killed midway,
+  `docker compose -f infra/local/docker-compose.yml up -d --force-recreate ldap` resets the
+  directory to its seed (it has no data volume).
 
 **One module, two environments (`20-realm`):**
 
@@ -394,7 +420,7 @@ A re-run refuses to replace an already-attached archive with different bytes.
 
 ## Verification status
 
-Proven against real software: 87 Terraform resources applied to the local Keycloak 26.6.3 with a
+Proven against real software: 93 Terraform resources applied to the local Keycloak 26.6.3 with a
 clean re-plan (Azure was applied with the 74 that predate the MCP server); 37 API + 96 MCP +
 57 desktop-auth .NET tests (including forged `alg:none`, wrong-key,
 wrong-audience, wrong-realm and expired tokens, and 404-not-403 across the tenant

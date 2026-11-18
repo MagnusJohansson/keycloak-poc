@@ -216,12 +216,20 @@ jobs:
       - name: MCP authorization works end to end
         run: python3 tools/assert-mcp-authz.py
 
+      # LDAP federation: people who exist only in the directory sign in, and then
+      # the directory changes under Keycloak. With Keycloak's default cache a
+      # person removed from a group, or deleted, goes on getting tokens; nothing
+      # but a check that changes the directory would notice.
+      - name: LDAP federation works end to end
+        run: python3 tools/assert-ldap.py
+
       - name: Server logs (on failure)
         if: failure()
         run: |
           cat api.log mcp.log mcp-audit.jsonl || true
           # Keycloak's events say WHY a sign-in was refused; its pages do not.
           docker compose -f infra/local/docker-compose.yml logs keycloak | grep -E "org.keycloak.events|ERROR|WARN|requires user" | tail -60 || true
+          docker compose -f infra/local/docker-compose.yml logs ldap | tail -40 || true
 
       - name: Plan is empty (no drift)
         working-directory: infra/terraform/20-realm
