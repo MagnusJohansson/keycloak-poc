@@ -1,6 +1,6 @@
 # 9. Use cases
 
-Seven scenarios, each with the problem, the realm configuration, the application
+Eight scenarios, each with the problem, the realm configuration, the application
 code, and — most importantly — **how to verify it actually works**.
 
 | # | Scenario |
@@ -12,6 +12,7 @@ code, and — most importantly — **how to verify it actually works**.
 | [5](use-cases/uc5-consent-and-privacy.md) | **Consent + data minimisation** — optional scopes, pairwise subject identifiers |
 | [6](use-cases/uc6-audit-siem-sentinel.md) | **Audit → SIEM** — Keycloak events into Azure Sentinel, with queries |
 | [7](use-cases/uc7-ldap-directory.md) | **People from an LDAP directory** — read-only user federation over TLS, directory groups onto realm groups, movers and leavers |
+| [8](use-cases/uc8-saml-legacy-idp.md) | **Moving off a legacy SAML provider** — Keycloak brokers it; signed requests and assertions, group mapping, tampered and replayed responses refused |
 
 Each builds on the realm defined in [03-realm-design](03-realm-design.md), so they
 are best read after it.

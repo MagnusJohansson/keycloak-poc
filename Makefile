@@ -146,6 +146,11 @@ ldap-search: ## Print the lab directory's people and groups (as its administrato
 	@$(COMPOSE) exec -T ldap ldapsearch -Q -LLL -Y EXTERNAL -H ldapi://%2Frun%2Fopenldap%2Fldapi \
 		-b dc=docvault,dc=test '(|(objectClass=inetOrgPerson)(objectClass=groupOfNames))' uid cn mail member
 
+# --- The legacy SAML provider -------------------------------------------------
+.PHONY: assert-saml
+assert-saml: ## Check the brokered SAML provider end to end (needs up + seed + api). Adds test people to the stand-in legacy realm and removes them.
+	python3 tools/assert-saml.py
+
 # --- Tests ------------------------------------------------------------------
 .PHONY: test
 test: ## Unit + integration + security tests (no Docker, no network)

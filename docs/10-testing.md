@@ -112,6 +112,15 @@ It changes the lab's directory (takes a person out of a group, deletes one,
 freezes the directory) and puts it back. See
 [UC7](use-cases/uc7-ldap-directory.md).
 
+The brokered SAML provider has one too. It plays the browser between DocVault
+and the legacy provider, and changes real SAML responses on their way:
+
+```bash
+make assert-saml   # 41 checks; needs up + seed + api
+```
+
+See [UC8](use-cases/uc8-saml-legacy-idp.md).
+
 ## CI
 
 - `ci.yml` — build, unit, integration, security. Runs against Docker Keycloak, so

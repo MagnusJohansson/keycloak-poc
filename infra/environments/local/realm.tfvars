@@ -21,3 +21,7 @@ smtp_port = "1025"
 # reaches it. The bind password is the lab's, set in infra/local/ldap/Dockerfile.
 ldap_connection_url  = "ldaps://ldap:636"
 ldap_bind_credential = "keycloak-bind-lab"
+
+# A stand-in for a legacy SAML identity provider, and the DocVault realm
+# brokering it. See docs/use-cases/uc8-saml-legacy-idp.md.
+saml_legacy_idp_enabled = true

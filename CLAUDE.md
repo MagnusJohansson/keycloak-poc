@@ -21,6 +21,7 @@ make web         # React SPA on :5173      (separate shell)
 make mcp         # MCP server on :5002  (separate shell; needs up + seed + api)
 make assert-mcp  # 34 checks of MCP authorization - REQUIRES up + seed + api + mcp running
 make assert-ldap # 53 checks of LDAP federation - REQUIRES up + seed + api; changes the directory and restores it
+make assert-saml # 41 checks of the brokered SAML provider - REQUIRES up + seed + api
 make test        # 190 .NET tests (37 API + 96 MCP + 57 desktop-auth) - no Docker, network or cloud
 make e2e         # 7 Playwright tests - REQUIRES up + seed + api + web running
 make plan        # realm diff; should be EMPTY on an unchanged realm
@@ -179,6 +180,23 @@ Every one of these cost real debugging time and is now load-bearing. Do not "sim
 - `make assert-ldap` restores the directory in `finally` blocks. If it is killed midway,
   `docker compose -f infra/local/docker-compose.yml up -d --force-recreate ldap` resets the
   directory to its seed (it has no data volume).
+
+**Brokered SAML provider (`saml-broker.tf`, `saml-legacy-idp.tf`, `docs/use-cases/uc8-saml-legacy-idp.md`):**
+
+- `saml-legacy-idp.tf` is a STAND-IN (a second realm, `legacy-idp`), not part of DocVault. Never
+  describe it as another vendor's IdP, and never claim interoperability beyond Keycloak-to-Keycloak.
+- **Keep `first_broker_login_flow_alias = first-broker-login-no-link`.** Keycloak's built-in flow
+  offers to link a brokered person to an existing user with the same email and EMAILS that user a
+  confirmation link, also with `trust_email = false`. The custom flow has no linking; its
+  executions carry `priority` like every other flow here.
+- **`sync_mode = "FORCE"`** or a mover never moves (mappers run once with the default `IMPORT`).
+- `validate_signature = false` still refuses a response with no signature and ACCEPTS an altered
+  one with stale signatures. Do not judge signature checking by a strip-only test.
+- Brokered usernames are `legacy-saml.<uid>` on purpose: no collision with local usernames.
+- `assert-saml.py` keeps cookies BY PATH: both realms are on one host with the same cookie names.
+  It answers Keycloak's "Add to existing account?" page with yes, as an attacker would, so the
+  no-email check has teeth. It only ever alters real responses; it cannot forge a signature.
+- Both files are optional by `saml_legacy_idp_enabled` (local only). Local = 121 resources.
 
 **One module, two environments (`20-realm`):**
 
@@ -439,7 +457,7 @@ A re-run refuses to replace an already-attached archive with different bytes.
 
 ## Verification status
 
-Proven against real software: 95 Terraform resources applied to the local Keycloak 26.6.3 with a
+Proven against real software: 121 Terraform resources applied to the local Keycloak 26.6.3 with a
 clean re-plan (Azure was applied with the 74 that predate the MCP server); 37 API + 96 MCP +
 57 desktop-auth .NET tests (including forged `alg:none`, wrong-key,
 wrong-audience, wrong-realm and expired tokens, and 404-not-403 across the tenant
