@@ -1,7 +1,7 @@
 # 10. Testing and validation
 
 ```bash
-make test    # 237 tests (37 API + 96 MCP server + 47 SAML application + 57 desktop-auth), no Docker, no secrets, no network
+make test    # 238 tests (37 API + 96 MCP server + 48 SAML application + 57 desktop-auth), no Docker, no secrets, no network
 make assert-mcp   # 34 checks of MCP authorization against the running lab (needs up + seed + api + mcp)
 ```
 

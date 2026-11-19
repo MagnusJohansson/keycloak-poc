@@ -95,6 +95,7 @@ for this application, that this browser asked for it, or that it is new.
 | Not expired, and not from the future | the library | `invalid` |
 | Addressed to this application's endpoint | **the application** | `destination` |
 | Answers a request this browser made | **the application** | `unsolicited`, `in_response_to` |
+| Confirmed as "bearer", the only kind it understands | **the application** | `invalid` |
 | Names exactly one person | **the application** | `attributes` |
 | Not used before, and the request not answered before | **the application** | `replay` |
 
@@ -118,7 +119,7 @@ would have expired.
 ## Verify
 
 ```bash
-make test                # 47 of the tests are this application's
+make test                # 48 of the tests are this application's
 make up && make seed
 make reports             # the application on :5003 (separate shell)
 make assert-saml-app     # 30 checks against the real Keycloak
@@ -133,8 +134,8 @@ unsigned envelope, naming two people, or used twice. Plus the ones with bad
 signatures: none, another key, changed after signing, and a forged assertion
 beside the signed one.
 
-Eighteen deliberate breaks of the application's checks were tried one at a
-time. Seventeen failed a test. The eighteenth is the list of used assertion
+Nineteen deliberate breaks of the application's checks were tried one at a
+time. Eighteen failed a test. The other is the list of used assertion
 ids, which cannot be reached without first getting past the once-per-request
 check; it is kept so that replay does not rest on one line.
 

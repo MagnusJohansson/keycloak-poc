@@ -56,6 +56,9 @@ public sealed class TestIdp
         /// <summary>The signed recipient inside the assertion, when that differs from the envelope's Destination.</summary>
         public string? Recipient { get; init; }
 
+        /// <summary>How the subject is confirmed. Keycloak sends bearer.</summary>
+        public string ConfirmationMethod { get; init; } = "urn:oasis:names:tc:SAML:2.0:cm:bearer";
+
         /// <summary>A second username attribute, placed before the real one.</summary>
         public string? UsernameBefore { get; init; }
         public string Destination { get; init; } = "http://localhost:5003/saml/acs";
@@ -95,7 +98,7 @@ public sealed class TestIdp
             $"<saml:Issuer>{options.Issuer}</saml:Issuer>" +
             "<saml:Subject>" +
             "<saml:NameID Format=\"urn:oasis:names:tc:SAML:2.0:nameid-format:persistent\">G-0f1e2d3c</saml:NameID>" +
-            "<saml:SubjectConfirmation Method=\"urn:oasis:names:tc:SAML:2.0:cm:bearer\">" +
+            $"<saml:SubjectConfirmation Method=\"{options.ConfirmationMethod}\">" +
             $"<saml:SubjectConfirmationData{inResponseTo} NotOnOrAfter=\"{Instant(options.NotOnOrAfter)}\" Recipient=\"{recipient}\"/>" +
             "</saml:SubjectConfirmation></saml:Subject>" +
             $"<saml:Conditions NotBefore=\"{Instant(options.NotBefore)}\" NotOnOrAfter=\"{Instant(options.NotOnOrAfter)}\">" +

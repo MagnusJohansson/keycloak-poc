@@ -24,7 +24,7 @@ make assert-ldap # 53 checks of LDAP federation - REQUIRES up + seed + api; chan
 make assert-saml # 43 checks of the brokered SAML provider - REQUIRES up + seed + api
 make reports     # the legacy SAML application on :5003 (separate shell; needs up + seed)
 make assert-saml-app # 30 checks of that application - REQUIRES up + seed + reports
-make test        # 237 .NET tests (37 API + 96 MCP + 47 SAML application + 57 desktop-auth) - no Docker, network or cloud
+make test        # 238 .NET tests (37 API + 96 MCP + 48 SAML application + 57 desktop-auth) - no Docker, network or cloud
 make e2e         # 10 Playwright tests - REQUIRES up + seed + api + web + reports running
 make plan        # realm diff; should be EMPTY on an unchanged realm
 make token       # mint a real token and decode its claims
@@ -218,7 +218,7 @@ Every one of these cost real debugging time and is now load-bearing. Do not "sim
   checked as well and decides nothing. Never add a check that reads only the envelope.
 - The sign-in cookie is READ at the ACS and cleared only on success. Clearing it before validation
   let any site cancel a sign-in with a junk cross-site POST.
-- Eighteen mutations in the scratch `mutate_reports.py` of that review: seventeen fail a test; the
+- Nineteen mutations were tried in that review: eighteen fail a test; the
   assertion-id list is unreachable behind the once-per-request check and is kept as a second line.
 - `name_id_format = "username"` on the SAML client is deliberate. `persistent` makes Keycloak write
   a user attribute, which fails for read-only LDAP users (`Federated storage is not writable`,
@@ -495,7 +495,7 @@ A re-run refuses to replace an already-attached archive with different bytes.
 
 Proven against real software: 127 Terraform resources applied to the local Keycloak 26.6.3 with a
 clean re-plan (Azure was applied with the 74 that predate the MCP server); 37 API + 96 MCP +
-47 SAML application + 57 desktop-auth .NET tests (including forged `alg:none`, wrong-key,
+48 SAML application + 57 desktop-auth .NET tests (including forged `alg:none`, wrong-key,
 wrong-audience, wrong-realm and expired tokens, and 404-not-403 across the tenant
 boundary); 10 Playwright tests in a real browser (a directory person, a SAML person, and the SAML application); 12 Flutter tests; React/Vue build;
 Flutter analyzes clean.

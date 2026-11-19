@@ -14,11 +14,11 @@ tag that is not on `main`.
 - The application checks what its SAML library does not: where a response was
   addressed, whether this browser asked for it, and whether it has been used
   before, each decided on the signed assertion and not on the response's
-  unsigned envelope. 47 tests forge responses with a key the tests hold; `make
+  unsigned envelope. 48 tests forge responses with a key the tests hold; `make
   assert-saml-app` (30 checks) adds the real Keycloak.
 - Its SAML subject is the username. A persistent identifier locked out people
   from the read-only directory, and Keycloak reported it as a wrong password.
-- One more browser test (10). 237 .NET tests. 127 Terraform resources locally.
+- One more browser test (10). 238 .NET tests. 127 Terraform resources locally.
 - Local lab and CI only. The application is a stand-in written for the lab.
 
 ## 1.3.0

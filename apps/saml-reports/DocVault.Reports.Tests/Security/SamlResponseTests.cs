@@ -322,6 +322,19 @@ public sealed class SamlResponseTests(ReportsFactory factory) : IClassFixture<Re
     }
 
     [Fact]
+    public async Task An_assertion_confirmed_in_a_way_the_application_does_not_check_is_refused()
+    {
+        // Holder-of-key asks the receiver to check a proof of possession. This
+        // application has no such check, so it must not treat it as bearer.
+        var browser = factory.NewBrowser();
+        var response = await browser.SignInAsync(Idp, o => o with
+        {
+            ConfirmationMethod = "urn:oasis:names:tc:SAML:2.0:cm:holder-of-key",
+        });
+        await Refused(response, "invalid", browser);
+    }
+
+    [Fact]
     public async Task An_assertion_that_names_two_people_is_refused()
     {
         var browser = factory.NewBrowser();

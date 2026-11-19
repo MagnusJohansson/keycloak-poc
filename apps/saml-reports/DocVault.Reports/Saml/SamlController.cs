@@ -30,6 +30,8 @@ namespace DocVault.Reports.Saml;
 public sealed class SamlController(
     Saml2Configuration saml, ReportsSettings settings, PendingSignIn pending, ILogger<SamlController> logger) : Controller
 {
+    private const string BearerMethod = "urn:oasis:names:tc:SAML:2.0:cm:bearer";
+
     [HttpGet("login")]
     public IActionResult Login(string? returnUrl = null)
     {
@@ -77,11 +79,15 @@ public sealed class SamlController(
         // and those are signed. The envelope is checked too, but it decides
         // nothing on its own.
         var assertion = response.Saml2SecurityToken?.Assertion;
-        var confirmations = assertion?.Subject?.SubjectConfirmations?
-            .Select(c => c.SubjectConfirmationData).Where(d => d is not null).ToList() ?? [];
-        if (assertion is null || confirmations.Count == 0)
+        var subject = assertion?.Subject?.SubjectConfirmations?.ToList() ?? [];
+        var confirmations = subject.Select(c => c.SubjectConfirmationData).Where(d => d is not null).ToList();
+        // "Bearer" is the only kind this application understands: whoever
+        // presents the assertion is the person. Another kind asks for a proof
+        // this code does not check, so it is not waved through as if it were.
+        if (assertion is null || confirmations.Count == 0 || confirmations.Count != subject.Count
+            || subject.Any(c => c.Method?.OriginalString != BearerMethod))
         {
-            return Refuse("invalid", "The assertion does not say whom it is for.");
+            return Refuse("invalid", "The assertion does not say whom it is for, in a way this application understands.");
         }
 
         if (confirmations.Any(d => d.Recipient != settings.AssertionConsumerUrl)
