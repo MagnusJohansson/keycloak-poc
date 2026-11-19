@@ -29,6 +29,11 @@ terraform {
       source  = "keycloak/keycloak"
       version = "~> 5.8"
     }
+    # For one key pair: the legacy SAML application's (saml-reports.tf).
+    tls = {
+      source  = "hashicorp/tls"
+      version = "~> 4.1"
+    }
   }
 }
 

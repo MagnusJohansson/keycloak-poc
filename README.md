@@ -24,11 +24,16 @@ on a laptop and complete enough to show the decisions an identity platform needs
   SAML identity provider reach the same API with the same tokens; SAML stops at
   Keycloak. Checked with responses that were stripped, altered, wrapped,
   replayed or issued for someone else.
+- **A legacy SAML application, kept working.** An application that speaks only
+  SAML signs its people in through Keycloak. It refuses responses that are
+  correctly signed and still wrong: expired, for another application, answering
+  someone else's request, or used twice.
 - **An AI assistant as a client.** An MCP server with audience-bound tokens,
   consented scopes and token exchange, so an assistant can do only what the user
   consented to, as that user. An audit log records each call: who, through which
   client, which tool, and how it ended.
-- **Tested against the real thing.** 190 .NET tests with forged tokens, browser
+- **Tested against the real thing.** 238 .NET tests with forged tokens and forged
+  SAML responses, browser
   tests against a real Keycloak, and end-to-end checks that sign in as the demo users.
 
 It is a lab, not a product: the demo passwords are published, the MCP part
@@ -262,7 +267,8 @@ The Azure variants read files you create and that are gitignored
 | 6 | Audit → SIEM → Azure Sentinel | [uc6](docs/use-cases/uc6-audit-siem-sentinel.md) |
 | 7 | People from an LDAP directory — read-only user federation over TLS, directory groups mapped onto the realm's groups, and what happens when someone moves or leaves (local lab; OpenLDAP) | [uc7](docs/use-cases/uc7-ldap-directory.md) |
 | 8 | Moving off a legacy SAML identity provider — Keycloak brokers it, maps its groups, and refuses responses that were stripped, altered, wrapped or replayed (local lab; the provider is a stand-in realm) | [uc8](docs/use-cases/uc8-saml-legacy-idp.md) |
-| 9 | An AI assistant as a client — an MCP server with audience-bound tokens, consented scopes, token exchange, and an audit log of what the assistant did and for whom (local lab; uses an experimental Keycloak feature) | [MCP](docs/13-integration-mcp.md) |
+| 9 | A legacy application that only speaks SAML — Keycloak as its identity provider, and the checks a SAML library leaves to the application (local lab; the application is a stand-in) | [uc9](docs/use-cases/uc9-saml-application.md) |
+| 10 | An AI assistant as a client — an MCP server with audience-bound tokens, consented scopes, token exchange, and an audit log of what the assistant did and for whom (local lab; uses an experimental Keycloak feature) | [MCP](docs/13-integration-mcp.md) |
 
 ## Repository map
 
@@ -276,6 +282,7 @@ infra/
 apps/
   api-dotnet/             .NET 10 resource server + worker + tests
   mcp-dotnet/             MCP server for AI assistants (resource indicators, token exchange) + tests
+  saml-reports/           a legacy application that only speaks SAML (Keycloak as its IdP) + tests
   web-react/              full reference client (PKCE, RBAC, step-up, TokenInspector)
   web-vue/                runnable-lite
   mobile-flutter/         runnable-lite  (flutter_appauth + Keychain/Keystore)
@@ -283,7 +290,7 @@ apps/
   desktop-electron/       runnable-lite  (loopback PKCE, tokens never in the renderer)
   desktop-winui/          WinUI 3 / .NET 10 (Duende OidcClient, DPAPI) + cross-platform auth lib
 tests/e2e-playwright/     browser login -> API call
-tools/                    export-realm.sh, decode-token.sh, assert-mcp-authz.py, assert-ldap.py, assert-saml.py
+tools/                    export-realm.sh, decode-token.sh, and the end-to-end checks (assert-*.py)
 ```
 
 ## The idea worth stealing
@@ -312,7 +319,7 @@ rather than asserted.
 
 Built and checked against real software, not just written down:
 
-- 121 Terraform resources applied to the local Keycloak 26.6.3, with a clean re-plan
+- 127 Terraform resources applied to the local Keycloak 26.6.3, with a clean re-plan
   (the Azure deployment was applied with the 74 that existed before the MCP server,
   the directory and the SAML provider);
   `acr_values_supported`, the audience mapper and service-account roles confirmed
@@ -328,9 +335,9 @@ Built and checked against real software, not just written down:
   also compiled by the `windows-latest` CI job.
 - Keycloak on Azure and the API on Container Apps are both applied and running,
   not merely planned.
-- 9 Playwright tests pass in a real browser against real Keycloak, two of them
-  signing in as a person from the LDAP directory and as one from the legacy SAML
-  provider.
+- 10 Playwright tests pass in a real browser (Chromium) against real Keycloak,
+  three of them for a person from the LDAP directory, one from the legacy SAML
+  provider, and a sign-in to the legacy SAML application.
 - MCP server: 96 tests pass with forged tokens (wrong audience, `alg:none`,
   wrong key, wrong realm, expired), every scope challenge and the audit log, and
   `make assert-mcp` passes 34 checks against the local Keycloak, API and MCP
@@ -353,6 +360,14 @@ Built and checked against real software, not just written down:
   wrapped, replayed, or issued for another service. **Local lab and CI only**,
   and the provider is a second Keycloak realm: nothing here has been run
   against another vendor's SAML product.
+- Legacy SAML application: 48 tests pass against an identity provider the tests
+  control, with responses that are unsigned, signed by another key, changed,
+  wrapped, expired, for another application, from another issuer, addressed
+  elsewhere, readdressed on their unsigned envelope, unasked for, or used
+  twice. Of nineteen deliberate breaks of its checks, eighteen failed a test
+  and one is a second line behind another check. `make assert-saml-app` passes
+  30 checks against the real Keycloak. **Local lab and CI only**; the application is a stand-in written
+  for the lab, tried in Chromium only.
 - React and Vue build; Flutter analyzes clean and its tests pass.
 - The Flutter client has been driven end-to-end on an Android emulator against the
   local lab, and React against the full Azure stack (cloud Keycloak *and* cloud API).

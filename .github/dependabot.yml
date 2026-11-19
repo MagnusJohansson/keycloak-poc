@@ -22,6 +22,7 @@ updates:
     directories:
       - /apps/api-dotnet
       - /apps/mcp-dotnet
+      - /apps/saml-reports
       - /apps/desktop-winui
     schedule:
       interval: weekly

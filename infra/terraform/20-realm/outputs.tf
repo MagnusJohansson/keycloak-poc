@@ -64,3 +64,18 @@ output "demo_users" {
     dave  = "no groups. Authenticated but unauthorized -> 403, not 401."
   }
 }
+
+# --- For the legacy SAML application (apps/saml-reports). `make reports` reads these. ---
+output "saml_idp_certificate" {
+  description = "The realm's signing certificate. The application pins it."
+  value       = data.keycloak_realm_keys.signing.keys[0].certificate
+}
+
+output "reports_saml_signing_certificate" {
+  value = tls_self_signed_cert.reports.cert_pem
+}
+
+output "reports_saml_signing_key" {
+  value     = tls_private_key.reports.private_key_pem
+  sensitive = true
+}

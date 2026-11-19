@@ -22,8 +22,10 @@ make mcp         # MCP server on :5002  (separate shell; needs up + seed + api)
 make assert-mcp  # 34 checks of MCP authorization - REQUIRES up + seed + api + mcp running
 make assert-ldap # 53 checks of LDAP federation - REQUIRES up + seed + api; changes the directory and restores it
 make assert-saml # 43 checks of the brokered SAML provider - REQUIRES up + seed + api
-make test        # 190 .NET tests (37 API + 96 MCP + 57 desktop-auth) - no Docker, network or cloud
-make e2e         # 9 Playwright tests - REQUIRES up + seed + api + web running
+make reports     # the legacy SAML application on :5003 (separate shell; needs up + seed)
+make assert-saml-app # 30 checks of that application - REQUIRES up + seed + reports
+make test        # 238 .NET tests (37 API + 96 MCP + 48 SAML application + 57 desktop-auth) - no Docker, network or cloud
+make e2e         # 10 Playwright tests - REQUIRES up + seed + api + web + reports running
 make plan        # realm diff; should be EMPTY on an unchanged realm
 make token       # mint a real token and decode its claims
 make down        # stop (keeps data)   /   make clean = also wipe volume + tfstate
@@ -200,6 +202,37 @@ Every one of these cost real debugging time and is now load-bearing. Do not "sim
   It answers Keycloak's "Add to existing account?" page with yes, as an attacker would, so the
   no-email check has teeth. It only ever alters real responses; it cannot forge a signature.
 - Both files are optional by `saml_legacy_idp_enabled` (local only). Local = 121 resources.
+
+**Legacy SAML application (`apps/saml-reports`, `saml-reports.tf`, `docs/use-cases/uc9-saml-application.md`):**
+
+- Keycloak is the IdP here and the APPLICATION must refuse bad responses. The library
+  (ITfoxtec.Identity.Saml2) checks signature, issuer, audience and validity. **Destination,
+  InResponseTo/unsolicited and replay are checked in `SamlController.cs` / `PendingSignIn.cs`; do
+  not remove them as "the library does that"** - it does not, and the sign-in still works without
+  them.
+- **Decide on the SIGNED copy.** The library accepts a response with no outer signature if the
+  assertion is signed, so the Response element's own `Destination` and `InResponseTo` are the
+  sender's to write. The first version compared `response.InResponseToAsString` (the envelope) and
+  a reviewer signed in as alice with a stolen response. The checks now read
+  `SubjectConfirmationData` inside the assertion (`Recipient`, `InResponseTo`); the envelope is
+  checked as well and decides nothing. Never add a check that reads only the envelope.
+- The sign-in cookie is READ at the ACS and cleared only on success. Clearing it before validation
+  let any site cancel a sign-in with a junk cross-site POST.
+- Nineteen mutations were tried in that review: eighteen fail a test; the
+  assertion-id list is unreachable behind the once-per-request check and is kept as a second line.
+- `name_id_format = "username"` on the SAML client is deliberate. `persistent` makes Keycloak write
+  a user attribute, which fails for read-only LDAP users (`Federated storage is not writable`,
+  reported to the person as wrong credentials). Any new SAML client in this realm has the same trap.
+- The sign-in cookie (`reports.signin`) is `SameSite=None; Secure` because the response is a
+  cross-site POST. It works on `http://localhost` in Chromium; not tried elsewhere.
+- Refusals carry a fixed word (`invalid`, `destination`, `unsolicited`, `in_response_to`, `replay`,
+  `status`), never the response or the library's exception text.
+- The realm certificate is pinned from Terraform's output, not read from metadata. The key pair is
+  made by the `tls` provider with `early_renewal_hours = 0`; do not let it renew on apply.
+- `TestIdp` (tests) signs with .NET's SignedXml, not with the library under test, on purpose.
+- After a mutation script restores a file by moving a backup, `touch` the sources before trusting a
+  test run: the older timestamp can leave a stale build.
+- The application is a stand-in written for the lab. Do not describe it as a real legacy product.
 
 **One module, two environments (`20-realm`):**
 
@@ -460,11 +493,11 @@ A re-run refuses to replace an already-attached archive with different bytes.
 
 ## Verification status
 
-Proven against real software: 121 Terraform resources applied to the local Keycloak 26.6.3 with a
+Proven against real software: 127 Terraform resources applied to the local Keycloak 26.6.3 with a
 clean re-plan (Azure was applied with the 74 that predate the MCP server); 37 API + 96 MCP +
-57 desktop-auth .NET tests (including forged `alg:none`, wrong-key,
+48 SAML application + 57 desktop-auth .NET tests (including forged `alg:none`, wrong-key,
 wrong-audience, wrong-realm and expired tokens, and 404-not-403 across the tenant
-boundary); 9 Playwright tests in a real browser (two of them a directory person and a SAML person); 12 Flutter tests; React/Vue build;
+boundary); 10 Playwright tests in a real browser (a directory person, a SAML person, and the SAML application); 12 Flutter tests; React/Vue build;
 Flutter analyzes clean.
 
 **`10-keycloak-azure` has been applied for real** (Azure, swedencentral) and works: Keycloak came
