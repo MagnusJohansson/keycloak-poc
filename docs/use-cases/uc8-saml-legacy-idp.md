@@ -207,5 +207,5 @@ sign-in in a real one, through the React app; it is not run in CI.
   are accepted.
 - **Another vendor's provider.** See above.
 - **The other direction.** A legacy application that speaks SAML, signing in
-  through Keycloak, is not here yet.
+  through Keycloak, is [UC9](uc9-saml-application.md).
 - **Azure.** The Azure deployment has neither file's resources.

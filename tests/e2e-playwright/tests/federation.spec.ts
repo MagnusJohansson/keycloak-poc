@@ -55,3 +55,26 @@ test('heidi signs in at the legacy SAML provider and sees Acme documents', async
   await expect(documents).toContainText('Acme Q3 Roadmap');
   await expect(documents).not.toContainText('Globex Supplier List');
 });
+
+test('alice signs in to the legacy SAML application through Keycloak', async ({ page }) => {
+  // The application has no login page of its own: it sends her to Keycloak
+  // with a signed SAML request, and Keycloak posts a signed response back.
+  await page.goto('http://localhost:5003/');
+
+  await expect(page).toHaveURL(/\/realms\/docvault\//);
+  await page.fill('#username', 'alice');
+  await page.fill('#password', PASSWORD);
+  await page.click('#kc-login');
+
+  // Back at the application. That it got here at all shows the browser kept
+  // the application's sign-in cookie across the round trip to another site.
+  await expect(page).toHaveURL('http://localhost:5003/');
+  await expect(page.getByTestId('username')).toHaveText('alice');
+  await expect(page.getByTestId('tenant')).toHaveText('acme');
+
+  await page.getByRole('button', { name: 'Sign out of Reports' }).click();
+  await page.goto('http://localhost:5003/me');
+  // Signed out of the application, still signed in at Keycloak: no password this time.
+  await expect(page).toHaveURL('http://localhost:5003/me');
+  await expect(page.locator('body')).toContainText('"username":"alice"');
+});

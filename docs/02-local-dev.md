@@ -12,6 +12,7 @@ make seed    # apply the DocVault realm
 | Keycloak admin | http://localhost:8080/admin | `admin` / `admin` |
 | Mailpit (catches email) | http://localhost:8025 | — |
 | API | http://localhost:5001 | bearer token |
+| Legacy SAML application (`make reports`) | http://localhost:5003 | any demo user, through Keycloak |
 | React SPA | http://localhost:5173 | `alice` / `DocVaultLab!2026` |
 | Vue SPA | http://localhost:5174 | same |
 

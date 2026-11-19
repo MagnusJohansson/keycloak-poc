@@ -1,7 +1,7 @@
 # 10. Testing and validation
 
 ```bash
-make test    # 190 tests (37 API + 96 MCP server + 57 desktop-auth), no Docker, no secrets, no network
+make test    # 229 tests (37 API + 96 MCP server + 39 SAML application + 57 desktop-auth), no Docker, no secrets, no network
 make assert-mcp   # 34 checks of MCP authorization against the running lab (needs up + seed + api + mcp)
 ```
 
@@ -120,6 +120,15 @@ make assert-saml   # 43 checks; needs up + seed + api
 ```
 
 See [UC8](use-cases/uc8-saml-legacy-idp.md).
+
+The legacy SAML application is checked the other way round: Keycloak issues the
+responses, and the application has to refuse the bad ones.
+
+```bash
+make assert-saml-app   # 29 checks; needs up + seed + reports
+```
+
+See [UC9](use-cases/uc9-saml-application.md).
 
 ## CI
 

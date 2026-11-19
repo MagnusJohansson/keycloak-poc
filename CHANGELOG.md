@@ -4,6 +4,22 @@ Each release attaches a source archive with a signed build provenance
 attestation; see [Releases](README.md#releases). The release workflow refuses a
 tag that is not on `main`.
 
+## 1.4.0
+
+- **A legacy application that only speaks SAML.** `apps/saml-reports` signs its
+  people in through Keycloak, which is the SAML identity provider here: the
+  other direction from 1.3.0. The same people reach it as reach the API,
+  including those from the LDAP directory and the legacy SAML provider. See
+  [UC9](docs/use-cases/uc9-saml-application.md).
+- The application checks what its SAML library does not: where a response was
+  addressed, whether this browser asked for it, and whether it has been used
+  before. 39 tests forge responses with a key the tests hold; `make
+  assert-saml-app` (29 checks) adds the real Keycloak.
+- Its SAML subject is the username. A persistent identifier locked out people
+  from the read-only directory, and Keycloak reported it as a wrong password.
+- One more browser test (10). 229 .NET tests. 127 Terraform resources locally.
+- Local lab and CI only. The application is a stand-in written for the lab.
+
 ## 1.3.0
 
 - **A legacy SAML identity provider, brokered.** People who still sign in at an

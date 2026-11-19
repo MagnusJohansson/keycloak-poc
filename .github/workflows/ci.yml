@@ -230,10 +230,33 @@ jobs:
       - name: Brokered SAML provider works end to end
         run: python3 tools/assert-saml.py
 
+      # The legacy SAML application: here Keycloak issues the responses and the
+      # application has to refuse the bad ones. Its own tests forge responses
+      # with a key they hold; this adds the real Keycloak.
+      - name: Start the legacy SAML application
+        run: |
+          set -euo pipefail
+          out() { terraform -chdir=infra/terraform/20-realm output -raw "$1"; }
+          ASPNETCORE_URLS=http://localhost:5003 \
+          Saml__IdpCertificate="$(out saml_idp_certificate)" \
+          Saml__SigningCertificate="$(out reports_saml_signing_certificate)" \
+          Saml__SigningKey="$(out reports_saml_signing_key)" \
+            nohup dotnet run --no-build --configuration Release \
+            --project apps/saml-reports/DocVault.Reports --no-launch-profile > reports.log 2>&1 &
+          for i in $(seq 1 30); do
+            [ "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:5003/health || true)" = "200" ] && exit 0
+            sleep 2
+          done
+          cat reports.log
+          exit 1
+
+      - name: Legacy SAML application works end to end
+        run: python3 tools/assert-saml-app.py
+
       - name: Server logs (on failure)
         if: failure()
         run: |
-          cat api.log mcp.log mcp-audit.jsonl || true
+          cat api.log mcp.log mcp-audit.jsonl reports.log || true
           # Keycloak's events say WHY a sign-in was refused; its pages do not.
           docker compose -f infra/local/docker-compose.yml logs keycloak | grep -E "org.keycloak.events|ERROR|WARN|requires user" | tail -60 || true
           docker compose -f infra/local/docker-compose.yml logs ldap | tail -40 || true

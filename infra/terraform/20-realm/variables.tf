@@ -97,6 +97,12 @@ variable "mcp_resource_url" {
   description = "Canonical URL of the MCP server (apps/mcp-dotnet), no trailing slash. It is both the RFC 8707 resource and the server's client_id; see mcp.tf."
 }
 
+variable "reports_url" {
+  description = "Where the legacy SAML application (apps/saml-reports) is reached. It is also the root of its SAML entity ID."
+  type        = string
+  default     = "http://localhost:5003"
+}
+
 variable "flutter_redirect_scheme" {
   type        = string
   default     = "io.docvault.flutter"

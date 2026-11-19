@@ -146,6 +146,20 @@ ldap-search: ## Print the lab directory's people and groups (as its administrato
 	@$(COMPOSE) exec -T ldap ldapsearch -Q -LLL -Y EXTERNAL -H ldapi://%2Frun%2Fopenldap%2Fldapi \
 		-b dc=docvault,dc=test '(|(objectClass=inetOrgPerson)(objectClass=groupOfNames))' uid cn mail member
 
+# --- The legacy SAML application ------------------------------------------------
+.PHONY: reports
+reports: ## Run the legacy SAML application on :5003 (needs up + seed)
+	@cd $(REALM_DIR) && $(WS_LOCAL) >/dev/null
+	ASPNETCORE_URLS=http://localhost:5003 \
+	Saml__IdpCertificate="$$(cd $(REALM_DIR) && $(TF) output -raw saml_idp_certificate)" \
+	Saml__SigningCertificate="$$(cd $(REALM_DIR) && $(TF) output -raw reports_saml_signing_certificate)" \
+	Saml__SigningKey="$$(cd $(REALM_DIR) && $(TF) output -raw reports_saml_signing_key)" \
+		dotnet run --project apps/saml-reports/DocVault.Reports --no-launch-profile
+
+.PHONY: assert-saml-app
+assert-saml-app: ## Check the legacy SAML application end to end (needs up + seed + reports)
+	python3 tools/assert-saml-app.py
+
 # --- The legacy SAML provider -------------------------------------------------
 .PHONY: assert-saml
 assert-saml: ## Check the brokered SAML provider end to end (needs up + seed + api). Adds test people to the stand-in legacy realm and removes them.
