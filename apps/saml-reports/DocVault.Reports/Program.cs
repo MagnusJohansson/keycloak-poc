@@ -63,6 +63,10 @@ builder.Services.AddSingleton(_ =>
 builder.Services.AddSaml2(loginPath: "/saml/login", slidingExpiration: false);
 builder.Services.Configure<CookieAuthenticationOptions>(Saml2Constants.AuthenticationScheme, options =>
 {
+    // Never over plain HTTP. (Browsers accept a Secure cookie on localhost.)
+    options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+    options.Cookie.HttpOnly = true;
+
     // Signed in and not allowed is a 403, said plainly. The default sends the
     // person to an "access denied" page this application does not have.
     options.Events.OnRedirectToAccessDenied = context =>

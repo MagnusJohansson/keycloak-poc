@@ -19,7 +19,8 @@ namespace DocVault.Reports.Saml;
 ///
 /// So the id of each request goes into a cookie in the browser that started it,
 /// encrypted so that the browser cannot write its own, and a response is
-/// accepted only if it answers that id. And each assertion is accepted once.
+/// accepted only if it answers that id. Each assertion is accepted once, and
+/// each request is answered once.
 /// </summary>
 public sealed class PendingSignIn(IDataProtectionProvider protection, IMemoryCache used, TimeProvider clock)
 {
@@ -46,15 +47,17 @@ public sealed class PendingSignIn(IDataProtectionProvider protection, IMemoryCac
         });
     }
 
-    /// <summary>The pending sign-in of this browser, read once. Null if there is none.</summary>
-    public (string RequestId, string ReturnUrl)? Take(HttpContext context)
+    /// <summary>
+    /// The pending sign-in of this browser. Null if there is none. Reading does
+    /// not use it up: what stops a second use is <see cref="FirstUse"/>.
+    /// </summary>
+    public (string RequestId, string ReturnUrl)? Read(HttpContext context)
     {
         if (!context.Request.Cookies.TryGetValue(CookieName, out var value) || string.IsNullOrEmpty(value))
         {
             return null;
         }
 
-        context.Response.Cookies.Delete(CookieName, new CookieOptions { Path = "/saml", Secure = true, SameSite = SameSiteMode.None });
         try
         {
             var ticket = JsonSerializer.Deserialize<Ticket>(_protector.Unprotect(value));
@@ -66,10 +69,12 @@ public sealed class PendingSignIn(IDataProtectionProvider protection, IMemoryCac
         }
     }
 
-    /// <summary>True the first time an assertion id is seen, false after that.</summary>
-    public bool FirstUse(string assertionId, DateTimeOffset notOnOrAfter)
+    public void Clear(HttpContext context) =>
+        context.Response.Cookies.Delete(CookieName, new CookieOptions { Path = "/saml", Secure = true, SameSite = SameSiteMode.None });
+
+    /// <summary>True the first time a key is seen, false after that.</summary>
+    public bool FirstUse(string key, DateTimeOffset notOnOrAfter)
     {
-        var key = "assertion:" + assertionId;
         lock (used)
         {
             if (used.TryGetValue(key, out _))

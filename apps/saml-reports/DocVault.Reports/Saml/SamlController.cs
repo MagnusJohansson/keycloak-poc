@@ -19,10 +19,11 @@ namespace DocVault.Reports.Saml;
 /// The SAML service provider: sends a signed sign-in request to Keycloak, and
 /// takes the signed response back.
 ///
-/// The library checks the response's signature, audience and validity period.
-/// What it leaves to the application is checked here: that the response was
-/// meant for this address, that it answers a request this browser made, and
-/// that it has not been used before.
+/// The library checks the response's signature, issuer, audience and validity
+/// period. What it leaves to the application is checked here: that the
+/// response was meant for this address, that it answers a request this browser
+/// made, and that it has not been used before. Each of those is decided on the
+/// signed assertion, never on the response's unsigned envelope.
 /// </summary>
 [AllowAnonymous]
 [Route("saml")]
@@ -45,7 +46,9 @@ public sealed class SamlController(
     [HttpPost("acs")]
     public async Task<IActionResult> AssertionConsumerService()
     {
-        var started = pending.Take(HttpContext);
+        // Read, not taken: a rubbish POST from another site must not cancel a
+        // sign-in that is in progress. It is cleared when a sign-in succeeds.
+        var started = pending.Read(HttpContext);
 
         var response = new Saml2AuthnResponse(saml);
         try
@@ -57,7 +60,7 @@ public sealed class SamlController(
                 return Refuse("status", $"The identity provider answered {response.Status}.");
             }
 
-            // Signature, audience and validity period.
+            // Signature, issuer, audience and validity period.
             http.Binding.Unbind(http, response);
         }
         catch (Exception exception)
@@ -66,7 +69,23 @@ public sealed class SamlController(
             return Refuse("invalid", exception.GetType().Name);
         }
 
-        if (response.Destination is null || response.Destination != settings.AssertionConsumerUrl)
+        // From here on, only what the SIGNATURE covers is believed. The library
+        // accepts a response whose outer signature is missing as long as the
+        // assertion inside is signed, so the envelope (the Response element's
+        // own Destination and InResponseTo) is whatever the sender wrote. The
+        // assertion carries its own copy of both, in SubjectConfirmationData,
+        // and those are signed. The envelope is checked too, but it decides
+        // nothing on its own.
+        var assertion = response.Saml2SecurityToken?.Assertion;
+        var confirmations = assertion?.Subject?.SubjectConfirmations?
+            .Select(c => c.SubjectConfirmationData).Where(d => d is not null).ToList() ?? [];
+        if (assertion is null || confirmations.Count == 0)
+        {
+            return Refuse("invalid", "The assertion does not say whom it is for.");
+        }
+
+        if (confirmations.Any(d => d.Recipient != settings.AssertionConsumerUrl)
+            || response.Destination is null || response.Destination != settings.AssertionConsumerUrl)
         {
             return Refuse("destination", "The response was addressed elsewhere.");
         }
@@ -76,17 +95,31 @@ public sealed class SamlController(
             return Refuse("unsolicited", "No sign-in was started from this browser.");
         }
 
-        if (response.InResponseToAsString != started.Value.RequestId)
+        if (confirmations.Any(d => d.InResponseTo?.Value != started.Value.RequestId)
+            || response.InResponseToAsString != started.Value.RequestId)
         {
             return Refuse("in_response_to", "The response answers another request.");
         }
 
-        var assertionId = response.Saml2SecurityToken?.Assertion?.Id?.Value;
-        if (string.IsNullOrEmpty(assertionId) || !pending.FirstUse(assertionId, response.SecurityTokenValidTo))
+        // One person, said once. Two values would leave it to this code which one counts.
+        if (response.ClaimsIdentity.FindAll("username").Count() != 1)
         {
-            return Refuse("replay", "The assertion has been used before.");
+            return Refuse("attributes", "The assertion does not name exactly one person.");
         }
 
+        // Each request answered once: a copy of the sign-in cookie is not good
+        // for a second response. And each assertion once. The second cannot be
+        // reached without the first while the signed InResponseTo is checked
+        // above; it is kept so that replay does not rest on one line.
+        var assertionId = assertion.Id?.Value;
+        if (string.IsNullOrEmpty(assertionId)
+            || !pending.FirstUse("assertion:" + assertionId, response.SecurityTokenValidTo)
+            || !pending.FirstUse("request:" + started.Value.RequestId, response.SecurityTokenValidTo))
+        {
+            return Refuse("replay", "The assertion or the request has been used before.");
+        }
+
+        pending.Clear(HttpContext);
         await response.CreateSession(HttpContext, claimsTransform: Person.From);
         return LocalRedirect(started.Value.ReturnUrl);
     }

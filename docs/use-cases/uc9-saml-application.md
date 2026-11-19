@@ -95,33 +95,48 @@ for this application, that this browser asked for it, or that it is new.
 | Not expired, and not from the future | the library | `invalid` |
 | Addressed to this application's endpoint | **the application** | `destination` |
 | Answers a request this browser made | **the application** | `unsolicited`, `in_response_to` |
-| Not used before | **the application** | `replay` |
+| Names exactly one person | **the application** | `attributes` |
+| Not used before, and the request not answered before | **the application** | `replay` |
 
-The three in bold are in `SamlController.cs` and `PendingSignIn.cs`. With any
-one removed, the application's tests fail, and nothing else would have
-noticed: the sign-in works.
+The ones in bold are in `SamlController.cs` and `PendingSignIn.cs`. With one
+removed, the application's tests fail, and nothing else would have noticed:
+the sign-in works.
+
+**Each of them is decided on the signed assertion, not on the response around
+it.** A SAML response says where it is going and what it answers twice: on its
+envelope, and inside the assertion (`SubjectConfirmationData`). The library
+accepts a response whose envelope is not signed, as long as the assertion is.
+So the envelope's copy is whatever the sender wrote, and only the assertion's
+copy can be believed. The application checks both and trusts the signed one.
 
 To tie a response to a browser, the application puts the id of its request in
 a cookie, encrypted so that the browser cannot write its own, and accepts only
-a response that answers that id. To accept each assertion once, it remembers
-the ids it has seen until they would have expired.
+a response whose signed assertion answers that id. Each request is answered
+once and each assertion accepted once; it remembers both until the assertion
+would have expired.
 
 ## Verify
 
 ```bash
-make test                # 39 of the tests are this application's
+make test                # 47 of the tests are this application's
 make up && make seed
 make reports             # the application on :5003 (separate shell)
-make assert-saml-app     # 29 checks against the real Keycloak
+make assert-saml-app     # 30 checks against the real Keycloak
 ```
 
 **The application's tests** (`DocVault.Reports.Tests`) have an identity
 provider of their own with a signing key. So they can make what a script
 between two real parties cannot: a response that is correctly signed and still
 wrong. Expired, not valid yet, for another application, from another issuer,
-addressed elsewhere, answering someone else's request, or used twice. Plus the
-ones with bad signatures: none, another key, changed after signing, and a
-forged assertion beside the signed one.
+addressed elsewhere, answering someone else's request, readdressed on its
+unsigned envelope, naming two people, or used twice. Plus the ones with bad
+signatures: none, another key, changed after signing, and a forged assertion
+beside the signed one.
+
+Eighteen deliberate breaks of the application's checks were tried one at a
+time. Seventeen failed a test. The eighteenth is the list of used assertion
+ids, which cannot be reached without first getting past the once-per-request
+check; it is kept so that replay does not rest on one line.
 
 **`make assert-saml-app`** adds the real Keycloak:
 
@@ -131,8 +146,8 @@ forged assertion beside the signed one.
   Keycloak in between.
 - Keycloak refuses a request the application did not sign.
 - Real responses from Keycloak are refused when they arrive changed, in
-  another browser, unasked, twice, or when Keycloak issued them for a
-  different application.
+  another browser, readdressed on their envelope to another sign-in, unasked,
+  twice, or when Keycloak issued them for a different application.
 - Sign-out works only from the application's own page.
 
 `make e2e` has one test that signs in to the application in a real browser.
@@ -145,6 +160,22 @@ forged assertion beside the signed one.
   been used before. A response taken from alice's sign-in could be posted from
   another browser and was accepted, with a perfectly good signature. Those
   three checks are the application's own.
+- **The first version checked the request id on the unsigned envelope.** It
+  compared the browser's request with the `InResponseTo` on the response
+  element. With the outer signature removed, which the library accepts, that
+  attribute is the sender's to write. An independent review took a real,
+  unused response for alice from Keycloak, removed the outer signature, set the
+  envelope's `InResponseTo` to a sign-in of the reviewer's own, and was signed
+  in as alice. Every other check passed: the assertion's signature was intact.
+  The copy of the request id inside the assertion still named alice's sign-in,
+  and nothing compared the two. The application now decides on the signed
+  copy, for the request id and for the recipient. A test and an end-to-end
+  check replay the attack.
+- **Clearing the sign-in cookie too early let another site cancel a sign-in.**
+  The cookie was deleted as soon as anything was posted to the application's
+  SAML endpoint, before the post was checked. That endpoint has to accept
+  posts from another site, so any page could post rubbish to it and cancel a
+  sign-in in progress. The cookie is now cleared only when a sign-in succeeds.
 - **A persistent NameID locks out people from a read-only directory.** The
   first version asked for an opaque, persistent subject, which is the better
   choice. Keycloak keeps that identifier as an attribute on the user. It could
@@ -167,9 +198,15 @@ forged assertion beside the signed one.
 - **Single logout.** Signing out ends the application's session only. The
   person is still signed in at Keycloak, and the next visit signs them in
   without a password. The check states this.
-- **Remember used assertions across a restart, or across instances.** The
-  list is in memory. A second instance, or a restart within an assertion's
-  few minutes of life, would accept a replay.
+- **Remember used requests and assertions across a restart, or across
+  instances.** The lists are in memory. A second instance, or a restart within
+  an assertion's few minutes of life, would accept a replay.
+- **Protect a response in transit.** A response is a credential until it is
+  used or expires. Someone who takes one that has not been delivered, and the
+  encrypted sign-in cookie of the browser it was meant for, can use it once.
+  Over HTTPS that needs the person's own machine; on plain HTTP it needs only
+  the network, which is why the application refuses plain HTTP off the
+  loopback.
 - **Follow a change while a session lasts.** The application learns who you
   are at sign-in. A change of group reaches it at the next one.
 - **Survive a key rotation.** The realm's certificate is pinned from

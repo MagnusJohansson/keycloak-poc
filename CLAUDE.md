@@ -23,8 +23,8 @@ make assert-mcp  # 34 checks of MCP authorization - REQUIRES up + seed + api + m
 make assert-ldap # 53 checks of LDAP federation - REQUIRES up + seed + api; changes the directory and restores it
 make assert-saml # 43 checks of the brokered SAML provider - REQUIRES up + seed + api
 make reports     # the legacy SAML application on :5003 (separate shell; needs up + seed)
-make assert-saml-app # 29 checks of that application - REQUIRES up + seed + reports
-make test        # 229 .NET tests (37 API + 96 MCP + 39 SAML application + 57 desktop-auth) - no Docker, network or cloud
+make assert-saml-app # 30 checks of that application - REQUIRES up + seed + reports
+make test        # 237 .NET tests (37 API + 96 MCP + 47 SAML application + 57 desktop-auth) - no Docker, network or cloud
 make e2e         # 10 Playwright tests - REQUIRES up + seed + api + web + reports running
 make plan        # realm diff; should be EMPTY on an unchanged realm
 make token       # mint a real token and decode its claims
@@ -209,7 +209,17 @@ Every one of these cost real debugging time and is now load-bearing. Do not "sim
   (ITfoxtec.Identity.Saml2) checks signature, issuer, audience and validity. **Destination,
   InResponseTo/unsolicited and replay are checked in `SamlController.cs` / `PendingSignIn.cs`; do
   not remove them as "the library does that"** - it does not, and the sign-in still works without
-  them. Eleven mutations of these checks each fail a test in `DocVault.Reports.Tests`.
+  them.
+- **Decide on the SIGNED copy.** The library accepts a response with no outer signature if the
+  assertion is signed, so the Response element's own `Destination` and `InResponseTo` are the
+  sender's to write. The first version compared `response.InResponseToAsString` (the envelope) and
+  a reviewer signed in as alice with a stolen response. The checks now read
+  `SubjectConfirmationData` inside the assertion (`Recipient`, `InResponseTo`); the envelope is
+  checked as well and decides nothing. Never add a check that reads only the envelope.
+- The sign-in cookie is READ at the ACS and cleared only on success. Clearing it before validation
+  let any site cancel a sign-in with a junk cross-site POST.
+- Eighteen mutations in the scratch `mutate_reports.py` of that review: seventeen fail a test; the
+  assertion-id list is unreachable behind the once-per-request check and is kept as a second line.
 - `name_id_format = "username"` on the SAML client is deliberate. `persistent` makes Keycloak write
   a user attribute, which fails for read-only LDAP users (`Federated storage is not writable`,
   reported to the person as wrong credentials). Any new SAML client in this realm has the same trap.
@@ -485,7 +495,7 @@ A re-run refuses to replace an already-attached archive with different bytes.
 
 Proven against real software: 127 Terraform resources applied to the local Keycloak 26.6.3 with a
 clean re-plan (Azure was applied with the 74 that predate the MCP server); 37 API + 96 MCP +
-39 SAML application + 57 desktop-auth .NET tests (including forged `alg:none`, wrong-key,
+47 SAML application + 57 desktop-auth .NET tests (including forged `alg:none`, wrong-key,
 wrong-audience, wrong-realm and expired tokens, and 404-not-403 across the tenant
 boundary); 10 Playwright tests in a real browser (a directory person, a SAML person, and the SAML application); 12 Flutter tests; React/Vue build;
 Flutter analyzes clean.

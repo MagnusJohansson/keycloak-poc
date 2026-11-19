@@ -49,6 +49,15 @@ public sealed class TestIdp
     public sealed record Options
     {
         public string? InResponseTo { get; init; }
+
+        /// <summary>What the unsigned envelope says it answers, when that differs from the signed assertion.</summary>
+        public string? EnvelopeInResponseTo { get; init; }
+
+        /// <summary>The signed recipient inside the assertion, when that differs from the envelope's Destination.</summary>
+        public string? Recipient { get; init; }
+
+        /// <summary>A second username attribute, placed before the real one.</summary>
+        public string? UsernameBefore { get; init; }
         public string Destination { get; init; } = "http://localhost:5003/saml/acs";
         public string Audience { get; init; } = "http://localhost:5003/saml";
         public string Issuer { get; init; } = EntityId;
@@ -68,6 +77,10 @@ public sealed class TestIdp
     {
         var now = Instant(DateTimeOffset.UtcNow);
         var inResponseTo = options.InResponseTo is null ? "" : $" InResponseTo=\"{options.InResponseTo}\"";
+        var envelopeInResponseTo = (options.EnvelopeInResponseTo ?? options.InResponseTo) is { } envelope
+            ? $" InResponseTo=\"{envelope}\""
+            : "";
+        var recipient = options.Recipient ?? options.Destination;
         var groups = string.Concat(options.Groups.Select(g =>
             $"<saml:AttributeValue xmlns:xs=\"http://www.w3.org/2001/XMLSchema\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:type=\"xs:string\">{g}</saml:AttributeValue>"));
         var groupsAttribute = options.Groups.Length == 0
@@ -75,7 +88,7 @@ public sealed class TestIdp
             : $"<saml:Attribute Name=\"groups\" NameFormat=\"urn:oasis:names:tc:SAML:2.0:attrname-format:basic\">{groups}</saml:Attribute>";
 
         var xml =
-            $"<samlp:Response xmlns:samlp=\"{Protocol}\" xmlns:saml=\"{Assertion}\" ID=\"_{Guid.NewGuid():N}\" Version=\"2.0\" IssueInstant=\"{now}\" Destination=\"{options.Destination}\"{inResponseTo}>" +
+            $"<samlp:Response xmlns:samlp=\"{Protocol}\" xmlns:saml=\"{Assertion}\" ID=\"_{Guid.NewGuid():N}\" Version=\"2.0\" IssueInstant=\"{now}\" Destination=\"{options.Destination}\"{envelopeInResponseTo}>" +
             $"<saml:Issuer>{options.Issuer}</saml:Issuer>" +
             $"<samlp:Status><samlp:StatusCode Value=\"{options.Status}\"/></samlp:Status>" +
             $"<saml:Assertion ID=\"{options.AssertionId}\" Version=\"2.0\" IssueInstant=\"{now}\">" +
@@ -83,7 +96,7 @@ public sealed class TestIdp
             "<saml:Subject>" +
             "<saml:NameID Format=\"urn:oasis:names:tc:SAML:2.0:nameid-format:persistent\">G-0f1e2d3c</saml:NameID>" +
             "<saml:SubjectConfirmation Method=\"urn:oasis:names:tc:SAML:2.0:cm:bearer\">" +
-            $"<saml:SubjectConfirmationData{inResponseTo} NotOnOrAfter=\"{Instant(options.NotOnOrAfter)}\" Recipient=\"{options.Destination}\"/>" +
+            $"<saml:SubjectConfirmationData{inResponseTo} NotOnOrAfter=\"{Instant(options.NotOnOrAfter)}\" Recipient=\"{recipient}\"/>" +
             "</saml:SubjectConfirmation></saml:Subject>" +
             $"<saml:Conditions NotBefore=\"{Instant(options.NotBefore)}\" NotOnOrAfter=\"{Instant(options.NotOnOrAfter)}\">" +
             $"<saml:AudienceRestriction><saml:Audience>{options.Audience}</saml:Audience></saml:AudienceRestriction></saml:Conditions>" +
@@ -91,6 +104,7 @@ public sealed class TestIdp
             "<saml:AuthnContextClassRef>urn:oasis:names:tc:SAML:2.0:ac:classes:unspecified</saml:AuthnContextClassRef>" +
             "</saml:AuthnContext></saml:AuthnStatement>" +
             "<saml:AttributeStatement>" +
+            (options.UsernameBefore is null ? "" : Attribute("username", options.UsernameBefore)) +
             Attribute("username", options.Username) + Attribute("email", options.Email) + groupsAttribute +
             "</saml:AttributeStatement>" +
             "</saml:Assertion></samlp:Response>";

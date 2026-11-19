@@ -32,7 +32,7 @@ on a laptop and complete enough to show the decisions an identity platform needs
   consented scopes and token exchange, so an assistant can do only what the user
   consented to, as that user. An audit log records each call: who, through which
   client, which tool, and how it ended.
-- **Tested against the real thing.** 229 .NET tests with forged tokens and forged
+- **Tested against the real thing.** 237 .NET tests with forged tokens and forged
   SAML responses, browser
   tests against a real Keycloak, and end-to-end checks that sign in as the demo users.
 
@@ -360,12 +360,13 @@ Built and checked against real software, not just written down:
   wrapped, replayed, or issued for another service. **Local lab and CI only**,
   and the provider is a second Keycloak realm: nothing here has been run
   against another vendor's SAML product.
-- Legacy SAML application: 39 tests pass against an identity provider the tests
+- Legacy SAML application: 47 tests pass against an identity provider the tests
   control, with responses that are unsigned, signed by another key, changed,
   wrapped, expired, for another application, from another issuer, addressed
-  elsewhere, unasked for, or used twice. Eleven deliberate breaks of its checks
-  each failed a test. `make assert-saml-app` passes 29 checks against the real
-  Keycloak. **Local lab and CI only**; the application is a stand-in written
+  elsewhere, readdressed on their unsigned envelope, unasked for, or used
+  twice. Of eighteen deliberate breaks of its checks, seventeen failed a test
+  and one is a second line behind another check. `make assert-saml-app` passes
+  30 checks against the real Keycloak. **Local lab and CI only**; the application is a stand-in written
   for the lab, tried in Chromium only.
 - React and Vue build; Flutter analyzes clean and its tests pass.
 - The Flutter client has been driven end-to-end on an Android emulator against the

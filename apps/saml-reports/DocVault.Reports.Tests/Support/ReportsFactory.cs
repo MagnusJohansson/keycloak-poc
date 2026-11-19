@@ -9,6 +9,9 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace DocVault.Reports.Tests.Support;
 
@@ -16,6 +19,9 @@ namespace DocVault.Reports.Tests.Support;
 public sealed class ReportsFactory : WebApplicationFactory<Program>
 {
     public TestIdp Idp { get; } = new();
+
+    /// <summary>The application's clock. Tests move it to make a sign-in grow old.</summary>
+    public MovableClock Clock { get; } = new();
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
@@ -27,6 +33,11 @@ public sealed class ReportsFactory : WebApplicationFactory<Program>
         builder.UseSetting("Saml:IdpCertificate", Idp.CertificateBase64);
         builder.UseSetting("Saml:SigningCertificate", certificate);
         builder.UseSetting("Saml:SigningKey", key);
+        builder.ConfigureTestServices(services =>
+        {
+            services.RemoveAll<TimeProvider>();
+            services.AddSingleton<TimeProvider>(Clock);
+        });
     }
 
     public Browser NewBrowser() => new(CreateClient(new WebApplicationFactoryClientOptions
@@ -35,6 +46,14 @@ public sealed class ReportsFactory : WebApplicationFactory<Program>
         HandleCookies = false,
         BaseAddress = new Uri("http://localhost:5003"),
     }));
+}
+
+/// <summary>A clock that runs with the real one, plus whatever a test adds.</summary>
+public sealed class MovableClock : TimeProvider
+{
+    public TimeSpan Ahead { get; set; }
+
+    public override DateTimeOffset GetUtcNow() => base.GetUtcNow() + Ahead;
 }
 
 /// <summary>

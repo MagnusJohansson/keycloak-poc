@@ -217,9 +217,8 @@ def main():
 
     for label, around in (("in front of", False), ("wrapped around", True)):
         visit = Visit().sign_in("alice", change_response=lambda f, a=around: forged(f, a))
-        me = visit.me()
-        check(f"a forged assertion {label} the signed one does not sign carol in",
-              me is None or me.get("username") == "alice", who(visit))
+        check(f"is refused with a forged assertion {label} the signed one",
+              visit.status == 400 and visit.me() is None, who(visit))
 
     # ------------------------------------------------------------------ #
     print("\nA real response in the wrong place")
@@ -228,6 +227,19 @@ def main():
     thief.deliver(waiting.response)
     check("alice's response, posted from another browser's sign-in, is refused",
           thief.refusal() == "in_response_to" and thief.me() is None, who(thief))
+
+    # Found in review. The envelope of a response is outside the assertion's
+    # signature, and the application accepts a response whose outer signature is
+    # gone. So the thief removes it and rewrites the envelope to answer their
+    # own sign-in. Only the request id inside the signed assertion still says
+    # whose sign-in this was.
+    thief = Visit().sign_in("bob", stop_before_response=True)
+    thief_request = re.search(r'\bID="([^"]+)"', thief.request).group(1)
+    stolen = saml.no_envelope_signature({"SAMLResponse": waiting.response})
+    readdressed = re.sub(r'InResponseTo="[^"]+"', f'InResponseTo="{thief_request}"', saml.xml_of(stolen), count=1)
+    thief.deliver(base64.b64encode(readdressed.encode()).decode())
+    check("readdressed on its unsigned envelope to the thief's own sign-in, it is still refused",
+          readdressed != saml.xml_of(stolen) and thief.refusal() == "in_response_to" and thief.me() is None, who(thief))
 
     stranger = Visit().deliver(waiting.response)
     check("posted from a browser that never started a sign-in, it is refused",

@@ -107,11 +107,11 @@ public sealed class SamlResponseTests(ReportsFactory factory) : IClassFixture<Re
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public async Task A_forged_assertion_beside_the_signed_one_does_not_sign_its_person_in(bool forgedFirst)
+    public async Task A_response_with_a_forged_assertion_beside_the_signed_one_is_refused(bool forgedFirst)
     {
         // Signature wrapping: the response carries the genuine signed assertion
-        // for bob, and an unsigned one for alice. Whatever the application
-        // makes of that, it must not be alice.
+        // for bob, and an unsigned one for alice. It is refused outright; a
+        // sign-in as either of them would be a regression.
         var browser = factory.NewBrowser();
         var (requestId, _, _) = await browser.StartSignInAsync();
         var document = Idp.Response(new TestIdp.Options
@@ -134,14 +134,7 @@ public sealed class SamlResponseTests(ReportsFactory factory) : IClassFixture<Re
 
         var response = await browser.PostResponseAsync(TestIdp.Encode(document));
 
-        if (response.StatusCode == HttpStatusCode.Redirect)
-        {
-            Assert.Equal("bob", (await browser.MeAsync()).GetProperty("username").GetString());
-        }
-        else
-        {
-            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        }
+        await Refused(response, "invalid", browser);
     }
 
     // --- correctly signed, and still wrong ----------------------------------
@@ -224,6 +217,126 @@ public sealed class SamlResponseTests(ReportsFactory factory) : IClassFixture<Re
         var response = await attacker.PostResponseAsync(aliceResponse);
 
         await Refused(response, "in_response_to", attacker);
+    }
+
+    [Fact]
+    public async Task A_stolen_response_cannot_be_readdressed_to_the_thiefs_own_request()
+    {
+        // Found in review. The envelope of a response is outside the assertion's
+        // signature. Someone holding alice's unused response strips the outer
+        // signature and rewrites the envelope to answer a sign-in of their own.
+        // Only the copy of the request id INSIDE the signed assertion still
+        // says whose sign-in it was.
+        var alice = factory.NewBrowser();
+        var (aliceRequest, _, _) = await alice.StartSignInAsync();
+        var thief = factory.NewBrowser();
+        var (thiefRequest, _, _) = await thief.StartSignInAsync();
+
+        var stolen = Idp.Encoded(new TestIdp.Options
+        {
+            InResponseTo = aliceRequest, EnvelopeInResponseTo = thiefRequest, SignResponse = false,
+        });
+        var response = await thief.PostResponseAsync(stolen);
+
+        await Refused(response, "in_response_to", thief);
+    }
+
+    [Fact]
+    public async Task A_response_for_another_endpoint_cannot_be_readdressed_on_its_envelope()
+    {
+        var browser = factory.NewBrowser();
+        var response = await browser.SignInAsync(Idp, o => o with
+        {
+            Recipient = "https://another-application.example/saml/acs", SignResponse = false,
+        });
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(HttpStatusCode.Redirect, (await browser.GetAsync("/me")).StatusCode);
+    }
+
+    [Fact]
+    public async Task An_envelope_that_disagrees_with_the_signed_assertion_is_refused_too()
+    {
+        // The signed assertion is right and the unsigned envelope is not.
+        // Nothing an honest identity provider sends looks like this.
+        var browser = factory.NewBrowser();
+        var response = await browser.SignInAsync(Idp, o => o with
+        {
+            EnvelopeInResponseTo = "_someone-elses-request", SignResponse = false,
+        });
+        await Refused(response, "in_response_to", browser);
+
+        var other = factory.NewBrowser();
+        response = await other.SignInAsync(Idp, o => o with
+        {
+            Destination = "https://another-application.example/saml/acs",
+            Recipient = "http://localhost:5003/saml/acs",
+            SignResponse = false,
+        });
+        await Refused(response, "destination", other);
+    }
+
+    [Fact]
+    public async Task A_sign_in_started_long_ago_is_no_longer_waited_for()
+    {
+        using var own = new ReportsFactory();
+        var browser = own.NewBrowser();
+        var (requestId, _, _) = await browser.StartSignInAsync();
+
+        own.Clock.Ahead = TimeSpan.FromMinutes(11);
+        var response = await browser.PostResponseAsync(own.Idp.Encoded(new TestIdp.Options { InResponseTo = requestId }));
+
+        await Refused(response, "unsolicited", browser);
+    }
+
+    [Fact]
+    public async Task A_request_is_answered_once_even_by_a_second_assertion()
+    {
+        // The sign-in cookie is a ticket the browser holds; a copy of it must
+        // not be good for a second response to the same request.
+        var browser = factory.NewBrowser();
+        var (requestId, _, _) = await browser.StartSignInAsync();
+        var ticket = browser.Cookies["reports.signin"];
+        Assert.Equal(HttpStatusCode.Redirect,
+            (await browser.PostResponseAsync(Idp.Encoded(new TestIdp.Options { InResponseTo = requestId }))).StatusCode);
+
+        var copy = factory.NewBrowser();
+        copy.Cookies["reports.signin"] = ticket;
+        var response = await copy.PostResponseAsync(Idp.Encoded(new TestIdp.Options { InResponseTo = requestId }));
+
+        await Refused(response, "replay", copy);
+    }
+
+    [Fact]
+    public async Task A_junk_post_from_another_site_does_not_cancel_a_sign_in_in_progress()
+    {
+        var browser = factory.NewBrowser();
+        var (requestId, _, _) = await browser.StartSignInAsync();
+
+        // Another site makes the browser post rubbish here, sign-in cookie and all.
+        var junk = await browser.PostResponseAsync(Convert.ToBase64String("<not-saml/>"u8.ToArray()));
+        Assert.Equal(HttpStatusCode.BadRequest, junk.StatusCode);
+
+        var response = await browser.PostResponseAsync(Idp.Encoded(new TestIdp.Options { InResponseTo = requestId }));
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        Assert.Equal("alice", (await browser.MeAsync()).GetProperty("username").GetString());
+    }
+
+    [Fact]
+    public async Task An_assertion_that_names_two_people_is_refused()
+    {
+        var browser = factory.NewBrowser();
+        var response = await browser.SignInAsync(Idp, o => o with { UsernameBefore = "mallory" });
+        await Refused(response, "attributes", browser);
+    }
+
+    [Fact]
+    public async Task The_session_cookie_is_for_https_only_and_not_for_scripts()
+    {
+        var browser = factory.NewBrowser();
+        await browser.SignInAsync(Idp);
+        var cookie = Assert.Single(browser.LastSetCookies, c => c.StartsWith(".AspNetCore.saml2=", StringComparison.Ordinal));
+        Assert.Contains("secure", cookie, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("httponly", cookie, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
