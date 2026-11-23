@@ -39,14 +39,20 @@ public static class ShareEndpoints
             var shares = new List<object>();
             foreach (var share in await authorizer.SharesAsync(document, ct))
             {
-                shares.Add(share switch
+                if (share is ShareTarget.Person p)
                 {
-                    // The username as it is now: the share is recorded by id, so a rename
-                    // shows here. Null for someone who no longer exists.
-                    ShareTarget.Person p => new { type = "user", id = p.UserId.ToString("D"), username = await directory.UsernameOfAsync(p.UserId, ct) },
-                    ShareTarget.Department d => (object)new { type = "department", name = d.Name },
-                    _ => throw new InvalidOperationException(),
-                });
+                    // The person as they are now: the share is recorded by id, so a rename
+                    // shows here. Someone who has left the tenant is still listed, so that
+                    // the owner can remove the share, and marked: it grants them nothing
+                    // now, and would again if they came back. A username of null is
+                    // someone who no longer exists.
+                    var person = await directory.SharedPersonAsync(p.UserId, document.Tenant, ct);
+                    shares.Add(new { type = "user", id = p.UserId.ToString("D"), username = person?.Username, inTenant = person?.InTenant == true });
+                }
+                else if (share is ShareTarget.Department d)
+                {
+                    shares.Add(new { type = "department", name = d.Name });
+                }
             }
 
             return Results.Ok(new { documentId = document.Id, visibility = document.Visibility, shares });
@@ -120,7 +126,7 @@ public static class ShareEndpoints
             await authorizer.ShareAsync(document, target, ct);
             return Results.Created($"/documents/{document.Id}/shares", target switch
             {
-                ShareTarget.Person p => new { type = "user", id = p.UserId.ToString("D"), username } as object,
+                ShareTarget.Person p => new { type = "user", id = p.UserId.ToString("D"), username, inTenant = true } as object,
                 _ => new { type = "department", name = department },
             });
         })

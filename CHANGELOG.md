@@ -34,8 +34,8 @@ tag that is not on `main`.
   alike; it believes contextual tuples completely; Terraform reports a replaced
   model destroyed while OpenFGA keeps it.
 - New: `make test-model` (the model's 30 checks on OpenFGA's own engine),
-  `make assert-fga` (41 checks against the real lab), one more browser test
-  (11). 310 .NET tests. 130 Terraform resources in `20-realm` and 2 in
+  `make assert-fga` (42 checks against the real lab), one more browser test
+  (11). 313 .NET tests. 130 Terraform resources in `20-realm` and 2 in
   `25-openfga` locally.
 - An independent adversarial review found five problems, none of them a way to
   see, share or delete a document; all fixed, each with a test that fails
@@ -46,6 +46,11 @@ tag that is not on `main`.
   DELETE confirmed a classified document existed. The department names `.`
   and `..` reached Keycloak's Admin API as path segments, and a name could end
   in a newline.
+- A second review of those fixes: a delete now goes in one write when it can,
+  and a larger one keeps everything that lets anyone see the document until its
+  last write. A share to someone who has left the tenant is marked as such.
+  The people-lookup client (`docvault-api-directory`) exists only where
+  `sharing_people_lookup_enabled` is set, so Azure no longer gets it.
 - `make clean` now removes the realm's local Terraform state. It has lived in a
   workspace since before 1.0.0, and `make clean` went on removing the old file.
 - Local lab and CI only.

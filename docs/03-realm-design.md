@@ -31,7 +31,7 @@ realm: docvault
     ├── docvault-reactnative       public + PKCE, io.docvault.rn://
     ├── docvault-desktop           public + PKCE, loopback
     ├── docvault-worker            confidential, client_credentials
-    ├── docvault-api-directory     confidential, view-users only: looks people up for a share
+    ├── docvault-api-directory     confidential, view-users only: looks people up for a share (lab and CI only)
     └── docvault-analytics         confidential, consent, pairwise sub
 ```
 

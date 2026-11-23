@@ -25,3 +25,7 @@ ldap_bind_credential = "keycloak-bind-lab"
 # A stand-in for a legacy SAML identity provider, and the DocVault realm
 # brokering it. See docs/use-cases/uc8-saml-legacy-idp.md.
 saml_legacy_idp_enabled = true
+
+# The client the API looks people up with to share a document (directory.tf).
+# The lab runs the API with Sharing__Mode=OpenFga; Azure does not, and leaves it out.
+sharing_people_lookup_enabled = true

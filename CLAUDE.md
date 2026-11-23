@@ -20,13 +20,13 @@ make api         # .NET 10 API on :5001 (needs up + seed: reads OpenFGA's store/
 make web         # React SPA on :5173      (separate shell)
 make mcp         # MCP server on :5002  (separate shell; needs up + seed + api)
 make assert-mcp  # 41 checks of MCP authorization (2 consent-screen checks only before alice has consented) - REQUIRES up + seed + api + mcp running
-make assert-fga  # 41 checks of sharing with the real OpenFGA - REQUIRES up + seed + api; freezes OpenFGA, renames and moves a directory person and restores them
+make assert-fga  # 42 checks of sharing with the real OpenFGA - REQUIRES up + seed + api; freezes OpenFGA, renames and moves a directory person and restores them
 make assert-ldap # 53 checks of LDAP federation - REQUIRES up + seed + api; changes the directory and restores it
 make assert-saml # 43 checks of the brokered SAML provider - REQUIRES up + seed + api
 make reports     # the legacy SAML application on :5003 (separate shell; needs up + seed)
 make assert-saml-app # 30 checks of that application - REQUIRES up + seed + reports
 make test-model  # the OpenFGA model's own tests (`fga model test` in Docker; no running lab needed)
-make test        # 310 .NET tests (90 API + 115 MCP + 48 SAML application + 57 desktop-auth) - no Docker, network or cloud
+make test        # 313 .NET tests (93 API + 115 MCP + 48 SAML application + 57 desktop-auth) - no Docker, network or cloud
 make e2e         # 11 Playwright tests - REQUIRES up + seed + api + web + reports running
 make plan        # realm + OpenFGA model diff; both should be EMPTY
 make token       # mint a real token and decode its claims
@@ -293,9 +293,17 @@ Every one of these cost real debugging time and is now load-bearing. Do not "sim
     someone up took ~300 ms for an LDAP person (groups read from the directory) and ~90 ms for nobody,
     telling an owner who exists in another tenant behind the same 404. Measured after: all ~1040 ms.
     The API logs a warning when a lookup exceeds the floor. Do not drop it "for speed".
-  - **`DeletingAsync` deletes shares first and the document's `tenant`/`owner` in a last write.**
-    OpenFGA reads tuples back oldest first and deletes go in writes of 100, so one pass that failed
-    after its first write left a document nobody could see, hence nobody could delete.
+  - **`DeletingAsync` deletes in ONE write when the tuples fit (≤100); a write is atomic.** Only a
+    larger document is split, and then its `tenant`, `owner` AND `viewer tenant:<t>#member` go in the
+    last write. OpenFGA reads tuples back oldest first, so one pass that failed after its first write
+    left a document nobody could see, hence nobody could delete. The first fix (always two writes,
+    tenant/owner last) still lost the tenant-wide viewer when the second failed, so an administrator
+    lost sight of a document nobody owns (second review).
+  - **The share list marks someone who left the tenant (`inTenant: false`)**, and still lists them so
+    the owner can remove a share that would switch on again if they came back.
+  - **`docvault-api-directory` is optional (`sharing_people_lookup_enabled`, local tfvars only).**
+    It can read every person in the realm; Azure runs `TenantOnly` and never looks anyone up.
+    `moved` blocks in `directory.tf` keep an existing lab's client and secret.
   - **DELETE finds a classified document only for `doc.admin`**; anyone else gets the unknown-id 404.
   - **Names (`FgaNames.IsSafeName`, the MCP `DepartmentName`) start with a letter or digit and end
     with `\z`.** `.`/`..` became path segments in Keycloak's `group-by-path`, and `$` matches before a
@@ -377,7 +385,8 @@ Every one of these cost real debugging time and is now load-bearing. Do not "sim
 
 - **Sharing has its own scope, `docvault:share`**, not in `ToolScopes.Initial`, so a client asks for it
   only when `share_document`/`unshare_document` is first used and the consent screen shows that line
-  on its own. Do not fold it into `docvault:write`: a share is how a document reaches people who could
+  on its own. Only the first time: Keycloak remembers the grant for that user and the MCP client
+  (shared by every assistant) and asks again only on `prompt=consent`. Do not fold it into `docvault:write`: a share is how a document reaches people who could
   not see it, the thing a prompt injection would most want. Inside the tenant nothing tells a share
   the user meant from one a document asked for; the scope, the API's owner/tenant rules and the audit
   record (`share.with`) are what there is. `unshare_document` looks the person's id up in the
@@ -581,7 +590,7 @@ A re-run refuses to replace an already-attached archive with different bytes.
 ## Verification status
 
 Proven against real software: 130 Terraform resources in `20-realm` (+2 in `25-openfga`) applied to the local Keycloak 26.6.3 with a
-clean re-plan (Azure was applied with the 74 that predate the MCP server); 90 API + 115 MCP +
+clean re-plan (Azure was applied with the 74 that predate the MCP server); 93 API + 115 MCP +
 48 SAML application + 57 desktop-auth .NET tests (including forged `alg:none`, wrong-key,
 wrong-audience, wrong-realm and expired tokens, and 404-not-403 across the tenant
 boundary); 11 Playwright tests in a real browser (a directory person, a SAML person, the SAML application, and a private document shared and unshared); 12 Flutter tests; React/Vue build;

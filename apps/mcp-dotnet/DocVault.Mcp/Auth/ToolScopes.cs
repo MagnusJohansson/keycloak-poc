@@ -24,7 +24,10 @@ public static class ToolScopes
     /// <summary>
     /// Sharing is its own scope, and not one a client asks for at first: a share is how a
     /// document leaves the people who can see it, which makes it the tool a prompt
-    /// injection would most want. Asking for it brings the consent screen back.
+    /// injection would most want. The first time a client asks for it, the consent screen
+    /// shows it on its own line. After that Keycloak remembers the grant for the user and
+    /// this client, which every assistant shares, and does not ask again unless the client
+    /// sends prompt=consent.
     /// </summary>
     public const string Share = "docvault:share";
 

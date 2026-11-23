@@ -123,14 +123,25 @@ public sealed class OpenFgaDocumentAuthorizer(OpenFgaClient fga) : IDocumentAuth
         // Read, then delete what was read. A share written in between survives, on a
         // document about to disappear from the store: it grants nothing that exists.
         //
-        // The shares first, the document's tenant and owner in a last write of their own.
-        // Deletes go in writes of at most 100, and OpenFGA reads tuples back oldest first,
-        // so in one pass a failure after the first write had removed the owner and the
-        // tenant: a document nobody could see, so nobody could retry deleting it (found
-        // by review, shown against a real OpenFGA). This way a failure leaves the owner,
-        // who can try again.
+        // A write to OpenFGA is all or nothing, so a document whose tuples fit in one goes
+        // in one, and a failure leaves it exactly as it was.
+        //
+        // More than that are split into writes of 100, and a failure between them must not
+        // leave a document nobody can see, because then nobody can delete it again. In one
+        // pass, oldest first as OpenFGA reads them back, the first write took the tenant
+        // and owner (found by review). So what lets anyone see the document goes in a last
+        // write: its tenant, its owner, and its tenant-wide visibility, which is how an
+        // administrator sees a document nobody owns, such as a seeded one. Before that
+        // last write, only individual and department shares are gone.
         var tuples = await fga.ReadAsync(FgaNames.Document(document.Id), cancellationToken);
-        var last = tuples.Where(t => t.Relation is "tenant" or "owner").ToList();
+        if (tuples.Count <= OpenFgaClient.MaxTuplesPerWrite)
+        {
+            await fga.WriteAsync([], tuples, cancellationToken);
+            return;
+        }
+
+        var tenantWide = FgaNames.TenantMembers(document.Tenant);
+        var last = tuples.Where(t => t.Relation is "tenant" or "owner" || (t.Relation == "viewer" && t.User == tenantWide)).ToList();
         await fga.WriteAsync([], tuples.Except(last).ToList(), cancellationToken);
         await fga.WriteAsync([], last, cancellationToken);
     }

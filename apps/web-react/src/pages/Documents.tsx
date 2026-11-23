@@ -28,7 +28,7 @@ interface DocumentsResponse {
   documents: Document[];
 }
 
-type Share = { type: 'user'; id: string; username: string | null } | { type: 'department'; name: string };
+type Share = { type: 'user'; id: string; username: string | null; inTenant: boolean } | { type: 'department'; name: string };
 
 interface SharesResponse {
   documentId: string;
@@ -207,7 +207,13 @@ function SharePanel({ user, document, onError }: { user: User | null | undefined
       <ul data-testid="shares">
         {shares?.map((item) => (
           <li key={item.type === 'user' ? item.id : item.name}>
-            <span>{item.type === 'user' ? (item.username ?? 'someone who no longer exists') : `department ${item.name}`}</span>
+            <span>
+              {item.type === 'user' ? (item.username ?? 'someone who no longer exists') : `department ${item.name}`}
+              {/* Left the tenant: the share grants nothing now, and would if they came back. */}
+              {item.type === 'user' && item.username !== null && !item.inTenant && (
+                <span className="muted small"> (no longer in {document.tenant}; this share gives them nothing)</span>
+              )}
+            </span>
             <button type="button" className="secondary" onClick={() => void unshare(item)}>
               Remove
             </button>

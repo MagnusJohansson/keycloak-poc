@@ -241,8 +241,8 @@ def main():
                   renamed.sub == erin.sub and ldap.claims(renamed.token).get("preferred_username") == "erin-renamed")
             check("the share followed her", renamed.sees("assert-fga private") is True)
             _, shares = alice.call("GET", f"/documents/{pid}/shares")
-            names = [s.get("username") for s in shares.get("shares", []) if s.get("type") == "user"]
-            check("alice's list of shares shows her new name", names == ["erin-renamed"], str(names))
+            people = [(s.get("username"), s.get("inTenant")) for s in shares.get("shares", []) if s.get("type") == "user"]
+            check("alice's list of shares shows her new name", people == [("erin-renamed", True)], str(people))
         finally:
             ldap.restore("rename erin back", f"ldapmodrdn {ldap.AS_ADMIN} -r uid=erin-renamed,{ldap.PEOPLE} uid=erin")
             ldap.restore("put erin back in engineering", f"ldapmodify {ldap.AS_ADMIN}", (
@@ -253,6 +253,21 @@ def main():
                 restored = Person("erin")
                 if restored.username != ldap.claims(restored.token).get("preferred_username"):
                     print("  WARNING  erin did not get her name back in Keycloak")
+
+        # A leaver: out of every group, so out of Acme. The share to her id stays in
+        # OpenFGA and grants nothing while she is elsewhere; the list must say so,
+        # or it reads as access she still has. Keycloak reads her groups from the
+        # directory on each lookup (no cache for directory people).
+        try:
+            ldap.set_engineering("grace")
+            _, shares = alice.call("GET", f"/documents/{pid}/shares")
+            people = [(s.get("username"), s.get("inTenant")) for s in shares.get("shares", []) if s.get("type") == "user"]
+            check("erin, gone from Acme, is still in alice's list of shares, marked as no longer in it",
+                  people == [("erin", False)], str(people))
+        finally:
+            ldap.restore("put erin back in engineering", f"ldapmodify {ldap.AS_ADMIN}", (
+                f"dn: cn=engineering,ou=groups,{ldap.BASE}\nchangetype: modify\nreplace: member\n"
+                f"member: uid=erin,{ldap.PEOPLE}\n"))
 
         # ------------------------------------------------------------------ #
         print("\nDeleting")

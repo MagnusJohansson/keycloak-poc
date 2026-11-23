@@ -37,7 +37,7 @@ on a laptop and complete enough to show the decisions an identity platform needs
   consented scopes and token exchange, so an assistant can do only what the user
   consented to, as that user. An audit log records each call: who, through which
   client, which tool, and how it ended.
-- **Tested against the real thing.** 310 .NET tests with forged tokens and forged
+- **Tested against the real thing.** 313 .NET tests with forged tokens and forged
   SAML responses, browser
   tests against a real Keycloak, and end-to-end checks that sign in as the demo users.
 
@@ -331,12 +331,12 @@ Built and checked against real software, not just written down:
   the directory and the SAML provider);
   `acr_values_supported`, the audience mapper and service-account roles confirmed
   in a real token.
-- .NET 10 API: 90 tests pass, including forged `alg:none`, wrong-key,
+- .NET 10 API: 93 tests pass, including forged `alg:none`, wrong-key,
   wrong-audience, wrong-realm and expired tokens, 403-vs-401 for an
   authenticated-but-unauthorized caller, 404-not-403 across the tenant
   boundary, and what the API sends OpenFGA and does with each answer.
 - Sharing: the OpenFGA model passes 30 checks on OpenFGA's own engine
-  (`make test-model`), and `make assert-fga` passes 41 checks against the local
+  (`make test-model`), and `make assert-fga` passes 42 checks against the local
   Keycloak, directory, OpenFGA and API: private documents, shares to a person and
   a department, a revoke, a directory person moved and renamed, and OpenFGA
   frozen. **Local lab and CI only**; Azure runs without OpenFGA.

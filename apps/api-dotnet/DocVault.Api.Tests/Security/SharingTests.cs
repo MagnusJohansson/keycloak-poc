@@ -329,9 +329,31 @@ public sealed class SharingTests(OpenFgaApiFactory factory) : IClassFixture<Open
         var share = Assert.Single(listed!["shares"]!.AsArray());
         Assert.Equal("grace", (string?)share!["username"]);
         Assert.Equal(graceId.ToString("D"), (string?)share["id"]);
+        Assert.True((bool)share["inTenant"]!);
 
         Assert.Equal(HttpStatusCode.NoContent, (await client.DeleteAsync($"/documents/{id}/shares/users/{graceId}")).StatusCode);
         Assert.DoesNotContain(($"user:{graceId:D}", "viewer"), Fga.StoredFor(FakeOpenFga.Document(id)));
+    }
+
+    [Fact]
+    public async Task Someone_who_has_left_the_tenant_is_listed_as_such_and_can_still_be_removed()
+    {
+        // The share stays in OpenFGA and grants nothing while they are elsewhere. Listed
+        // without a mark, it read as access they still had (found by the second review).
+        var (owner, id) = await PrivateDocumentAsync();
+        var heidiId = Guid.NewGuid();
+        factory.Directory.AddPerson("heidi", heidiId, "acme");
+        var client = Client(Token(owner, ["doc.editor"], "/acme"));
+        await client.PostAsJsonAsync($"/documents/{id}/shares", new { username = "heidi" });
+
+        factory.Directory.AddPerson("heidi", heidiId, "globex");
+
+        var listed = await client.GetFromJsonAsync<JsonObject>($"/documents/{id}/shares");
+        var share = Assert.Single(listed!["shares"]!.AsArray());
+        Assert.Equal("heidi", (string?)share!["username"]);
+        Assert.False((bool)share["inTenant"]!);
+        Assert.Equal(HttpStatusCode.NoContent, (await client.DeleteAsync($"/documents/{id}/shares/users/{heidiId}")).StatusCode);
+        Assert.DoesNotContain(($"user:{heidiId:D}", "viewer"), Fga.StoredFor(FakeOpenFga.Document(id)));
     }
 
     // --- Delete -----------------------------------------------------------------------
@@ -394,6 +416,69 @@ public sealed class SharingTests(OpenFgaApiFactory factory) : IClassFixture<Open
     }
 
     [Fact]
+    public async Task A_document_whose_tuples_fit_in_one_write_is_deleted_in_one_so_a_failure_changes_nothing()
+    {
+        // Two writes, shares then tenant and owner, failing at the second: the tenant-wide
+        // visibility was already gone, and an administrator could no longer see the
+        // document to delete it again (found by the second review).
+        var (owner, id) = await TenantDocumentAsync();
+        await WriteDirectlyAsync([new { user = $"user:{Guid.NewGuid():D}", relation = "viewer", @object = FakeOpenFga.Document(id) }]);
+        var before = Fga.StoredFor(FakeOpenFga.Document(id)).Order().ToList();
+        Fga.Allow(FakeOpenFga.User(owner), "can_delete", FakeOpenFga.Document(id));
+        var client = Client(Token(owner, ["doc.editor"], "/acme"));
+
+        Fga.FailWrite = DeletesTheTenant;
+        try
+        {
+            Assert.Equal(HttpStatusCode.ServiceUnavailable, (await client.DeleteAsync($"/documents/{id}")).StatusCode);
+        }
+        finally
+        {
+            Fga.FailWrite = null;
+        }
+
+        Assert.Equal(before, Fga.StoredFor(FakeOpenFga.Document(id)).Order().ToList());
+
+        var writes = Fga.Writes.Count;
+        Assert.Equal(HttpStatusCode.NoContent, (await client.DeleteAsync($"/documents/{id}")).StatusCode);
+        Assert.Equal(writes + 1, Fga.Writes.Count);
+        Assert.Empty(Fga.StoredFor(FakeOpenFga.Document(id)));
+    }
+
+    [Fact]
+    public async Task A_large_delete_that_fails_at_the_end_keeps_everything_that_lets_anyone_see_the_document()
+    {
+        // Too many tuples for one write. The last write fails: the shares are gone, and the
+        // tenant, the owner and the tenant-wide visibility must all still be there, so that
+        // the administrator who sees it through the tenant can try again, not only the owner.
+        var (owner, id) = await TenantDocumentAsync();
+        await WriteDirectlyAsync(Enumerable.Range(0, 120)
+            .Select(_ => (object)new { user = $"user:{Guid.NewGuid():D}", relation = "viewer", @object = FakeOpenFga.Document(id) })
+            .ToArray());
+        Fga.Allow(FakeOpenFga.User(owner), "can_delete", FakeOpenFga.Document(id));
+
+        Fga.FailWrite = DeletesTheTenant;
+        try
+        {
+            var response = await Client(Token(owner, ["doc.editor"], "/acme")).DeleteAsync($"/documents/{id}");
+            Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+        }
+        finally
+        {
+            Fga.FailWrite = null;
+        }
+
+        (string, string)[] visibility = [("tenant:acme", "tenant"), ("tenant:acme#member", "viewer"), ($"user:{owner}", "owner")];
+        Assert.Equal(visibility.Order(), Fga.StoredFor(FakeOpenFga.Document(id)).Order());
+
+        var admin = NewSub();
+        Fga.Allow(FakeOpenFga.User(admin), "can_view", FakeOpenFga.Document(id));
+        Assert.Equal(HttpStatusCode.NoContent,
+            (await Client(Token(admin, ["doc.admin"], "/acme")).DeleteAsync($"/documents/{id}")).StatusCode);
+        Assert.Empty(Fga.StoredFor(FakeOpenFga.Document(id)));
+    }
+
+    [Fact]
     public async Task Deleting_a_classified_document_without_doc_admin_is_a_404_like_any_unknown_id()
     {
         // A 403 here confirmed that a document behind the step-up policy exists.
@@ -431,6 +516,20 @@ public sealed class SharingTests(OpenFgaApiFactory factory) : IClassFixture<Open
         Fga.Allow(FakeOpenFga.User(owner), "can_share", FakeOpenFga.Document(id));
         return (owner, id);
     }
+
+    /// <summary>A tenant-wide document, owned by a new person who can see it.</summary>
+    private async Task<(string Owner, Guid Id)> TenantDocumentAsync()
+    {
+        var owner = NewSub();
+        var id = await IdOf(await Client(Token(owner, ["doc.editor"], "/acme"))
+            .PostAsJsonAsync("/documents", new { title = "For everyone", visibility = "tenant" }));
+        Fga.Allow(FakeOpenFga.User(owner), "can_view", FakeOpenFga.Document(id));
+        return (owner, id);
+    }
+
+    /// <summary>A write that deletes a document's tenant tuple: in a split delete, the last one.</summary>
+    private static bool DeletesTheTenant(JsonObject body) =>
+        body["deletes"]?["tuple_keys"]?.AsArray().Any(t => (string?)t!["relation"] == "tenant") == true;
 
     private static string NewSub() => Guid.NewGuid().ToString("D");
 

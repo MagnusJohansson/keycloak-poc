@@ -19,8 +19,14 @@
 # lookup for someone outside the caller's tenant exactly as for nobody, so the
 # lookup does not tell alice who is in globex. Narrowing the role itself to
 # one tenant would need fine-grained admin permissions; not done here.
+#
+# Optional by sharing_people_lookup_enabled (local lab and CI). Azure runs the
+# API with Sharing__Mode=TenantOnly, which never looks anyone up: a client that
+# can read every person in the realm, with a secret nobody uses, is only risk.
 # ---------------------------------------------------------------------------
 resource "keycloak_openid_client" "api_directory" {
+  count = var.sharing_people_lookup_enabled ? 1 : 0
+
   realm_id  = keycloak_realm.docvault.id
   client_id = "docvault-api-directory"
   name      = "DocVault API: people lookup for sharing"
@@ -33,13 +39,28 @@ resource "keycloak_openid_client" "api_directory" {
 }
 
 data "keycloak_openid_client" "realm_management" {
+  count = var.sharing_people_lookup_enabled ? 1 : 0
+
   realm_id  = keycloak_realm.docvault.id
   client_id = "realm-management"
 }
 
 resource "keycloak_openid_client_service_account_role" "api_directory_view_users" {
+  count = var.sharing_people_lookup_enabled ? 1 : 0
+
   realm_id                = keycloak_realm.docvault.id
-  service_account_user_id = keycloak_openid_client.api_directory.service_account_user_id
-  client_id               = data.keycloak_openid_client.realm_management.id
+  service_account_user_id = keycloak_openid_client.api_directory[0].service_account_user_id
+  client_id               = data.keycloak_openid_client.realm_management[0].id
   role                    = "view-users"
+}
+
+# A realm made before the switch keeps its client and its secret.
+moved {
+  from = keycloak_openid_client.api_directory
+  to   = keycloak_openid_client.api_directory[0]
+}
+
+moved {
+  from = keycloak_openid_client_service_account_role.api_directory_view_users
+  to   = keycloak_openid_client_service_account_role.api_directory_view_users[0]
 }

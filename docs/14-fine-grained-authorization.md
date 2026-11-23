@@ -141,8 +141,12 @@ documents"), and never "allow".
   with `docker compose pause` and measures the 503 in about 3 seconds.
 - A document whose tuples cannot be written is taken out of the store again.
   Without its tuples nobody could see it, its owner included.
-- Deleting removes the tuples first, the shares before the document's owner and
-  tenant. If that fails, the document is still there and its owner can try again.
+- Deleting removes the tuples first. A document with 100 tuples or fewer goes in
+  one write, which OpenFGA applies whole or not at all, so a failure changes
+  nothing. A larger one is split, with everything that lets anyone see the
+  document (its tenant, its owner and its tenant-wide visibility) in the last
+  write: if a write fails, the document is still there and whoever could see it
+  before (the owner, or an administrator) can try again.
 - The OpenFGA client is a few dozen lines over HTTP rather than the SDK, so there
   is no retry loop or fallback between a failure and the 503.
 
@@ -153,7 +157,7 @@ default). Measured with it on: a revoked share stayed **allowed**, and a new
 share stayed **refused**, until the entry expired (10 seconds by default).
 
 The API asks every check with `consistency: HIGHER_CONSISTENCY`, which skips the
-cache. With the cache on and the API unchanged, all 41 `assert-fga` checks pass;
+cache. With the cache on and the API unchanged, all 42 `assert-fga` checks pass;
 with the cache on and `HIGHER_CONSISTENCY` removed, "carol sees it now" fails.
 The cache is also stated `false` in the compose file, so turning it on is a
 visible decision.
@@ -169,9 +173,17 @@ the same user id, the share follows her, and alice's list of shares shows the ne
 name. (The directory does not rewrite group members on a rename, so the check
 moves the group membership too, as a real directory would.)
 
+Someone who leaves the tenant keeps their place in the list, marked as no longer
+in it. The share grants them nothing while they are elsewhere (every permission
+needs the tenant), and would again if they came back, so the owner can see it
+and remove it. `assert-fga` takes erin out of every group and checks the mark.
+
 Turning a username into an id takes Keycloak's Admin API. The API does that as
 its own client, `docvault-api-directory` (`20-realm/directory.tf`), which holds
-`view-users` and nothing else, not as `docvault-api`'s service account. Asking
+`view-users` and nothing else, not as `docvault-api`'s service account. It
+exists only where `sharing_people_lookup_enabled` is set (the local lab and CI):
+Azure runs without OpenFGA and never looks anyone up, so it does not get a
+client that can read every person in the realm. Asking
 for someone in another tenant gets exactly the same 404 as asking for nobody, so
 a share request is not a way to find out who works at globex. It takes the same
 time too: looking up a directory person took ~300 ms (their groups are read from
@@ -231,17 +243,18 @@ Three layers, each testing what the others cannot:
 |---|---|---|
 | The model | `docvault.fga.yml`: 30 checks, 3 lists | `make test-model`, CI |
 | The API's wiring | `SharingTests`, `SharingModeTests`: over a fake OpenFGA | `make test`, CI |
-| Both, for real | `assert-fga.py`: 41 checks | `make assert-fga`, CI |
+| Both, for real | `assert-fga.py`: 42 checks | `make assert-fga`, CI |
 
 The fake OpenFGA in the API's tests **does not evaluate the model**. Checks are
 answered from a table each test fills in, and the fake records what the API sent.
 A fake that evaluated the model would be a second implementation of it, and the
 tests would be testing that.
 
-Each guard was broken on purpose to see a test fail. The last four rows are
-from an independent adversarial review of the branch, which found five problems,
-none of them a way to see, share or delete a document; each fix has a test that
-fails without it:
+Each guard was broken on purpose to see a test fail. The last seven rows come
+from two rounds of independent adversarial review of the branch. The first found
+five problems, the second a gap left by one of the fixes and a share list that
+hid a leaver. None of them was a way to see, share or delete a document, and
+each fix has a test that fails without it:
 
 | Broken | Fails |
 |---|---|
@@ -259,7 +272,10 @@ fails without it:
 | no time floor on a person lookup (~300 ms for a directory person, ~90 ms for nobody: an oracle for who exists in another tenant) | 1 API test (`SharingTimingTests`) |
 | a delete removing the owner and tenant in its first write (a failure after it left a document nobody could see or delete) | 1 API test |
 | DELETE finding a classified document for anyone (a 403 confirmed it existed) | 1 API test |
-| `.`, `..` or a trailing newline accepted as a department name | 4 API tests |
+| `.`, `..` or a trailing newline accepted as a department name | 7 API tests |
+| a small delete split into two writes (a failure at the second left a tenant-wide document the administrator could no longer see) | 1 API test |
+| a split delete removing the tenant-wide visibility before its last write | 1 API test |
+| a share to someone who has left the tenant listed like any other | 1 API test |
 
 ## What is not here
 

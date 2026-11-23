@@ -209,7 +209,9 @@ cd tests/e2e-playwright && npx playwright test
 > it is `TenantOnly`: every document is visible to its tenant, and a private one is
 > refused rather than created visible to everyone. `30-azure` sets the same.
 > Private documents and sharing are the local lab's
-> ([chapter 14](14-fine-grained-authorization.md)).
+> ([chapter 14](14-fine-grained-authorization.md)). For the same reason the
+> Azure realm has no `docvault-api-directory`, the client the API looks people up
+> with to share: it would read every person in the realm for nothing.
 
 ---
 

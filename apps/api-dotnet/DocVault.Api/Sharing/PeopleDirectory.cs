@@ -24,9 +24,19 @@ public interface IPeopleDirectory
     /// <summary>Whether <c>/tenant/department</c> is a group in the realm.</summary>
     Task<bool> DepartmentExistsAsync(string tenant, string department, CancellationToken cancellationToken);
 
-    /// <summary>A person's current username, or null if they no longer exist.</summary>
-    Task<string?> UsernameOfAsync(Guid userId, CancellationToken cancellationToken);
+    /// <summary>
+    /// Someone a document is shared with, as they are now: their current username, and
+    /// whether they are still in this tenant. Null if they no longer exist.
+    /// </summary>
+    Task<SharedPerson?> SharedPersonAsync(Guid userId, string tenant, CancellationToken cancellationToken);
 }
+
+/// <summary>
+/// A person a share names. <see cref="InTenant"/> false: they have left the document's
+/// tenant, and the share grants them nothing (the model intersects every permission with
+/// the tenant) until they come back, when it would grant it again.
+/// </summary>
+public sealed record SharedPerson(string Username, bool InTenant);
 
 /// <summary>
 /// Keycloak's Admin API, as the <c>docvault-api-directory</c> client (20-realm/directory.tf),
@@ -78,12 +88,7 @@ public sealed class KeycloakPeopleDirectory(
             return null;
         }
 
-        using var groups = await GetJsonAsync($"users/{id:D}/groups?briefRepresentation=true", cancellationToken);
-        var inTenant = groups?.RootElement.EnumerateArray()
-            .Select(g => g.GetProperty("path").GetString() ?? string.Empty)
-            .Any(path => path == $"/{tenant}" || path.StartsWith($"/{tenant}/", StringComparison.Ordinal)) == true;
-
-        return inTenant ? id : null;
+        return await InTenantAsync(id, tenant, cancellationToken) ? id : null;
     }
 
     public async Task<bool> DepartmentExistsAsync(string tenant, string department, CancellationToken cancellationToken)
@@ -93,10 +98,24 @@ public sealed class KeycloakPeopleDirectory(
         return group is not null;
     }
 
-    public async Task<string?> UsernameOfAsync(Guid userId, CancellationToken cancellationToken)
+    public async Task<SharedPerson?> SharedPersonAsync(Guid userId, string tenant, CancellationToken cancellationToken)
     {
         using var user = await GetJsonAsync($"users/{userId:D}", cancellationToken);
-        return user?.RootElement.GetProperty("username").GetString();
+        if (user?.RootElement.GetProperty("username").GetString() is not { } username)
+        {
+            return null;
+        }
+
+        return new SharedPerson(username, await InTenantAsync(userId, tenant, cancellationToken));
+    }
+
+    /// <summary>Whether the person is in <c>/tenant</c> or a group under it: the same test the API applies to a token.</summary>
+    private async Task<bool> InTenantAsync(Guid userId, string tenant, CancellationToken cancellationToken)
+    {
+        using var groups = await GetJsonAsync($"users/{userId:D}/groups?briefRepresentation=true", cancellationToken);
+        return groups?.RootElement.EnumerateArray()
+            .Select(g => g.GetProperty("path").GetString() ?? string.Empty)
+            .Any(path => path == $"/{tenant}" || path.StartsWith($"/{tenant}/", StringComparison.Ordinal)) == true;
     }
 
     /// <summary>The response, or null for 404. Anything else that is not a success throws.</summary>

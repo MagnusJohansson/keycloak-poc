@@ -81,7 +81,7 @@ output "reports_saml_signing_key" {
 }
 
 output "api_directory_client_secret" {
-  description = "The API's secret for looking people up to share a document with (directory.tf)."
-  value       = keycloak_openid_client.api_directory.client_secret
+  description = "The API's secret for looking people up to share a document with (directory.tf). Null unless sharing_people_lookup_enabled."
+  value       = one(keycloak_openid_client.api_directory[*].client_secret)
   sensitive   = true
 }

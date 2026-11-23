@@ -185,6 +185,8 @@ public sealed class FakeDirectory : DocVault.Api.Sharing.IPeopleDirectory
     public Task<bool> DepartmentExistsAsync(string tenant, string department, CancellationToken cancellationToken) =>
         Task.FromResult(_departments.ContainsKey($"{tenant}/{department}"));
 
-    public Task<string?> UsernameOfAsync(Guid userId, CancellationToken cancellationToken) =>
-        Task.FromResult(_people.FirstOrDefault(p => p.Value.Id == userId).Key);
+    public Task<DocVault.Api.Sharing.SharedPerson?> SharedPersonAsync(Guid userId, string tenant, CancellationToken cancellationToken) =>
+        Task.FromResult(_people.Where(p => p.Value.Id == userId)
+            .Select(p => new DocVault.Api.Sharing.SharedPerson(p.Key, p.Value.Tenant == tenant))
+            .FirstOrDefault());
 }
