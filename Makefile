@@ -19,7 +19,11 @@ TF       := terraform
 REALM_DIR    := infra/terraform/20-realm
 KEYCLOAK_AZURE_DIR := infra/terraform/10-keycloak-azure
 APPS_AZURE_DIR     := infra/terraform/30-azure
+FGA_DIR      := infra/terraform/25-openfga
 LOCAL_VARS   := -var-file=$(CURDIR)/infra/environments/local/realm.tfvars
+FGA_VARS     := -var-file=$(CURDIR)/infra/environments/local/openfga.tfvars
+# OpenFGA's CLI, run from its image so the model tests need no install.
+FGA_CLI      := docker run --rm -v $(CURDIR)/infra/openfga:/w -w /w $${FGA_CLI_IMAGE:-mirror.gcr.io/openfga/cli:v0.8.2}
 AZURE_VARS   := -var-file=$(CURDIR)/infra/environments/azure/realm.tfvars
 
 # 20-realm is ONE module applied to MORE THAN ONE Keycloak, so each target picks
@@ -37,14 +41,21 @@ help: ## Show this help
 
 # --- Local lab --------------------------------------------------------------
 .PHONY: up
-up: ## Start Keycloak + Postgres + the directory + Mailpit, wait for readiness
+up: ## Start Keycloak + Postgres + the directory + OpenFGA + Mailpit, wait for readiness
 	$(COMPOSE) up -d
 	@echo "Waiting for Keycloak..."
 	@for i in $$(seq 1 60); do \
 		if curl -sfo /dev/null http://localhost:8080/realms/master; then \
-			echo "Keycloak ready at http://localhost:8080 (admin/admin)"; exit 0; fi; \
+			echo "Keycloak ready at http://localhost:8080 (admin/admin)"; break; fi; \
+		[ $$i = 60 ] && { echo "Keycloak did not become ready in time; try: make logs"; exit 1; }; \
 		sleep 2; \
-	done; echo "Keycloak did not become ready in time; try: make logs"; exit 1
+	done
+	@# /healthz needs no key; every other call does.
+	@for i in $$(seq 1 30); do \
+		if curl -sf http://localhost:8090/healthz | grep -q SERVING; then \
+			echo "OpenFGA ready at http://localhost:8090"; exit 0; fi; \
+		sleep 2; \
+	done; echo "OpenFGA did not become ready in time; try: $(COMPOSE) logs openfga"; exit 1
 
 .PHONY: down
 down: ## Stop the lab (keeps the database volume)
@@ -54,6 +65,8 @@ down: ## Stop the lab (keeps the database volume)
 clean: ## Stop the lab AND delete all data + Terraform state
 	$(COMPOSE) down -v
 	rm -f $(REALM_DIR)/terraform.tfstate $(REALM_DIR)/terraform.tfstate.backup
+	@# The local workspace only. 25-openfga has no other, but say so anyway.
+	rm -rf $(FGA_DIR)/terraform.tfstate.d/local
 
 .PHONY: logs
 logs: ## Tail Keycloak logs
@@ -61,18 +74,32 @@ logs: ## Tail Keycloak logs
 
 # --- Realm ------------------------------------------------------------------
 .PHONY: seed
-seed: ## Apply the DocVault realm to the local Keycloak
+seed: ## Apply the DocVault realm to the local Keycloak, then the OpenFGA store and model
 	cd $(REALM_DIR) && $(TF) init -backend=false -input=false >/dev/null && $(WS_LOCAL)
 	cd $(REALM_DIR) && $(TF) apply -auto-approve -input=false $(LOCAL_VARS)
+	cd $(FGA_DIR) && $(TF) init -backend=false -input=false >/dev/null && $(WS_LOCAL)
+	@# OpenFGA's data gone (its volume removed without `make clean`) while the
+	@# state still holds the store: the provider (0.5.2) drops the missing store,
+	@# then fails reading the model with "authorization_model_not_found", and no
+	@# apply gets past it. Forget the state, but only when OpenFGA itself says
+	@# the store does not exist.
+	@cd $(FGA_DIR) && id=$$($(TF) output -raw store_id 2>/dev/null) && [ -n "$$id" ] && \
+	[ "$$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $${OPENFGA_API_KEY:-docvault-fga-lab-key}" \
+		http://localhost:8090/stores/$$id)" = 404 ] && { \
+		echo "OpenFGA has no store $$id any more; forgetting it in Terraform's state."; \
+		$(TF) state rm openfga_authorization_model.docvault openfga_store.docvault >/dev/null; } || true
+	cd $(FGA_DIR) && $(TF) apply -auto-approve -input=false $(FGA_VARS)
 	@echo
 	@$(MAKE) --no-print-directory show-secrets
 
 .PHONY: plan
-plan: ## Show what applying the realm would change
+plan: ## Show what applying the realm and the OpenFGA model would change
 	cd $(REALM_DIR) && $(WS_LOCAL) && $(TF) plan -input=false $(LOCAL_VARS)
+	cd $(FGA_DIR) && $(WS_LOCAL) && $(TF) plan -input=false $(FGA_VARS)
 
 .PHONY: unseed
-unseed: ## Destroy the realm (leaves Keycloak running)
+unseed: ## Destroy the realm and the OpenFGA store (leaves Keycloak and OpenFGA running)
+	cd $(FGA_DIR) && $(WS_LOCAL) && $(TF) destroy -auto-approve -input=false $(FGA_VARS)
 	cd $(REALM_DIR) && $(WS_LOCAL) && $(TF) destroy -auto-approve -input=false $(LOCAL_VARS)
 
 .PHONY: show-secrets
@@ -81,6 +108,8 @@ show-secrets: ## Print the generated client secrets and demo logins
 	echo "Issuer:  $$($(TF) output -raw issuer)" && \
 	echo "Worker client secret: $$($(TF) output -raw worker_client_secret)" && \
 	echo "Demo users: alice / bob / carol / dave   password: DocVaultLab!2026"
+	@cd $(FGA_DIR) && $(WS_LOCAL) >/dev/null && \
+	echo "OpenFGA store: $$($(TF) output -raw store_id)   model: $$($(TF) output -raw model_id)"
 
 .PHONY: assert-authz
 assert-authz: ## Check the Authorization Services model's decisions (needs up + seed)
@@ -166,6 +195,10 @@ assert-saml: ## Check the brokered SAML provider end to end (needs up + seed + a
 	python3 tools/assert-saml.py
 
 # --- Tests ------------------------------------------------------------------
+.PHONY: test-model
+test-model: ## Test the OpenFGA model on OpenFGA's own engine (Docker; no running lab needed)
+	$(FGA_CLI) model test --tests docvault.fga.yml
+
 .PHONY: test
 test: ## Unit + integration + security tests (no Docker, no network)
 	dotnet test apps/api-dotnet/DocVault.slnx

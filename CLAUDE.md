@@ -14,8 +14,8 @@ identity and access management server — OIDC, OAuth 2.0, SAML, MFA, RBAC, fede
 ## Commands
 
 ```bash
-make up          # Keycloak + Postgres + the LDAP directory + Mailpit (~30s, waits for readiness)
-make seed        # apply the DocVault realm via Terraform, then print secrets
+make up          # Keycloak + Postgres + the LDAP directory + OpenFGA + Mailpit (~30s, waits for readiness)
+make seed        # apply the DocVault realm, then the OpenFGA store + model, via Terraform; print secrets
 make api         # .NET 10 API on :5001
 make web         # React SPA on :5173      (separate shell)
 make mcp         # MCP server on :5002  (separate shell; needs up + seed + api)
@@ -24,9 +24,10 @@ make assert-ldap # 53 checks of LDAP federation - REQUIRES up + seed + api; chan
 make assert-saml # 43 checks of the brokered SAML provider - REQUIRES up + seed + api
 make reports     # the legacy SAML application on :5003 (separate shell; needs up + seed)
 make assert-saml-app # 30 checks of that application - REQUIRES up + seed + reports
+make test-model  # the OpenFGA model's own tests (`fga model test` in Docker; no running lab needed)
 make test        # 238 .NET tests (37 API + 96 MCP + 48 SAML application + 57 desktop-auth) - no Docker, network or cloud
 make e2e         # 10 Playwright tests - REQUIRES up + seed + api + web + reports running
-make plan        # realm diff; should be EMPTY on an unchanged realm
+make plan        # realm + OpenFGA model diff; both should be EMPTY
 make token       # mint a real token and decode its claims
 make down        # stop (keeps data)   /   make clean = also wipe volume + tfstate
 ```
@@ -70,9 +71,10 @@ module environment-specific defeats the point.
 |---|---|---|
 | `10-keycloak-azure` | `azurerm` | Keycloak itself on Azure: Container Apps + private Postgres + Key Vault |
 | `20-realm` | `keycloak/keycloak` | **the realm — source of truth** |
+| `25-openfga` | `openfga/openfga` | the OpenFGA store + model (local lab and CI only) |
 | `30-azure` | `azurerm` | your apps: Container Apps, Static Web Apps, Log Analytics (Sentinel opt-in) |
 
-Apply order for cloud: `10-keycloak-azure` → `20-realm` → `30-azure`.
+Apply order for cloud: `10-keycloak-azure` → `20-realm` → `30-azure`. Locally: `20-realm` → `25-openfga`.
 
 `infra/local/realm-export/docvault-realm.json` is a **generated artifact** (`make export-realm`).
 Never hand-edit it — the next `make seed` overwrites it. Terraform is the source of truth.
@@ -233,6 +235,35 @@ Every one of these cost real debugging time and is now load-bearing. Do not "sim
 - After a mutation script restores a file by moving a backup, `touch` the sources before trusting a
   test run: the older timestamp can leave a stale build.
 - The application is a stand-in written for the lab. Do not describe it as a real legacy product.
+
+**OpenFGA (`infra/openfga/`, `25-openfga`, `docs/use-cases/uc1-rbac-document-sharing.md`)** - work in
+progress: the API does not use it yet.
+
+- **OpenFGA holds relationships only** (owner, shared with, a document's tenant). Tenant and department
+  membership come from the caller's token as **contextual tuples** on each request, never stored, so a
+  leaver loses access with their next token. **OpenFGA believes contextual tuples completely**: a check
+  that says bob is in acme lets bob in (measured; a model test states it). Build them from the validated
+  token alone.
+- Every permission is intersected with `member from tenant`. A share across tenants is therefore
+  inert, and is still to be refused when written: it would switch on if the person joined the tenant.
+- Users are Keycloak user ids (`sub`), never usernames: a renamed or reused username would carry grants.
+- **`list-objects` truncates silently** at `OPENFGA_LIST_OBJECTS_MAX_RESULTS` (default 1000): HTTP 200,
+  no flag, no header (measured, v1.22.1). Do not list a person's documents with it.
+- **The check query cache keeps a revoked share allowed** until it expires (10 s default; measured).
+  Off by default and stated `false` in compose; a revoke must take effect on the next request.
+- **Its own Postgres (`openfga-db`)**, not a database inside `postgres`: init scripts run only on an
+  empty data directory, so an existing lab's `pgdata` would never get it.
+- Host port **8090** (OpenFGA's 8080 is Keycloak's here). Preshared key `docvault-fga-lab-key`, the lab
+  default like admin/admin; `infra/environments/local/openfga.tfvars` is committed for that reason.
+  The image has no shell: the healthcheck uses its `grpc_health_probe`.
+- **Terraform owns the store and model, never tuples** (they change at run time; `make plan` would never
+  be empty). A model change shows as a replacement and the apply says "Destruction complete", but
+  OpenFGA cannot delete a model and the old id still answers. A comment-only DSL change is no change.
+- **Provider 0.5.2 cannot recover from a wiped OpenFGA**: it drops the missing store from state, then
+  fails reading the model (`authorization_model_not_found`). `make seed` forgets the state first, only
+  when OpenFGA answers 404 for the stored id. Leave that guard.
+- `fga model test` (CLI v0.8.2) has no contextual tuples for a check; the tests give membership as each
+  test's own tuples, which evaluate the same way.
 
 **One module, two environments (`20-realm`):**
 

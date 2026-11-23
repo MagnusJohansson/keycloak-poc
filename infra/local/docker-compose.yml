@@ -17,8 +17,9 @@ name: docvault
 # Image refs are overridable because Docker Hub rate-limits anonymous pulls
 # (HTTP 429) and that is the single most common reason `make up` fails on a fresh
 # machine. The defaults therefore avoid Docker Hub: Keycloak comes from quay.io
-# (its home registry), and the two Docker Hub images come via Google's public
-# pull-through mirror. Override with your own registry if you prefer:
+# and OpenFGA from ghcr.io (their home registries), and the two Docker Hub
+# images come via Google's public pull-through mirror. Override with your own
+# registry if you prefer:
 #
 #   POSTGRES_IMAGE=docker.io/library/postgres:17-alpine make up
 services:
@@ -122,6 +123,70 @@ services:
       timeout: 5s
       retries: 20
 
+  # --- OpenFGA: who may see THIS document (docs/use-cases/uc1) ---------------
+  # Its own database, not a second one inside `postgres` above: Postgres runs
+  # init scripts only on an empty data directory, so a database added there
+  # would never be created on an existing lab's `pgdata` volume.
+  openfga-db:
+    image: ${POSTGRES_IMAGE:-mirror.gcr.io/library/postgres:17-alpine}
+    environment:
+      POSTGRES_DB: openfga
+      POSTGRES_USER: openfga
+      POSTGRES_PASSWORD: openfga
+    volumes:
+      - fgadata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U openfga -d openfga"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  # Creates or upgrades OpenFGA's tables, then exits. Safe to run on every start.
+  openfga-migrate:
+    image: &openfga ${OPENFGA_IMAGE:-ghcr.io/openfga/openfga:v1.22.1}
+    command: ["migrate"]
+    depends_on:
+      openfga-db:
+        condition: service_healthy
+    environment: &openfga-datastore
+      OPENFGA_DATASTORE_ENGINE: postgres
+      OPENFGA_DATASTORE_URI: postgres://openfga:openfga@openfga-db:5432/openfga?sslmode=disable
+    restart: "no"
+
+  openfga:
+    # From ghcr.io, OpenFGA's own registry: no Docker Hub rate limit.
+    image: *openfga
+    command: ["run"]
+    depends_on:
+      openfga-migrate:
+        condition: service_completed_successfully
+    environment:
+      <<: *openfga-datastore
+      # Every caller presents this key. The lab's, like admin/admin above;
+      # 25-openfga and `make api` read the same default.
+      OPENFGA_AUTHN_METHOD: preshared
+      OPENFGA_AUTHN_PRESHARED_KEYS: ${OPENFGA_API_KEY:-docvault-fga-lab-key}
+
+      # Both already the defaults in v1.22.1, stated so that changing them is a
+      # visible decision:
+      #   - the check cache: on, a REVOKED share stays allowed until the cache
+      #     entry expires (10 s by default; measured). A revoke must take effect
+      #     on the next request, and tools/assert-fga.py checks that it does.
+      #   - the playground: a UI that edits stores, with no place in a lab that
+      #     is meant to rehearse production.
+      OPENFGA_CHECK_QUERY_CACHE_ENABLED: "false"
+      OPENFGA_PLAYGROUND_ENABLED: "false"
+    ports:
+      # 8090, not OpenFGA's 8080: that is Keycloak's on this host. The gRPC
+      # port (8081) is not published; the API uses HTTP.
+      - "8090:8080"
+    healthcheck:
+      # The image has no shell, curl or wget; it ships this probe for the gRPC port.
+      test: ["CMD", "/usr/local/bin/grpc_health_probe", "-addr=localhost:8081"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
   # Catches password-reset / verification mail so the email flows in
   # docs/use-cases are actually demonstrable. UI at http://localhost:8025
   mailpit:
@@ -134,3 +199,4 @@ volumes:
   pgdata:
   ldapkey:
   ldapcert:
+  fgadata:
