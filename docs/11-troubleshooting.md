@@ -104,6 +104,12 @@ issuer rather than widening what the API trusts — an API should validate exact
 | Demo users (`alice`, `bob`…) missing in the admin console | You are looking at the **`master`** realm, which only holds `admin` | Switch realms via the top-left selector, or open <http://localhost:8080/admin/master/console/#/docvault/users> |
 | Realm itself missing | `make seed` has not run, or `make clean` wiped the volume | `make seed` — Terraform creates the realm; Keycloak does **not** auto-import it |
 | Changes to the realm JSON ignored | It is a **generated artifact** | Edit the HCL; `make export-realm` regenerates |
+| API exits at start: *"Sharing:Mode must be set"* | No default, on purpose: tenant-wide as a default would make every private document visible to its tenant | `make api` sets `OpenFga` and the rest; elsewhere set `Sharing__Mode=TenantOnly` |
+| API exits at start: *"OpenFGA store … has no authorization model …"* | The API was started with an old model id, or OpenFGA's data was wiped | `make seed`, then `make api` (it reads both ids from `25-openfga`'s outputs) |
+| Every document call is **503** *"Authorization unavailable"* | The API cannot reach OpenFGA (or, when sharing, Keycloak's Admin API). It fails closed rather than guessing | `make up`; `docker compose -f infra/local/docker-compose.yml logs openfga` |
+| `make seed` fails in `25-openfga` with `authorization_model_not_found` | OpenFGA's volume was removed but Terraform's state kept; provider 0.5.2 cannot recover | `make seed` clears that state itself when OpenFGA says the store is gone; on an old checkout, `make clean` |
+| A share or a revoke takes ~10 s to show | OpenFGA's check cache is on and the client does not ask for `HIGHER_CONSISTENCY` | Keep `OPENFGA_CHECK_QUERY_CACHE_ENABLED=false`; the API asks for `HIGHER_CONSISTENCY` anyway |
+| A shared document does not appear for someone in the shared department | Membership comes from their **token**; an old token predates the change | Sign in again, or wait for the next refresh |
 
 ## Reading the logs
 

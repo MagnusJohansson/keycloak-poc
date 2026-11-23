@@ -184,6 +184,7 @@ Keycloak with no further deployment and no extra cost.
 ```bash
 # terminal 1
 Keycloak__Authority="$ISS" Keycloak__RequireHttpsMetadata=true \
+Sharing__Mode=TenantOnly \
 ASPNETCORE_URLS=http://localhost:5001 \
   dotnet run --project apps/api-dotnet/DocVault.Api --no-launch-profile
 
@@ -203,6 +204,12 @@ cd tests/e2e-playwright && npx playwright test
 > `RequireHttpsMetadata=true` is required. The API refuses to start with a
 > non-loopback authority over plain HTTP — fetching signing keys unencrypted from
 > a remote host would let an attacker substitute their own.
+>
+> `Sharing__Mode` is required too, and has no default. Azure runs no OpenFGA, so
+> it is `TenantOnly`: every document is visible to its tenant, and a private one is
+> refused rather than created visible to everyone. `30-azure` sets the same.
+> Private documents and sharing are the local lab's
+> ([chapter 14](14-fine-grained-authorization.md)).
 
 ---
 

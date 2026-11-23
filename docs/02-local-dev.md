@@ -3,14 +3,15 @@
 The whole lab runs on your machine, free, against upstream Keycloak.
 
 ```bash
-make up      # Keycloak 26.6.3 + Postgres + the LDAP directory + Mailpit
-make seed    # apply the DocVault realm
+make up      # Keycloak 26.6.3 + Postgres + the LDAP directory + OpenFGA + Mailpit
+make seed    # apply the DocVault realm, then the OpenFGA store and model
 ```
 
 | Service | URL | Credentials |
 |---|---|---|
 | Keycloak admin | http://localhost:8080/admin | `admin` / `admin` |
 | Mailpit (catches email) | http://localhost:8025 | — |
+| OpenFGA (who may see which document) | http://localhost:8090 | preshared key `docvault-fga-lab-key` |
 | API | http://localhost:5001 | bearer token |
 | Legacy SAML application (`make reports`) | http://localhost:5003 | any demo user, through Keycloak |
 | React SPA | http://localhost:5173 | `alice` / `DocVaultLab!2026` |

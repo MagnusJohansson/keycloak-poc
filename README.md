@@ -16,6 +16,11 @@ on a laptop and complete enough to show the decisions an identity platform needs
   and an AI assistant.
 - **Access control in layers.** Role-based access, tenant isolation, step-up MFA
   (RFC 9470), service-to-service calls, consent, and an audit trail to Azure Sentinel.
+- **Sharing a document with OpenFGA.** A document can be private to its owner,
+  who shares it with a person or a department. OpenFGA decides per document;
+  Keycloak stays the only place membership lives, sent with every check from the
+  token. Checked with a person moved and renamed in the directory, and with
+  OpenFGA switched off: the API answers 503, never "allow".
 - **People from a directory.** LDAP user federation against an OpenLDAP
   container, read-only and over TLS: the directory says who someone is and where
   they belong, the realm says what that allows. Checked for what happens when a
@@ -32,7 +37,7 @@ on a laptop and complete enough to show the decisions an identity platform needs
   consented scopes and token exchange, so an assistant can do only what the user
   consented to, as that user. An audit log records each call: who, through which
   client, which tool, and how it ended.
-- **Tested against the real thing.** 238 .NET tests with forged tokens and forged
+- **Tested against the real thing.** 294 .NET tests with forged tokens and forged
   SAML responses, browser
   tests against a real Keycloak, and end-to-end checks that sign in as the demo users.
 
@@ -137,8 +142,8 @@ subscription.
 ## Quickstart
 
 ```bash
-make up      # Keycloak + Postgres + the directory + Mailpit  (~30s)
-make seed    # apply the DocVault realm via Terraform
+make up      # Keycloak + Postgres + the directory + OpenFGA + Mailpit  (~30s)
+make seed    # apply the DocVault realm, and the OpenFGA store and model, via Terraform
 make api     # .NET 10 API on :5001
 make web     # React SPA on :5173   (in another shell)
 ```
@@ -259,7 +264,7 @@ The Azure variants read files you create and that are gitignored
 
 | # | Scenario | Where |
 |---|---|---|
-| 1 | RBAC + tenant isolation, with per-document ownership modelled in Authorization Services | [uc1](docs/use-cases/uc1-rbac-document-sharing.md) |
+| 1 | RBAC + tenant isolation, and per-document sharing decided by OpenFGA with membership from the token (local lab; Azure runs tenant-wide only) | [uc1](docs/use-cases/uc1-rbac-document-sharing.md), [chapter 14](docs/14-fine-grained-authorization.md) |
 | 2 | Enterprise SSO — Entra ID federated as an external OIDC IdP | [uc2](docs/use-cases/uc2-enterprise-sso-entra.md) |
 | 3 | Step-up MFA — `acr_values`, RFC 9470 challenge, conditional OTP | [uc3](docs/use-cases/uc3-step-up-mfa.md) |
 | 4 | Machine-to-machine — `client_credentials`, service accounts | [uc4](docs/use-cases/uc4-service-to-service.md) |
@@ -277,6 +282,8 @@ docs/                     the guide - start at 00-what-keycloak-is.md
 infra/
   terraform/10-keycloak-azure/  Keycloak on Azure       (azurerm)
   terraform/20-realm/           realm config            (keycloak/keycloak)  <- source of truth
+  terraform/25-openfga/         OpenFGA store + model   (openfga/openfga)    local lab + CI
+  openfga/                      the model (docvault.fga) and its tests
   terraform/30-azure/           your apps on Azure      (azurerm)
   local/                        docker-compose lab, and the OpenLDAP directory it builds
 apps/
@@ -319,15 +326,20 @@ rather than asserted.
 
 Built and checked against real software, not just written down:
 
-- 127 Terraform resources applied to the local Keycloak 26.6.3, with a clean re-plan
+- 130 Terraform resources applied to the local Keycloak 26.6.3, and 2 to OpenFGA, with a clean re-plan
   (the Azure deployment was applied with the 74 that existed before the MCP server,
   the directory and the SAML provider);
   `acr_values_supported`, the audience mapper and service-account roles confirmed
   in a real token.
-- .NET 10 API: 37 tests pass, including forged `alg:none`, wrong-key,
+- .NET 10 API: 76 tests pass, including forged `alg:none`, wrong-key,
   wrong-audience, wrong-realm and expired tokens, 403-vs-401 for an
-  authenticated-but-unauthorized caller, and 404-not-403 across the tenant
-  boundary.
+  authenticated-but-unauthorized caller, 404-not-403 across the tenant
+  boundary, and what the API sends OpenFGA and does with each answer.
+- Sharing: the OpenFGA model passes 30 checks on OpenFGA's own engine
+  (`make test-model`), and `make assert-fga` passes 41 checks against the local
+  Keycloak, directory, OpenFGA and API: private documents, shares to a person and
+  a department, a revoke, a directory person moved and renamed, and OpenFGA
+  frozen. **Local lab and CI only**; Azure runs without OpenFGA.
 - Desktop auth library: 57 tests pass on macOS/Linux. **Both desktop clients have
   been run end-to-end against the Azure deployment** — WinUI 3 on Windows and
   Electron on macOS — with system-browser sign-in, correct issuer, audience and
@@ -335,12 +347,13 @@ Built and checked against real software, not just written down:
   also compiled by the `windows-latest` CI job.
 - Keycloak on Azure and the API on Container Apps are both applied and running,
   not merely planned.
-- 10 Playwright tests pass in a real browser (Chromium) against real Keycloak,
-  three of them for a person from the LDAP directory, one from the legacy SAML
-  provider, and a sign-in to the legacy SAML application.
-- MCP server: 96 tests pass with forged tokens (wrong audience, `alg:none`,
-  wrong key, wrong realm, expired), every scope challenge and the audit log, and
-  `make assert-mcp` passes 34 checks against the local Keycloak, API and MCP
+- 11 Playwright tests pass in a real browser (Chromium) against real Keycloak,
+  among them a person from the LDAP directory, one from the legacy SAML
+  provider, a sign-in to the legacy SAML application, and a private document
+  shared with carol and unshared.
+- MCP server: 113 tests pass with forged tokens (wrong audience, `alg:none`,
+  wrong key, wrong realm, expired), every scope challenge, the share tools and
+  the audit log, and `make assert-mcp` passes 41 checks against the local Keycloak, API and MCP
   server, signing in as the demo users. The last eight read the audit log the
   server wrote about those sign-ins, and match one call to Keycloak's events and
   to the API's own log. Driven from Claude Code as a real
