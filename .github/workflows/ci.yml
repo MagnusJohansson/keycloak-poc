@@ -248,6 +248,15 @@ jobs:
       - name: MCP authorization works end to end
         run: python3 tools/assert-mcp-authz.py
 
+      # Per-document authorization with the real OpenFGA: private documents,
+      # shares to a person and to a department, a revoke, a share written past
+      # the API, a directory person moved and renamed, and OpenFGA frozen.
+      - name: Sharing works end to end
+        run: |
+          FGA_STORE_ID="$(terraform -chdir=infra/terraform/25-openfga output -raw store_id)" \
+          FGA_MODEL_ID="$(terraform -chdir=infra/terraform/25-openfga output -raw model_id)" \
+            python3 tools/assert-fga.py
+
       # LDAP federation: people who exist only in the directory sign in, and then
       # the directory changes under Keycloak. With Keycloak's default cache a
       # person removed from a group, or deleted, goes on getting tokens; nothing

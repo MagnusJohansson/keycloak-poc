@@ -20,6 +20,7 @@ make api         # .NET 10 API on :5001 (needs up + seed: reads OpenFGA's store/
 make web         # React SPA on :5173      (separate shell)
 make mcp         # MCP server on :5002  (separate shell; needs up + seed + api)
 make assert-mcp  # 34 checks of MCP authorization - REQUIRES up + seed + api + mcp running
+make assert-fga  # 41 checks of sharing with the real OpenFGA - REQUIRES up + seed + api; freezes OpenFGA, renames and moves a directory person and restores them
 make assert-ldap # 53 checks of LDAP federation - REQUIRES up + seed + api; changes the directory and restores it
 make assert-saml # 43 checks of the brokered SAML provider - REQUIRES up + seed + api
 make reports     # the legacy SAML application on :5003 (separate shell; needs up + seed)
@@ -248,8 +249,10 @@ Every one of these cost real debugging time and is now load-bearing. Do not "sim
 - Users are Keycloak user ids (`sub`), never usernames: a renamed or reused username would carry grants.
 - **`list-objects` truncates silently** at `OPENFGA_LIST_OBJECTS_MAX_RESULTS` (default 1000): HTTP 200,
   no flag, no header (measured, v1.22.1). Do not list a person's documents with it.
-- **The check query cache keeps a revoked share allowed** until it expires (10 s default; measured).
-  Off by default and stated `false` in compose; a revoke must take effect on the next request.
+- **The check query cache keeps a revoked share allowed AND a new share refused** until the entry
+  expires (10 s default; both measured). Off by default and stated `false` in compose. The API's
+  `HIGHER_CONSISTENCY` skips it: `assert-fga` passes with the cache on, and fails with it on and
+  `HIGHER_CONSISTENCY` removed ("carol sees it now").
 - **Its own Postgres (`openfga-db`)**, not a database inside `postgres`: init scripts run only on an
   empty data directory, so an existing lab's `pgdata` would never get it.
 - Host port **8090** (OpenFGA's 8080 is Keycloak's here). Preshared key `docvault-fga-lab-key`, the lab
@@ -285,6 +288,10 @@ Every one of these cost real debugging time and is now load-bearing. Do not "sim
   revoked by user id (`DELETE .../shares/users/{id}`) so a renamed, moved or deleted person can still
   be removed. A lookup imports an LDAP person who never signed in; a brokered SAML person cannot be
   shared with before their first sign-in.
+- `assert-fga.py` checks "does not see it" with `Person.sees(...) is False`, never
+  `title not in titles()`: a refused list (403, 503) passed the latter. Its mover check once passed
+  only because erin had lost every group. The directory does not rewrite group members on a
+  rename, so the rename check moves `engineering` to the new name; `assert-ldap` passes after it.
 - The API tests' `FakeOpenFga` **does not evaluate the model**: checks come from a table, writes are
   recorded. The model's meaning is `make test-model`'s job. Do not "improve" the fake into a second
   implementation of docvault.fga.

@@ -60,9 +60,10 @@ public sealed class OpenFgaClient(HttpClient http, IOptions<SharingSettings> opt
     /// </summary>
     /// <remarks>
     /// HIGHER_CONSISTENCY on every check. With OpenFGA's check cache switched on, the default
-    /// consistency answered "allowed" for a share revoked a moment before, until the cache
-    /// entry expired (10 s by default; measured). The cache is off in this lab; this keeps a
-    /// revoke immediate if someone switches it on.
+    /// consistency answered "allowed" for a share revoked a moment before, and "refused" for
+    /// one made a moment before, until the cache entry expired (10 s by default; both
+    /// measured). The cache is off in this lab; this keeps shares immediate if someone
+    /// switches it on (tools/assert-fga.py passes with it on).
     /// </remarks>
     public async Task<bool[]> BatchCheckAsync(IReadOnlyList<TupleKey> checks, IReadOnlyList<TupleKey> contextualTuples, CancellationToken cancellationToken)
     {

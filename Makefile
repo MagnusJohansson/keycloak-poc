@@ -176,6 +176,14 @@ assert-mcp: ## Check MCP authorization end to end (needs up + seed + api + mcp)
 	DOCVAULT_API_LOG="$$(test -f .lab/api.log && echo "$(CURDIR)/.lab/api.log")" \
 		python3 tools/assert-mcp-authz.py
 
+# --- Per-document authorization (OpenFGA) ------------------------------------
+.PHONY: assert-fga
+assert-fga: ## Check sharing end to end (needs up + seed + api). Freezes OpenFGA briefly; renames and moves a directory person and puts them back.
+	@cd $(FGA_DIR) && $(WS_LOCAL) >/dev/null
+	FGA_STORE_ID="$$(cd $(FGA_DIR) && $(TF) output -raw store_id)" \
+	FGA_MODEL_ID="$$(cd $(FGA_DIR) && $(TF) output -raw model_id)" \
+		python3 tools/assert-fga.py
+
 # --- The directory (LDAP) -----------------------------------------------------
 .PHONY: assert-ldap
 assert-ldap: ## Check LDAP federation end to end (needs up + seed + api). Changes the lab's directory and puts it back.

@@ -170,8 +170,10 @@ services:
       # Both already the defaults in v1.22.1, stated so that changing them is a
       # visible decision:
       #   - the check cache: on, a REVOKED share stays allowed until the cache
-      #     entry expires (10 s by default; measured). A revoke must take effect
-      #     on the next request, and tools/assert-fga.py checks that it does.
+      #     entry expires (10 s by default), and a NEW share stays refused just
+      #     as long (both measured). The API asks for HIGHER_CONSISTENCY, which
+      #     skips the cache; tools/assert-fga.py passes with it on, and fails
+      #     with it on and HIGHER_CONSISTENCY taken out.
       #   - the playground: a UI that edits stores, with no place in a lab that
       #     is meant to rehearse production.
       OPENFGA_CHECK_QUERY_CACHE_ENABLED: "false"
