@@ -9,7 +9,9 @@ using DocVault.Api.Domain;
 using DocVault.Api.Sharing;
 using DocVault.Api.Tests.Support;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace DocVault.Api.Tests.Security;
@@ -62,27 +64,30 @@ public sealed class SharingModeTests(DocVaultApiFactory tenantOnly) : IClassFixt
     [Fact]
     public void The_API_refuses_to_start_without_a_mode()
     {
-        using var factory = new FactoryWith(new() { ["Sharing:Mode"] = null });
+        var startup = new StartupFailures();
+        using var factory = new FactoryWith(new() { ["Sharing:Mode"] = null }, startup);
 
-        var error = Assert.Throws<OptionsValidationException>(() => factory.CreateClient());
+        var error = startup.Of<OptionsValidationException>(factory);
         Assert.Contains("Sharing:Mode must be set", error.Message);
     }
 
     [Fact]
     public void The_API_refuses_to_start_on_a_model_the_store_does_not_have()
     {
-        using var factory = new OpenFgaFactoryWith(fga => fga.KnownModelId = "01JSOMEOTHERMODEL000000000");
+        var startup = new StartupFailures();
+        using var factory = new OpenFgaFactoryWith(fga => fga.KnownModelId = "01JSOMEOTHERMODEL000000000", startup);
 
-        var error = Assert.Throws<InvalidOperationException>(() => factory.CreateClient());
+        var error = startup.Of<InvalidOperationException>(factory);
         Assert.Contains($"has no authorization model {FakeOpenFga.ModelId}", error.Message);
     }
 
     [Fact]
     public void The_API_refuses_to_start_when_OpenFGA_is_unreachable()
     {
-        using var factory = new OpenFgaFactoryWith(fga => fga.Down = true);
+        var startup = new StartupFailures();
+        using var factory = new OpenFgaFactoryWith(fga => fga.Down = true, startup);
 
-        Assert.Throws<DependencyUnavailableException>(() => factory.CreateClient());
+        startup.Of<DependencyUnavailableException>(factory);
     }
 
     [Theory]
@@ -114,17 +119,67 @@ public sealed class SharingModeTests(DocVaultApiFactory tenantOnly) : IClassFixt
         Assert.Empty(new SharingSettings { Mode = SharingMode.TenantOnly }.Problems());
     }
 
-    private sealed class FactoryWith(Dictionary<string, string?> settings) : DocVaultApiFactory
+    private sealed class FactoryWith(Dictionary<string, string?> settings, StartupFailures startup) : DocVaultApiFactory
     {
         protected override Dictionary<string, string?> SharingSettings() => settings;
+
+        protected override void ConfigureWebHost(IWebHostBuilder builder)
+        {
+            base.ConfigureWebHost(builder);
+            builder.ConfigureServices(services => services.AddSingleton<ILoggerProvider>(startup));
+        }
     }
 
-    private sealed class OpenFgaFactoryWith(Action<FakeOpenFga> arrange) : OpenFgaApiFactory
+    private sealed class OpenFgaFactoryWith(Action<FakeOpenFga> arrange, StartupFailures startup) : OpenFgaApiFactory
     {
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
             arrange(Fga);
             base.ConfigureWebHost(builder);
+            builder.ConfigureServices(services => services.AddSingleton<ILoggerProvider>(startup));
+        }
+    }
+
+    /// <summary>
+    /// Why the host did not start. WebApplicationFactory usually rethrows the API's own
+    /// exception, but not always: when the failed host is disposed before the factory asks
+    /// it for IHostApplicationLifetime, the factory throws ObjectDisposedException instead
+    /// (seen once in CI). The host logs the real exception either way, so that is read too.
+    /// </summary>
+    private sealed class StartupFailures : ILoggerProvider, ILogger
+    {
+        private readonly System.Collections.Concurrent.ConcurrentQueue<Exception> _logged = new();
+
+        public T Of<T>(WebApplicationFactory<Program> factory)
+            where T : Exception
+        {
+            var thrown = Assert.ThrowsAny<Exception>(() => factory.CreateClient());
+            if (thrown is T expected)
+            {
+                return expected;
+            }
+
+            Assert.IsType<ObjectDisposedException>(thrown);
+            return Assert.Single(_logged.OfType<T>().Distinct());
+        }
+
+        public ILogger CreateLogger(string categoryName) => this;
+
+        public IDisposable? BeginScope<TState>(TState state)
+            where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => logLevel >= LogLevel.Error;
+
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+        {
+            if (exception is not null && IsEnabled(logLevel))
+            {
+                _logged.Enqueue(exception);
+            }
+        }
+
+        public void Dispose()
+        {
         }
     }
 }

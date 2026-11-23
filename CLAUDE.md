@@ -309,6 +309,9 @@ Every one of these cost real debugging time and is now load-bearing. Do not "sim
     with `\z`.** `.`/`..` became path segments in Keycloak's `group-by-path`, and `$` matches before a
     final newline.
   - The timing test runs in a non-parallel xUnit collection; beside other classes it was flaky.
+  - **The "refuses to start" tests (`SharingModeTests`) also read the exception the host logs.**
+    `WebApplicationFactory` sometimes throws `ObjectDisposedException` instead of the API's own
+    exception (the failed host is disposed before it reads `IHostApplicationLifetime`; seen in CI).
 - `assert-fga.py` checks "does not see it" with `Person.sees(...) is False`, never
   `title not in titles()`: a refused list (403, 503) passed the latter. Its mover check once passed
   only because erin had lost every group. The directory does not rewrite group members on a
