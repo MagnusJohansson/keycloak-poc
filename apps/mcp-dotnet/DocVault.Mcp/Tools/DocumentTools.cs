@@ -20,12 +20,13 @@ namespace DocVault.Mcp.Tools;
 /// treated as untrusted: typed, bounded, and never used to choose a tenant or a user.
 /// </summary>
 [McpServerToolType]
-public sealed class DocumentTools(
+public sealed partial class DocumentTools(
     IHttpContextAccessor accessor,
     DocVaultApiClient api,
     IAuditLog audit)
 {
     private const int MaxTitleLength = 200;
+    private const int MaxNameLength = 255;
 
     [McpServerTool(Name = ToolScopes.ListDocuments, ReadOnly = true, Destructive = false, OpenWorld = false)]
     [Description("List the documents in the signed-in user's tenant.")]
@@ -70,6 +71,120 @@ public sealed class DocumentTools(
         return RunAsync(ToolScopes.DeleteDocument, token => api.DeleteDocumentAsync(token, documentId, cancellationToken),
             cancellationToken, ("document.id", documentId.ToString()));
     }
+
+    /// <remarks>
+    /// The tool a prompt injection would most want: a share moves a document past the
+    /// people who could see it. Three things stand in the way, none of them the model.
+    /// It needs <see cref="ToolScopes.Share"/>, which the user consents to separately.
+    /// The API lets only the owner share, and only with someone in the same tenant. And
+    /// the record below names who it went to. Inside the tenant, nothing here can tell
+    /// a share the user meant from one a document told the assistant to make.
+    /// </remarks>
+    [McpServerTool(Name = ToolScopes.ShareDocument, ReadOnly = false, Destructive = false, OpenWorld = false)]
+    [Description("Share one of the signed-in user's own documents with a person or a department of their organisation, so they can read it. Give exactly one of username or department.")]
+    public Task<CallToolResult> ShareDocument(
+        [Description("The document's id (a GUID), as returned by list_documents.")] string id,
+        [Description("The username of one person to share with.")] string? username = null,
+        [Description("The name of one department to share with, e.g. legal.")] string? department = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (ShareArguments(ToolScopes.ShareDocument, id, username, department) is { } refusal)
+        {
+            return Task.FromResult(refusal);
+        }
+
+        var documentId = Guid.Parse(id);
+        return RunAsync(ToolScopes.ShareDocument,
+            token => api.ShareAsync(token, documentId, username?.Trim(), department?.Trim(), cancellationToken),
+            cancellationToken, ("document.id", documentId.ToString()), ("share.with", ShareWith(username, department)));
+    }
+
+    [McpServerTool(Name = ToolScopes.UnshareDocument, ReadOnly = false, Destructive = false, OpenWorld = false)]
+    [Description("Stop sharing one of the signed-in user's own documents with a person or a department. Give exactly one of username or department.")]
+    public Task<CallToolResult> UnshareDocument(
+        [Description("The document's id (a GUID), as returned by list_documents.")] string id,
+        [Description("The username of the person to stop sharing with.")] string? username = null,
+        [Description("The name of the department to stop sharing with.")] string? department = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (ShareArguments(ToolScopes.UnshareDocument, id, username, department) is { } refusal)
+        {
+            return Task.FromResult(refusal);
+        }
+
+        var documentId = Guid.Parse(id);
+        return RunAsync(ToolScopes.UnshareDocument, async token =>
+        {
+            if (department is not null)
+            {
+                return await api.UnshareDepartmentAsync(token, documentId, department.Trim(), cancellationToken);
+            }
+
+            // The API removes a person's share by user id, which survives a rename. The
+            // assistant knows a username, so look the id up in the document's shares.
+            var shares = await api.ListSharesAsync(token, documentId, cancellationToken);
+            if (!shares.Ok)
+            {
+                return shares;
+            }
+
+            var userId = SharedUserId(shares.Text, username!.Trim());
+            return userId is null
+                ? new ApiResult(false, "That document is not shared with that person.", "not_found")
+                : await api.UnsharePersonAsync(token, documentId, userId.Value, cancellationToken);
+        }, cancellationToken, ("document.id", documentId.ToString()), ("share.with", ShareWith(username, department)));
+    }
+
+    /// <summary>An error result for bad share arguments, recorded; null when they are fine.</summary>
+    private CallToolResult? ShareArguments(string tool, string id, string? username, string? department)
+    {
+        var reason =
+            !Guid.TryParse(id, out _) ? "invalid_id"
+            : (username is null) == (department is null) ? "invalid_target"
+            : username is not null && (string.IsNullOrWhiteSpace(username) || username.Trim().Length > MaxNameLength || HasInvisible(username)) ? "invalid_target"
+            : department is not null && !DepartmentName().IsMatch(department.Trim()) ? "invalid_target"
+            : null;
+
+        if (reason is null)
+        {
+            return null;
+        }
+
+        // Not the name itself: a refused argument is refused for what it may carry.
+        audit.Record(AuditEvents.ToolCall, AuditOutcomes.Rejected, AuditCaller.From(accessor.HttpContext),
+            ("tool", tool), ("reason", reason));
+        return Error(reason == "invalid_id"
+            ? "The id must be a GUID, as returned by list_documents."
+            : "Give exactly one of username or department: a username of up to 255 visible characters, or a department name of letters, digits, '.', '_' and '-'.");
+    }
+
+    private static string ShareWith(string? username, string? department) =>
+        username is not null ? $"user:{username.Trim().ToLowerInvariant()}" : $"department:{department!.Trim()}";
+
+    private static Guid? SharedUserId(string sharesJson, string username)
+    {
+        try
+        {
+            using var json = JsonDocument.Parse(sharesJson);
+            foreach (var share in json.RootElement.GetProperty("shares").EnumerateArray())
+            {
+                if (share.GetProperty("type").GetString() == "user"
+                    && string.Equals(share.GetProperty("username").GetString(), username, StringComparison.OrdinalIgnoreCase)
+                    && Guid.TryParse(share.GetProperty("id").GetString(), out var userId))
+                {
+                    return userId;
+                }
+            }
+        }
+        catch (Exception ex) when (ex is JsonException or KeyNotFoundException or InvalidOperationException)
+        {
+        }
+
+        return null;
+    }
+
+    [System.Text.RegularExpressions.GeneratedRegex("^[A-Za-z0-9._-]{1,64}$")]
+    private static partial System.Text.RegularExpressions.Regex DepartmentName();
 
     private async Task<CallToolResult> RunAsync(
         string tool, Func<string, Task<ApiResult>> call, CancellationToken cancellationToken,

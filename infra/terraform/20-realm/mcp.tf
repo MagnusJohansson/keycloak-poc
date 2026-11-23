@@ -100,6 +100,10 @@ locals {
     "docvault:read"   = "Let the assistant list your documents"
     "docvault:write"  = "Let the assistant create documents"
     "docvault:delete" = "Let the assistant delete documents"
+    # Its own scope: a share is how a document reaches people who could not see
+    # it, the thing a prompt injection would most want done. Asked for only when
+    # the share tool is first used, so the user sees this line on its own.
+    "docvault:share" = "Let the assistant share your documents with people in your organisation"
   }
 }
 

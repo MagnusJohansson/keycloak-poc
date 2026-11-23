@@ -388,7 +388,7 @@ def main():
     print("\nTools, as each demo user")
     status, _, message = mcp(alice["access_token"], "tools/list")
     names = sorted(t["name"] for t in message.get("result", {}).get("tools", []))
-    check("every tool is listed", names == ["create_document", "delete_document", "list_documents"], str(names))
+    check("every tool is listed", names == ["create_document", "delete_document", "list_documents", "share_document", "unshare_document"], str(names))
 
     status, _, is_error, text = tool(alice["access_token"], "list_documents")
     check("alice lists her tenant's documents", status == 200 and not is_error and '"tenant":"acme"' in text, text[:60])
@@ -423,7 +423,43 @@ def main():
         _, _, is_error, text = tool(bob.get("access_token"), "list_documents")
         check("the document never appeared in bob's tenant", "assert-mcp-authz" not in text)
 
-    tokens = [t.get("access_token") for t in (alice, bob, dave, carol, writer)]
+    # Sharing: the tool a prompt injection would most want. Its own scope, so the
+    # user is asked about it on its own; then the API's rules (owner only, own
+    # tenant only) whatever the assistant was told.
+    print("\nSharing through the assistant")
+    status, challenge, _, _ = tool(writer["access_token"], "share_document", {"id": SEEDED_ACME_DOCUMENT, "username": "carol"})
+    check("sharing needs its own scope, docvault:share, even with read, write and delete",
+          status == 403 and 'scope="docvault:share"' in challenge, challenge[:90])
+    screens_before = len(consent_screens)
+    sharer = sign_in("alice", "openid docvault:read docvault:write docvault:share")
+    if len(consent_screens) > screens_before:
+        screen = consent_screens[-1]
+        check("the consent screen asks about sharing in plain words",
+              "Let the assistant share your documents with people in your organisation" in screen, screen[:300])
+    else:
+        print("  SKIP  the sharing consent screen (alice had already consented; shown on a fresh realm)")
+    _, _, is_error, text = tool(sharer.get("access_token"), "create_document", {"title": "assert-mcp-authz shared"})
+    shared_id = json.loads(text).get("id") if not is_error and text.startswith("{") else None
+    if shared_id:
+        _, _, is_error, text = tool(sharer["access_token"], "share_document", {"id": shared_id, "department": "legal"})
+        check("with the scope, alice's assistant shares her document with legal", not is_error, text[:80])
+        _, _, is_error, text = tool(sharer["access_token"], "share_document", {"id": shared_id, "username": "bob"})
+        check("but not with bob, in globex, whatever it was told", is_error and "No such document, person or department" in text, text[:80])
+        _, _, is_error, text = tool(sharer["access_token"], "share_document", {"id": SEEDED_ACME_DOCUMENT, "username": "carol"})
+        check("nor a document alice does not own", is_error and "only a document's owner" in text, text[:80])
+        _, _, is_error, text = tool(sharer["access_token"], "unshare_document", {"id": shared_id, "department": "legal"})
+        check("and it can stop sharing it", not is_error, text[:80])
+        if AUDIT_LOG:
+            records = [json.loads(line) for line in lines_of(AUDIT_LOG)[audit_start:] if line.strip()]
+            shared = [(r.get("share.with"), r.get("outcome")) for r in records
+                      if r.get("tool") == "share_document" and r.get("document.id") == shared_id]
+            check("each share is on record with who it went to and how it ended",
+                  shared == [("department:legal", "ok"), ("user:bob", "not_found")], str(shared))
+        tool(carol.get("access_token"), "delete_document", {"id": shared_id})
+    else:
+        check("alice's assistant creates a document to share", False, text[:80])
+
+    tokens = [t.get("access_token") for t in (alice, bob, dave, carol, writer, sharer)]
     carol_claims = claims(carol["access_token"]) if "access_token" in carol else {}
     audit_checks(audit_start, tokens, alice_claims, carol_claims, document_id)
 

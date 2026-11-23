@@ -19,14 +19,14 @@ make seed        # apply the DocVault realm, then the OpenFGA store + model, via
 make api         # .NET 10 API on :5001 (needs up + seed: reads OpenFGA's store/model and a client secret)
 make web         # React SPA on :5173      (separate shell)
 make mcp         # MCP server on :5002  (separate shell; needs up + seed + api)
-make assert-mcp  # 34 checks of MCP authorization - REQUIRES up + seed + api + mcp running
+make assert-mcp  # 41 checks of MCP authorization (2 consent-screen checks only before alice has consented) - REQUIRES up + seed + api + mcp running
 make assert-fga  # 41 checks of sharing with the real OpenFGA - REQUIRES up + seed + api; freezes OpenFGA, renames and moves a directory person and restores them
 make assert-ldap # 53 checks of LDAP federation - REQUIRES up + seed + api; changes the directory and restores it
 make assert-saml # 43 checks of the brokered SAML provider - REQUIRES up + seed + api
 make reports     # the legacy SAML application on :5003 (separate shell; needs up + seed)
 make assert-saml-app # 30 checks of that application - REQUIRES up + seed + reports
 make test-model  # the OpenFGA model's own tests (`fga model test` in Docker; no running lab needed)
-make test        # 276 .NET tests (75 API + 96 MCP + 48 SAML application + 57 desktop-auth) - no Docker, network or cloud
+make test        # 293 .NET tests (75 API + 113 MCP + 48 SAML application + 57 desktop-auth) - no Docker, network or cloud
 make e2e         # 10 Playwright tests - REQUIRES up + seed + api + web + reports running
 make plan        # realm + OpenFGA model diff; both should be EMPTY
 make token       # mint a real token and decode its claims
@@ -360,6 +360,14 @@ Every one of these cost real debugging time and is now load-bearing. Do not "sim
 
 **MCP server (`apps/mcp-dotnet`, `20-realm/mcp.tf`)** - see `docs/13-integration-mcp.md`:
 
+- **Sharing has its own scope, `docvault:share`**, not in `ToolScopes.Initial`, so a client asks for it
+  only when `share_document`/`unshare_document` is first used and the consent screen shows that line
+  on its own. Do not fold it into `docvault:write`: a share is how a document reaches people who could
+  not see it, the thing a prompt injection would most want. Inside the tenant nothing tells a share
+  the user meant from one a document asked for; the scope, the API's owner/tenant rules and the audit
+  record (`share.with`) are what there is. `unshare_document` looks the person's id up in the
+  document's shares, because the API revokes by id.
+
 - **The MCP server's Keycloak `client_id` is its URL** (`var.mcp_resource_url`), on purpose. With
   resource indicators the token's `aud` is that URL, and standard token exchange only lets a
   client exchange a token whose `aud` contains its own `client_id`. A short name signs users in
@@ -557,8 +565,8 @@ A re-run refuses to replace an already-attached archive with different bytes.
 
 ## Verification status
 
-Proven against real software: 129 Terraform resources in `20-realm` (+2 in `25-openfga`) applied to the local Keycloak 26.6.3 with a
-clean re-plan (Azure was applied with the 74 that predate the MCP server); 75 API + 96 MCP +
+Proven against real software: 130 Terraform resources in `20-realm` (+2 in `25-openfga`) applied to the local Keycloak 26.6.3 with a
+clean re-plan (Azure was applied with the 74 that predate the MCP server); 75 API + 113 MCP +
 48 SAML application + 57 desktop-auth .NET tests (including forged `alg:none`, wrong-key,
 wrong-audience, wrong-realm and expired tokens, and 404-not-403 across the tenant
 boundary); 10 Playwright tests in a real browser (a directory person, a SAML person, and the SAML application); 12 Flutter tests; React/Vue build;

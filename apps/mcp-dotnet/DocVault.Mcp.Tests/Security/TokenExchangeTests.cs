@@ -107,10 +107,18 @@ public sealed class TokenExchangeTests(McpServerFactory factory) : IClassFixture
     [InlineData("create_document", """{"title":"tag\uDB40\uDC41chars"}""")] // U+E0041, outside the BMP
     [InlineData("delete_document", """{"id":"not-a-guid"}""")]
     [InlineData("delete_document", """{"id":"../documents"}""")]
+    [InlineData("share_document", """{"id":"not-a-guid","username":"carol"}""")]
+    [InlineData("share_document", """{"id":"7b0c8f0e-4d0a-4c46-9f0a-1f2f3a4b5c6d"}""")]
+    [InlineData("share_document", """{"id":"7b0c8f0e-4d0a-4c46-9f0a-1f2f3a4b5c6d","username":"carol","department":"legal"}""")]
+    [InlineData("share_document", """{"id":"7b0c8f0e-4d0a-4c46-9f0a-1f2f3a4b5c6d","username":"car​ol"}""")]
+    [InlineData("share_document", """{"id":"7b0c8f0e-4d0a-4c46-9f0a-1f2f3a4b5c6d","username":"  "}""")]
+    [InlineData("share_document", """{"id":"7b0c8f0e-4d0a-4c46-9f0a-1f2f3a4b5c6d","department":"le#gal"}""")]
+    [InlineData("share_document", """{"id":"7b0c8f0e-4d0a-4c46-9f0a-1f2f3a4b5c6d","department":"../admin"}""")]
+    [InlineData("unshare_document", """{"id":"7b0c8f0e-4d0a-4c46-9f0a-1f2f3a4b5c6d"}""")]
     public async Task Bad_arguments_are_refused_before_any_downstream_call(string tool, string arguments)
     {
         factory.Downstream.Reset();
-        var token = factory.Tokens.CreateToken(scope: "docvault:read docvault:write docvault:delete");
+        var token = factory.Tokens.CreateToken(scope: "docvault:read docvault:write docvault:delete docvault:share");
 
         var response = await factory.CallToolAsync(token, tool, System.Text.Json.JsonDocument.Parse(arguments).RootElement);
         var result = (await McpServerFactory.ReadMessageAsync(response)).GetProperty("result");

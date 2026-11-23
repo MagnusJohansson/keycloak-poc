@@ -19,13 +19,15 @@ public sealed class ScopeTests(McpServerFactory factory) : IClassFixture<McpServ
     [InlineData("list_documents", "openid", "docvault:read")]
     [InlineData("create_document", "openid docvault:read", "docvault:write")]
     [InlineData("delete_document", "openid docvault:read docvault:write", "docvault:delete")]
+    [InlineData("share_document", "openid docvault:read docvault:write docvault:delete", "docvault:share")]
+    [InlineData("unshare_document", "openid docvault:read docvault:write docvault:delete", "docvault:share")]
     public async Task A_call_without_the_scope_gets_an_insufficient_scope_challenge(
         string tool, string granted, string required)
     {
         factory.Downstream.Reset();
         var token = factory.Tokens.CreateToken(scope: granted);
 
-        var response = await factory.CallToolAsync(token, tool, new { title = "x", id = Guid.NewGuid().ToString() });
+        var response = await factory.CallToolAsync(token, tool, new { title = "x", id = Guid.NewGuid().ToString(), username = "carol" });
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
         var challenge = response.Headers.WwwAuthenticate.ToString();
@@ -71,7 +73,7 @@ public sealed class ScopeTests(McpServerFactory factory) : IClassFixture<McpServ
 
         var names = message.GetProperty("result").GetProperty("tools").EnumerateArray()
             .Select(t => t.GetProperty("name").GetString()!).Order().ToArray();
-        Assert.Equal(["create_document", "delete_document", "list_documents"], names);
+        Assert.Equal(["create_document", "delete_document", "list_documents", "share_document", "unshare_document"], names);
     }
 
     [Fact]
@@ -85,6 +87,12 @@ public sealed class ScopeTests(McpServerFactory factory) : IClassFixture<McpServ
         Assert.False(tools["create_document"].GetProperty("readOnlyHint").GetBoolean());
         Assert.False(tools["create_document"].GetProperty("destructiveHint").GetBoolean());
         Assert.True(tools["delete_document"].GetProperty("destructiveHint").GetBoolean());
+
+        // Neither removes data: a share can be revoked, and a revoke can be undone.
+        // They are hints, not controls (a client must not trust them): the scope is.
+        Assert.False(tools["share_document"].GetProperty("readOnlyHint").GetBoolean());
+        Assert.False(tools["share_document"].GetProperty("destructiveHint").GetBoolean());
+        Assert.False(tools["unshare_document"].GetProperty("readOnlyHint").GetBoolean());
     }
 
     [Fact]

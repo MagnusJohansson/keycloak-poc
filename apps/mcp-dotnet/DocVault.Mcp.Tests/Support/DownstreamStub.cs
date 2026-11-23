@@ -37,6 +37,9 @@ public sealed class DownstreamStub : HttpMessageHandler
     public (HttpStatusCode Status, string Body) Api { get; set; } =
         (HttpStatusCode.OK, """{"tenant":"acme","documents":[{"id":"7b0c8f0e-4d0a-4c46-9f0a-1f2f3a4b5c6d","title":"Acme Q3 Roadmap"}]}""");
 
+    /// <summary>When set, answers the API per request instead of <see cref="Api"/>.</summary>
+    public Func<Seen, (HttpStatusCode Status, string Body)>? ApiResponder { get; set; }
+
     /// <summary>
     /// When set, the API does not answer until this completes: the request has
     /// arrived and the caller is still waiting.
@@ -69,7 +72,7 @@ public sealed class DownstreamStub : HttpMessageHandler
             }
         }
 
-        var (status, content) = isExchange ? Exchange : Api;
+        var (status, content) = isExchange ? Exchange : ApiResponder?.Invoke(seen) ?? Api;
         return new HttpResponseMessage(status) { Content = new StringContent(content, Encoding.UTF8, "application/json") };
     }
 }
