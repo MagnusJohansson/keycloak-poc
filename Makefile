@@ -64,9 +64,13 @@ down: ## Stop the lab (keeps the database volume)
 .PHONY: clean
 clean: ## Stop the lab AND delete all data + Terraform state
 	$(COMPOSE) down -v
+	@# The LOCAL workspace's state only, never azure's: that one tracks billable
+	@# resources that `down -v` did not touch. Since the workspaces, the realm's
+	@# state lives in terraform.tfstate.d/local; this target used to remove only
+	@# terraform.tfstate, which is where state lived before them, and is kept for
+	@# a checkout that still has one.
+	rm -rf $(REALM_DIR)/terraform.tfstate.d/local $(FGA_DIR)/terraform.tfstate.d/local
 	rm -f $(REALM_DIR)/terraform.tfstate $(REALM_DIR)/terraform.tfstate.backup
-	@# The local workspace only. 25-openfga has no other, but say so anyway.
-	rm -rf $(FGA_DIR)/terraform.tfstate.d/local
 
 .PHONY: logs
 logs: ## Tail Keycloak logs
