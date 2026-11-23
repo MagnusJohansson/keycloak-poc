@@ -31,6 +31,21 @@ public sealed record Document(
     bool IsClassified,
     DateTimeOffset CreatedAt);
 
+/// <summary>A document as one caller is shown it.</summary>
+/// <param name="IsOwner">
+/// Whether the caller is the owner the store recorded: for a client to decide whether to
+/// offer "Share". A hint, not a decision: OpenFGA decides, and a seeded document, which
+/// has no recorded owner, is nobody's.
+/// </param>
+public sealed record DocumentView(
+    Guid Id, string Tenant, string Title, string OwnerUsername, Visibility Visibility,
+    bool IsClassified, DateTimeOffset CreatedAt, bool IsOwner)
+{
+    public static DocumentView Of(Document d, string? callerSub) => new(
+        d.Id, d.Tenant, d.Title, d.OwnerUsername, d.Visibility, d.IsClassified, d.CreatedAt,
+        IsOwner: d.OwnerId is not null && Guid.TryParse(callerSub, out var sub) && d.OwnerId == sub.ToString("D"));
+}
+
 public interface IDocumentStore
 {
     IReadOnlyList<Document> ListForTenant(string tenant, bool includeClassified);

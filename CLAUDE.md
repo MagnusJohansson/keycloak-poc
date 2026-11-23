@@ -26,8 +26,8 @@ make assert-saml # 43 checks of the brokered SAML provider - REQUIRES up + seed 
 make reports     # the legacy SAML application on :5003 (separate shell; needs up + seed)
 make assert-saml-app # 30 checks of that application - REQUIRES up + seed + reports
 make test-model  # the OpenFGA model's own tests (`fga model test` in Docker; no running lab needed)
-make test        # 293 .NET tests (75 API + 113 MCP + 48 SAML application + 57 desktop-auth) - no Docker, network or cloud
-make e2e         # 10 Playwright tests - REQUIRES up + seed + api + web + reports running
+make test        # 294 .NET tests (76 API + 113 MCP + 48 SAML application + 57 desktop-auth) - no Docker, network or cloud
+make e2e         # 11 Playwright tests - REQUIRES up + seed + api + web + reports running
 make plan        # realm + OpenFGA model diff; both should be EMPTY
 make token       # mint a real token and decode its claims
 make down        # stop (keeps data)   /   make clean = also wipe volume + tfstate
@@ -292,6 +292,8 @@ Every one of these cost real debugging time and is now load-bearing. Do not "sim
   `title not in titles()`: a refused list (403, 503) passed the latter. Its mover check once passed
   only because erin had lost every group. The directory does not rewrite group members on a
   rename, so the rename check moves `engineering` to the new name; `assert-ldap` passes after it.
+- Responses carry `isOwner` (the store's recorded owner id = the caller's `sub`) so the React app
+  knows where to offer Share/Delete. A hint, not a decision; seeded documents are nobody's.
 - The API tests' `FakeOpenFga` **does not evaluate the model**: checks come from a table, writes are
   recorded. The model's meaning is `make test-model`'s job. Do not "improve" the fake into a second
   implementation of docvault.fga.
@@ -566,10 +568,10 @@ A re-run refuses to replace an already-attached archive with different bytes.
 ## Verification status
 
 Proven against real software: 130 Terraform resources in `20-realm` (+2 in `25-openfga`) applied to the local Keycloak 26.6.3 with a
-clean re-plan (Azure was applied with the 74 that predate the MCP server); 75 API + 113 MCP +
+clean re-plan (Azure was applied with the 74 that predate the MCP server); 76 API + 113 MCP +
 48 SAML application + 57 desktop-auth .NET tests (including forged `alg:none`, wrong-key,
 wrong-audience, wrong-realm and expired tokens, and 404-not-403 across the tenant
-boundary); 10 Playwright tests in a real browser (a directory person, a SAML person, and the SAML application); 12 Flutter tests; React/Vue build;
+boundary); 11 Playwright tests in a real browser (a directory person, a SAML person, the SAML application, and a private document shared and unshared); 12 Flutter tests; React/Vue build;
 Flutter analyzes clean.
 
 **`10-keycloak-azure` has been applied for real** (Azure, swedencentral) and works: Keycloak came

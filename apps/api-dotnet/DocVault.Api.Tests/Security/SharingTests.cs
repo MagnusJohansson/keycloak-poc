@@ -177,6 +177,24 @@ public sealed class SharingTests(OpenFgaApiFactory factory) : IClassFixture<Open
     }
 
     [Fact]
+    public async Task IsOwner_is_true_for_the_owner_only_and_never_for_a_seeded_document()
+    {
+        var (owner, id) = await PrivateDocumentAsync();
+        Fga.Allow(FakeOpenFga.User(owner), "can_view", FakeOpenFga.Document(Roadmap));
+        var other = NewSub();
+        Fga.Allow(FakeOpenFga.User(other), "can_view", FakeOpenFga.Document(id));
+
+        var mine = await Client(Token(owner, ["doc.editor"], "/acme")).GetFromJsonAsync<JsonObject>("/documents");
+        var theirs = await Client(Token(other, ["doc.reader"], "/acme")).GetFromJsonAsync<JsonObject>($"/documents/{id}");
+
+        bool IsOwner(JsonObject list, Guid doc) => (bool)list["documents"]!.AsArray().Single(d => (string)d!["id"]! == doc.ToString("D"))!["isOwner"]!;
+        Assert.True(IsOwner(mine!, id));
+        Assert.False(IsOwner(mine!, Roadmap));
+        Assert.False((bool)theirs!["isOwner"]!);
+        Assert.Null(theirs["ownerId"]);
+    }
+
+    [Fact]
     public async Task A_document_is_visible_to_its_tenant_unless_made_private()
     {
         var sub = NewSub();

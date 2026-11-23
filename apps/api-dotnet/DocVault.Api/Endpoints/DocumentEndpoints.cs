@@ -47,11 +47,12 @@ public static class DocumentEndpoints
             var documents = await authorizer.VisibleAsync(
                 user, store.ListForTenant(tenant.Tenant, includeClassified: false), ct);
 
+            var sub = user.FindFirst("sub")?.Value;
             return Results.Ok(new
             {
                 tenant = tenant.Tenant,
                 department = tenant.Department,
-                documents,
+                documents = documents.Select(d => DocumentView.Of(d, sub)),
             });
         })
         .RequireAuthorization(Policies.ReadDocuments)
@@ -61,7 +62,7 @@ public static class DocumentEndpoints
         group.MapGet("/{id:guid}", async (Guid id, ClaimsPrincipal user, IDocumentStore store, IDocumentAuthorizer authorizer, CancellationToken ct) =>
         {
             var (document, _) = await FindAsync(id, user, store, authorizer, ct);
-            return document is null ? Results.NotFound() : Results.Ok(document);
+            return document is null ? Results.NotFound() : Results.Ok(DocumentView.Of(document, user.FindFirst("sub")?.Value));
         })
         .RequireAuthorization(Policies.ReadDocuments)
         .WithSummary("One document. 404 for one in another tenant AND for one you may not see.");
@@ -116,7 +117,7 @@ public static class DocumentEndpoints
                 throw;
             }
 
-            return Results.Created($"/documents/{document.Id}", document);
+            return Results.Created($"/documents/{document.Id}", DocumentView.Of(document, user.FindFirst("sub")?.Value));
         })
         .RequireAuthorization(Policies.WriteDocuments)
         .WithSummary("Create a document, visible to the tenant (default) or private. Requires doc.editor or doc.admin.");

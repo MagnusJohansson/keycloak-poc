@@ -74,6 +74,21 @@ pre {
 
 .new-document { display: flex; gap: 0.5rem; margin: 1rem 0; }
 .new-document input { flex: 1; }
+.new-document select, .share-panel select {
+  background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 0.5rem;
+}
+
+.documents li:has(.share-panel) { flex-direction: column; }
+.document-row { display: flex; justify-content: space-between; gap: 1rem; align-items: center; width: 100%; }
+.document-actions { display: flex; gap: 0.5rem; align-items: center; }
+.badge {
+  margin-left: 0.5rem; font-size: 0.75rem; color: var(--warn); border: 1px solid var(--warn);
+  border-radius: 999px; padding: 0 0.5rem;
+}
+button.secondary { background: transparent; color: var(--muted); border: 1px solid var(--border); padding: 0.25rem 0.6rem; }
+.share-panel { border-top: 1px solid var(--border); padding-top: 0.75rem; }
+.share-panel ul { list-style: none; padding: 0; display: grid; gap: 0.25rem; }
+.share-panel li { display: flex; justify-content: space-between; align-items: center; }
 
 .inspector {
   background: var(--panel); border-left: 1px solid var(--border);
