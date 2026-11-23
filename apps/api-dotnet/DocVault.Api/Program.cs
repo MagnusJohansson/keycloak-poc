@@ -6,6 +6,7 @@
 using DocVault.Api.Auth;
 using DocVault.Api.Domain;
 using DocVault.Api.Endpoints;
+using DocVault.Api.Sharing;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -13,6 +14,14 @@ builder.Services.AddDocVaultAuthentication(builder.Configuration, builder.Enviro
 builder.Services.AddDocVaultAuthorization();
 
 builder.Services.AddSingleton<IDocumentStore, InMemoryDocumentStore>();
+
+// Who may see THIS document: OpenFGA, or nobody but the tenant (Sharing:Mode, required).
+builder.Services.AddDocVaultSharing(builder.Configuration);
+
+// "tenant" and "private", in requests and responses, rather than 0 and 1.
+builder.Services.ConfigureHttpJsonOptions(options =>
+    options.SerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter(
+        System.Text.Json.JsonNamingPolicy.CamelCase, allowIntegerValues: false)));
 builder.Services.AddOpenApi();
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<MultipleTenantsExceptionHandler>();
@@ -55,6 +64,7 @@ app.UseAuthorization();
 
 app.MapIdentityEndpoints();
 app.MapDocumentEndpoints();
+app.MapShareEndpoints();
 app.MapAnalyticsEndpoints();
 app.MapAdminEndpoints();
 

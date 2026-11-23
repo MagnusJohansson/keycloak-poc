@@ -6,9 +6,19 @@
 using System.Security.Claims;
 using DocVault.Api.Auth;
 using DocVault.Api.Domain;
+using DocVault.Api.Sharing;
 
 namespace DocVault.Api.Endpoints;
 
+/// <summary>
+/// Documents. Four questions, each answered by the part that owns it:
+/// <list type="bullet">
+/// <item>which tenant you are in: the token's group path (<see cref="TenantClaimExtensions"/>);</item>
+/// <item>what kind of thing you may do: the token's roles (<see cref="Policies"/>);</item>
+/// <item>whether the sign-in was strong enough: the token's <c>acr</c> (classified only);</item>
+/// <item>whether you may do it to THIS document: OpenFGA (<see cref="IDocumentAuthorizer"/>).</item>
+/// </list>
+/// </summary>
 public static class DocumentEndpoints
 {
     public static IEndpointRouteBuilder MapDocumentEndpoints(this IEndpointRouteBuilder app)
@@ -19,7 +29,7 @@ public static class DocumentEndpoints
         // Every caller hits the same code. What differs is the tenant derived from
         // their token, so tenant isolation is enforced in one place rather than
         // remembered at each call site.
-        group.MapGet("/", (ClaimsPrincipal user, IDocumentStore store) =>
+        group.MapGet("/", async (ClaimsPrincipal user, IDocumentStore store, IDocumentAuthorizer authorizer, CancellationToken ct) =>
         {
             var tenant = user.GetTenantContext();
             if (!tenant.IsResolved)
@@ -32,7 +42,11 @@ public static class DocumentEndpoints
                     statusCode: StatusCodes.Status403Forbidden);
             }
 
-            var documents = store.ListForTenant(tenant.Tenant, includeClassified: false);
+            // The store narrows to the tenant; OpenFGA decides each of those. Not
+            // OpenFGA's list-objects, which drops results past its limit with a 200.
+            var documents = await authorizer.VisibleAsync(
+                user, store.ListForTenant(tenant.Tenant, includeClassified: false), ct);
+
             return Results.Ok(new
             {
                 tenant = tenant.Tenant,
@@ -41,15 +55,43 @@ public static class DocumentEndpoints
             });
         })
         .RequireAuthorization(Policies.ReadDocuments)
-        .WithSummary("List documents in the caller's tenant.");
+        .WithSummary("List the documents in the caller's tenant that the caller may see.");
+
+        // --- One document -----------------------------------------------------
+        group.MapGet("/{id:guid}", async (Guid id, ClaimsPrincipal user, IDocumentStore store, IDocumentAuthorizer authorizer, CancellationToken ct) =>
+        {
+            var (document, _) = await FindAsync(id, user, store, authorizer, ct);
+            return document is null ? Results.NotFound() : Results.Ok(document);
+        })
+        .RequireAuthorization(Policies.ReadDocuments)
+        .WithSummary("One document. 404 for one in another tenant AND for one you may not see.");
 
         // --- Create -----------------------------------------------------------
-        group.MapPost("/", (CreateDocumentRequest request, ClaimsPrincipal user, IDocumentStore store) =>
+        group.MapPost("/", async (CreateDocumentRequest request, ClaimsPrincipal user, IDocumentStore store, IDocumentAuthorizer authorizer, CancellationToken ct) =>
         {
             var tenant = user.GetTenantContext();
             if (!tenant.IsResolved)
             {
                 return Results.Problem(statusCode: StatusCodes.Status403Forbidden, title: "No tenant");
+            }
+
+            var visibility = request.Visibility ?? Visibility.Tenant;
+            if (visibility == Visibility.Private && !authorizer.SupportsSharing)
+            {
+                // Refused, not created visible to the whole tenant.
+                return Results.Problem(
+                    statusCode: StatusCodes.Status400BadRequest,
+                    title: "Private documents are not available",
+                    detail: "This deployment has no per-document authorization (Sharing:Mode is TenantOnly).");
+            }
+
+            // The owner is recorded by Keycloak user id. A token without one could own a
+            // document nobody, the owner included, could ever be shown.
+            var caller = Caller.From(user);
+            if (authorizer.SupportsSharing && caller is null)
+            {
+                return Results.Problem(statusCode: StatusCodes.Status403Forbidden, title: "No subject",
+                    detail: "Your token does not identify you as a Keycloak user.");
             }
 
             // The tenant comes from the TOKEN, never from the request body. Trusting a
@@ -58,35 +100,58 @@ public static class DocumentEndpoints
                 tenant.Tenant,
                 request.Title,
                 user.Identity?.Name ?? "unknown",
+                caller?.UserId.ToString("D"),
+                visibility,
                 isClassified: false);
+
+            try
+            {
+                await authorizer.CreatedAsync(document, ct);
+            }
+            catch
+            {
+                // Without its tuples the document could be seen by nobody. Do not leave it
+                // half-made: take it out again, and let the error answer (503).
+                store.Delete(document.Id);
+                throw;
+            }
 
             return Results.Created($"/documents/{document.Id}", document);
         })
         .RequireAuthorization(Policies.WriteDocuments)
-        .WithSummary("Create a document. Requires doc.editor or doc.admin.");
+        .WithSummary("Create a document, visible to the tenant (default) or private. Requires doc.editor or doc.admin.");
 
         // --- Delete -----------------------------------------------------------
-        group.MapDelete("/{id:guid}", (Guid id, ClaimsPrincipal user, IDocumentStore store) =>
+        // An administrator, or the owner. Either way only a document you can see: an
+        // administrator cannot delete a private document they cannot see, and gets 404,
+        // as for one that does not exist.
+        group.MapDelete("/{id:guid}", async (Guid id, ClaimsPrincipal user, IDocumentStore store, IDocumentAuthorizer authorizer, CancellationToken ct) =>
         {
-            var tenant = user.GetTenantContext();
-            var document = store.Get(id);
-
-            // Return 404, not 403, for a document in another tenant. A 403 would confirm
-            // the document exists, leaking information across the tenant boundary.
-            if (document is null || document.Tenant != tenant.Tenant)
+            var (document, access) = await FindAsync(id, user, store, authorizer, ct, includeClassified: true);
+            if (document is null)
             {
                 return Results.NotFound();
             }
 
+            if (!user.IsInRole("doc.admin") && !access.CanDelete)
+            {
+                return Results.Problem(statusCode: StatusCodes.Status403Forbidden, title: "Not allowed",
+                    detail: "Deleting a document needs the doc.admin role, or being its owner.");
+            }
+
+            // Relationships first. If that fails the document is still there, intact; the
+            // other order could leave a document in the store that nobody may see.
+            await authorizer.DeletingAsync(document, ct);
             store.Delete(id);
             return Results.NoContent();
         })
-        .RequireAuthorization(Policies.AdminDocuments)
-        .WithSummary("Delete a document. Requires doc.admin.");
+        .RequireAuthorization(Policies.ReadDocuments)
+        .WithSummary("Delete a document. Requires doc.admin, or owning it.");
 
         // --- Classified -------------------------------------------------------
         // The step-up demo. doc.admin alone is not enough; the token must also carry
-        // acr=silver, meaning the user completed OTP recently.
+        // acr=silver, meaning the user completed OTP recently. Classified documents are
+        // all seeded and visible to their tenant, so OpenFGA is not asked here.
         group.MapGet("/classified", (ClaimsPrincipal user, IDocumentStore store) =>
         {
             var tenant = user.GetTenantContext();
@@ -100,6 +165,34 @@ public static class DocumentEndpoints
 
         return app;
     }
+
+    /// <summary>
+    /// The document, if it is in the caller's tenant AND the caller may see it; otherwise
+    /// null, for every reason alike. Callers answer null with 404, so that "exists but not
+    /// yours" and "does not exist" cannot be told apart.
+    /// </summary>
+    /// <remarks>
+    /// The tenant is compared here, before OpenFGA is asked, and OpenFGA's model requires
+    /// the tenant too. Two checks on purpose: either alone holds the boundary.
+    /// A classified document is only reachable through /classified, behind the step-up
+    /// policy, unless <paramref name="includeClassified"/> (delete, which needs doc.admin
+    /// and has never asked for step-up).
+    /// </remarks>
+    internal static async Task<(Document? Document, DocumentAccess Access)> FindAsync(
+        Guid id, ClaimsPrincipal user, IDocumentStore store, IDocumentAuthorizer authorizer,
+        CancellationToken ct, bool includeClassified = false)
+    {
+        var tenant = user.GetTenantContext();
+        var document = store.Get(id);
+        if (document is null || !tenant.IsResolved || document.Tenant != tenant.Tenant
+            || (document.IsClassified && !includeClassified))
+        {
+            return (null, DocumentAccess.None);
+        }
+
+        var access = await authorizer.AccessAsync(user, document, ct);
+        return access.CanView ? (document, access) : (null, DocumentAccess.None);
+    }
 }
 
-public sealed record CreateDocumentRequest(string Title);
+public sealed record CreateDocumentRequest(string Title, Visibility? Visibility = null);

@@ -125,10 +125,17 @@ export-realm: ## Regenerate infra/local/realm-export/docvault-realm.json
 
 # --- Apps -------------------------------------------------------------------
 .PHONY: api
-api: ## Run the .NET API on :5001
+api: ## Run the .NET API on :5001 (needs up + seed: reads the OpenFGA store, model and directory secret)
 	@mkdir -p .lab
+	@cd $(REALM_DIR) && $(WS_LOCAL) >/dev/null
+	@cd $(FGA_DIR) && $(WS_LOCAL) >/dev/null
 	@# Also to a file: `make assert-mcp` matches the API's access log with the
 	@# MCP server's audit log by trace id.
+	Sharing__Mode=OpenFga \
+	Sharing__StoreId="$$(cd $(FGA_DIR) && $(TF) output -raw store_id)" \
+	Sharing__ModelId="$$(cd $(FGA_DIR) && $(TF) output -raw model_id)" \
+	Sharing__OpenFgaApiKey="$${OPENFGA_API_KEY:-docvault-fga-lab-key}" \
+	Sharing__DirectoryClientSecret="$$(cd $(REALM_DIR) && $(TF) output -raw api_directory_client_secret)" \
 	ASPNETCORE_URLS=http://localhost:5001 \
 		dotnet run --project apps/api-dotnet/DocVault.Api --no-launch-profile 2>&1 | tee .lab/api.log
 

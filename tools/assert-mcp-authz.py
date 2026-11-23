@@ -36,6 +36,8 @@ KEYCLOAK = os.environ.get("KEYCLOAK_URL", "http://localhost:8080")
 REALM = os.environ.get("KEYCLOAK_REALM", "docvault")
 MCP = os.environ.get("MCP_RESOURCE_URL", "http://localhost:5002/mcp")
 API = os.environ.get("DOCVAULT_API_URL", "http://localhost:5001")
+# Acme Q3 Roadmap: seeded with a fixed id, visible to acme, owned by nobody OpenFGA knows.
+SEEDED_ACME_DOCUMENT = "d0c00000-0000-4000-8000-000000000001"
 CLIENT = "docvault-mcp-client"
 PASSWORD = os.environ.get("SEED_USER_PASSWORD", "DocVaultLab!2026")
 SECRET = os.environ.get("MCP_CLIENT_SECRET", "")
@@ -255,7 +257,9 @@ def audit_checks(skip, tokens, alice_claims, carol_claims, document_id):
           json.dumps(challenged)[:200])
 
     if document_id:
-        refused = find(event="tool.call", tool="delete_document", outcome="refused", **{"document.id": document_id})
+        # The seeded document: alice owns the one she created, and may delete that.
+        refused = find(event="tool.call", tool="delete_document", outcome="refused",
+                       **{"document.id": SEEDED_ACME_DOCUMENT, "user.id": alice_claims.get("sub")})
         check("alice's refused delete is on record as the API's refusal, not the scope's",
               bool(refused) and refused.get("reason") == "api_forbidden" and refused.get("user.name") == "alice",
               json.dumps(refused)[:200])
@@ -409,8 +413,10 @@ def main():
     check("with the scope, alice (editor) creates a document", status == 200 and not is_error, text[:60])
     document_id = json.loads(text).get("id") if not is_error and text.startswith("{") else None
     if document_id:
-        # The scope says the assistant may delete. alice's role says she may not.
-        _, _, is_error, text = tool(writer["access_token"], "delete_document", {"id": document_id})
+        # The scope says the assistant may delete. alice's role says she may not, for a
+        # document she does not own: a seeded one, which has no owner. Her own she may
+        # delete, as its owner (UC1), so it would not show the scope/role difference.
+        _, _, is_error, text = tool(writer["access_token"], "delete_document", {"id": SEEDED_ACME_DOCUMENT})
         check("the delete scope does not give alice the admin role", is_error and "your DocVault role" in text, text[:60])
         _, _, is_error, text = tool(carol.get("access_token"), "delete_document", {"id": document_id})
         check("carol (admin) deletes it", not is_error, text[:60])

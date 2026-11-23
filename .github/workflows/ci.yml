@@ -223,6 +223,15 @@ jobs:
           # The script reads what the servers wrote about its own calls.
           echo "MCP_AUDIT_LOG=$PWD/mcp-audit.jsonl" >> "$GITHUB_ENV"
           echo "DOCVAULT_API_LOG=$PWD/api.log" >> "$GITHUB_ENV"
+          # Per-document authorization: the OpenFGA store and model 25-openfga made,
+          # and the client that looks people up for a share (20-realm/directory.tf).
+          directory_secret=$(terraform -chdir=infra/terraform/20-realm output -raw api_directory_client_secret)
+          echo "::add-mask::$directory_secret"
+          Sharing__Mode=OpenFga \
+          Sharing__StoreId="$(terraform -chdir=infra/terraform/25-openfga output -raw store_id)" \
+          Sharing__ModelId="$(terraform -chdir=infra/terraform/25-openfga output -raw model_id)" \
+          Sharing__OpenFgaApiKey=docvault-fga-lab-key \
+          Sharing__DirectoryClientSecret="$directory_secret" \
           ASPNETCORE_URLS=http://localhost:5001 nohup dotnet run --no-build --configuration Release \
             --project apps/api-dotnet/DocVault.Api --no-launch-profile > api.log 2>&1 &
           ASPNETCORE_URLS=http://localhost:5002 Mcp__ClientSecret="$secret" Audit__File="$PWD/mcp-audit.jsonl" nohup dotnet run --no-build --configuration Release \

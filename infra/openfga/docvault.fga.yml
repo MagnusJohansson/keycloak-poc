@@ -16,7 +16,7 @@
 # The people are the lab's:
 #   alice  /acme/engineering      carol  /acme/legal
 #   bob    /globex                dave   no groups at all
-#   erin   /acme, no department (exists only here)
+#   pat    /acme, no department (exists only in these tests)
 name: DocVault documents
 model_file: ./docvault.fga
 
@@ -58,7 +58,7 @@ tests:
       - { user: user:alice, relation: member, object: department:acme/engineering }
       - { user: user:carol, relation: member, object: tenant:acme }
       - { user: user:carol, relation: member, object: department:acme/legal }
-      - { user: user:erin, relation: member, object: tenant:acme }
+      - { user: user:pat, relation: member, object: tenant:acme }
       - { user: user:bob, relation: member, object: tenant:globex }
     check:
       # Tenant visibility reaches the whole tenant and no further.
@@ -87,7 +87,7 @@ tests:
       - user: user:carol
         object: document:for-carol
         assertions: { can_view: true, can_share: false, can_delete: false }
-      - user: user:erin
+      - user: user:pat
         object: document:for-carol
         assertions: { can_view: false }
 
@@ -95,7 +95,7 @@ tests:
       - user: user:carol
         object: document:for-legal
         assertions: { can_view: true, can_share: false }
-      - user: user:erin
+      - user: user:pat
         object: document:for-legal
         assertions: { can_view: false }
 

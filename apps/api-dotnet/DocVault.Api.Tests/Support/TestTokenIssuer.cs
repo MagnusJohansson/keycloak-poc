@@ -39,11 +39,13 @@ public sealed class TestTokenIssuer : IDisposable
         string audience = DefaultAudience,
         DateTime? expires = null,
         SecurityKey? overrideKey = null,
-        string? client = null)
+        string? client = null,
+        string? sub = null)
     {
         var claims = new List<Claim>
         {
-            new("sub", Guid.NewGuid().ToString()),
+            // A fresh id per token unless a test needs one person across several tokens.
+            new("sub", sub ?? Guid.NewGuid().ToString()),
             new("preferred_username", username),
             new("email", $"{username}@acme.test"),
         };

@@ -54,7 +54,7 @@ public sealed class DocumentTools(
     }
 
     [McpServerTool(Name = ToolScopes.DeleteDocument, ReadOnly = false, Destructive = true, OpenWorld = false)]
-    [Description("Permanently delete a document by id. Needs the admin role in DocVault.")]
+    [Description("Permanently delete a document by id. Needs the admin role in DocVault, or owning the document.")]
     public Task<CallToolResult> DeleteDocument(
         [Description("The document's id (a GUID), as returned by list_documents.")] string id,
         CancellationToken cancellationToken)

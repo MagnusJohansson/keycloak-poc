@@ -24,7 +24,7 @@ namespace DocVault.Api.Tests.Support;
 /// (audience, issuer, lifetime, algorithm, role mapping, policy evaluation) is the
 /// production code path, so a passing test means the production configuration works.
 /// </remarks>
-public sealed class DocVaultApiFactory : WebApplicationFactory<Program>
+public class DocVaultApiFactory : WebApplicationFactory<Program>
 {
     public TestTokenIssuer Tokens { get; } = new();
 
@@ -40,6 +40,7 @@ public sealed class DocVaultApiFactory : WebApplicationFactory<Program>
                 ["Keycloak:Audience"] = TestTokenIssuer.DefaultAudience,
                 ["Cors:AllowedOrigins:0"] = "http://localhost:5173",
             });
+            config.AddInMemoryCollection(SharingSettings());
         });
 
         builder.ConfigureTestServices(services =>
@@ -64,6 +65,15 @@ public sealed class DocVaultApiFactory : WebApplicationFactory<Program>
             });
         });
     }
+
+    /// <summary>
+    /// TenantOnly here: what the API did before sharing, so that every test written before
+    /// it still asserts what it always did. <see cref="OpenFgaApiFactory"/> runs with OpenFGA.
+    /// </summary>
+    protected virtual Dictionary<string, string?> SharingSettings() => new()
+    {
+        ["Sharing:Mode"] = "TenantOnly",
+    };
 
     public HttpClient CreateClientWithToken(string token)
     {
