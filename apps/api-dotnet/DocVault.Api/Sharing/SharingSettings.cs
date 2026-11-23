@@ -55,6 +55,16 @@ public sealed class SharingSettings
 
     public string? DirectoryClientSecret { get; set; }
 
+    /// <summary>
+    /// The least time a share to a person takes to answer, found or not. Looking someone
+    /// up takes longer when they exist, and longer still when they come from the LDAP
+    /// directory (their groups are read from it): measured at ~300 ms against ~90 ms for
+    /// nobody, which told an owner who exists in another tenant even though both answers
+    /// are the same 404 (found by review). One second is above the directory's slowest
+    /// lookups in the lab; sharing is rare enough to afford it.
+    /// </summary>
+    public TimeSpan PersonLookupFloor { get; set; } = TimeSpan.FromSeconds(1);
+
     /// <summary>Every problem with these settings, so that one start reports all of them.</summary>
     public IEnumerable<string> Problems()
     {

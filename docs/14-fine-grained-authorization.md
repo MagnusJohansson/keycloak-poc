@@ -141,8 +141,8 @@ documents"), and never "allow".
   with `docker compose pause` and measures the 503 in about 3 seconds.
 - A document whose tuples cannot be written is taken out of the store again.
   Without its tuples nobody could see it, its owner included.
-- Deleting removes the tuples first. If that fails, the document is still there,
-  intact.
+- Deleting removes the tuples first, the shares before the document's owner and
+  tenant. If that fails, the document is still there and its owner can try again.
 - The OpenFGA client is a few dozen lines over HTTP rather than the SDK, so there
   is no retry loop or fallback between a failure and the 503.
 
@@ -173,8 +173,12 @@ Turning a username into an id takes Keycloak's Admin API. The API does that as
 its own client, `docvault-api-directory` (`20-realm/directory.tf`), which holds
 `view-users` and nothing else, not as `docvault-api`'s service account. Asking
 for someone in another tenant gets exactly the same 404 as asking for nobody, so
-a share request is not a way to find out who works at globex. Keycloak is asked
-only when sharing, never when reading.
+a share request is not a way to find out who works at globex. It takes the same
+time too: looking up a directory person took ~300 ms (their groups are read from
+the directory) and nobody ~90 ms, so every share to a person now takes at least
+`Sharing:PersonLookupFloor`, one second. Measured afterwards: a directory person
+in globex, one in no group, a local user in globex and nobody all ~1040 ms.
+Keycloak is asked only when sharing, never when reading.
 
 Two consequences of using the directory: looking up an LDAP person who has never
 signed in imports them into Keycloak, and a brokered SAML person cannot be shared
@@ -234,7 +238,10 @@ answered from a table each test fills in, and the fake records what the API sent
 A fake that evaluated the model would be a second implementation of it, and the
 tests would be testing that.
 
-Each guard was broken on purpose to see a test fail:
+Each guard was broken on purpose to see a test fail. The last four rows are
+from an independent adversarial review of the branch, which found five problems,
+none of them a way to see, share or delete a document; each fix has a test that
+fails without it:
 
 | Broken | Fails |
 |---|---|
@@ -249,6 +256,10 @@ Each guard was broken on purpose to see a test fail:
 | seeing a document enough to delete it | 4 API tests |
 | a viewer allowed to share | 1 API test |
 | the check cache on and `HIGHER_CONSISTENCY` removed | 2 `assert-fga` checks |
+| no time floor on a person lookup (~300 ms for a directory person, ~90 ms for nobody: an oracle for who exists in another tenant) | 1 API test (`SharingTimingTests`) |
+| a delete removing the owner and tenant in its first write (a failure after it left a document nobody could see or delete) | 1 API test |
+| DELETE finding a classified document for anyone (a 403 confirmed it existed) | 1 API test |
+| `.`, `..` or a trailing newline accepted as a department name | 4 API tests |
 
 ## What is not here
 

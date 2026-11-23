@@ -1,7 +1,7 @@
 # 10. Testing and validation
 
 ```bash
-make test    # 294 tests (76 API + 113 MCP server + 48 SAML application + 57 desktop-auth), no Docker, no secrets, no network
+make test    # 310 tests (90 API + 115 MCP server + 48 SAML application + 57 desktop-auth), no Docker, no secrets, no network
 make test-model   # the OpenFGA model's 30 checks on OpenFGA's own engine (Docker, no running lab)
 make assert-fga   # 41 checks of sharing against the running lab (needs up + seed + api)
 make assert-mcp   # 41 checks of MCP authorization against the running lab (needs up + seed + api + mcp)

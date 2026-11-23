@@ -115,8 +115,9 @@ public sealed class OpenFgaClient(HttpClient http, IOptions<SharingSettings> opt
     /// </summary>
     /// <remarks>
     /// Split into writes of at most <see cref="MaxTuplesPerWrite"/>. Each is atomic, the
-    /// whole is not: deleting a much-shared document can fail halfway. What remains is
-    /// tuples for a document that still exists, and the delete can be retried.
+    /// whole is not: deleting a much-shared document can fail halfway. Callers order what
+    /// they pass so that a halfway failure leaves something usable
+    /// (<see cref="OpenFgaDocumentAuthorizer.DeletingAsync"/>).
     /// </remarks>
     public async Task WriteAsync(IReadOnlyList<TupleKey> writes, IReadOnlyList<TupleKey> deletes, CancellationToken cancellationToken)
     {

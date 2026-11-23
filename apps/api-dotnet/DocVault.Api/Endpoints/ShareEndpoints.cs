@@ -7,6 +7,7 @@ using System.Security.Claims;
 using DocVault.Api.Auth;
 using DocVault.Api.Domain;
 using DocVault.Api.Sharing;
+using Microsoft.Extensions.Options;
 
 namespace DocVault.Api.Endpoints;
 
@@ -53,7 +54,8 @@ public static class ShareEndpoints
         .WithSummary("Who a document is shared with. Owner only.");
 
         group.MapPost("/", async (Guid id, ShareRequest request, ClaimsPrincipal user, IDocumentStore store,
-            IDocumentAuthorizer authorizer, IPeopleDirectory directory, CancellationToken ct) =>
+            IDocumentAuthorizer authorizer, IPeopleDirectory directory, IOptions<SharingSettings> settings,
+            TimeProvider time, ILoggerFactory loggers, CancellationToken ct) =>
         {
             // One of the two, and a name that cannot be anything but a name.
             var username = request.Username?.Trim().ToLowerInvariant();
@@ -79,7 +81,23 @@ public static class ShareEndpoints
             ShareTarget target;
             if (username is not null)
             {
+                // Every outcome takes at least the same time: see PersonLookupFloor.
+                var started = time.GetTimestamp();
                 var userId = await directory.FindInTenantAsync(username, document.Tenant, ct);
+                var took = time.GetElapsedTime(started);
+                var floor = settings.Value.PersonLookupFloor;
+                if (took < floor)
+                {
+                    await Task.Delay(floor - took, time, ct);
+                }
+                else if (floor > TimeSpan.Zero)
+                {
+                    // Slower than the floor, so the time is the lookup's again. Said here so
+                    // that a floor too low for this directory gets noticed.
+                    loggers.CreateLogger("DocVault.Api.Sharing").LogWarning(
+                        "A person lookup took {Took} ms, more than Sharing:PersonLookupFloor.", (int)took.TotalMilliseconds);
+                }
+
                 if (userId is null)
                 {
                     return Results.Problem(statusCode: StatusCodes.Status404NotFound, title: "No such person",

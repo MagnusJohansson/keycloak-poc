@@ -32,10 +32,13 @@ public static partial class FgaNames
     /// are Keycloak's to choose and could hold ':' or '#', which mean something in a
     /// tuple. A name that does not fit is left out: that membership grants nothing,
     /// which is the safe way to be wrong.
+    /// Starts with a letter or digit: "." and ".." are path segments to anything that
+    /// builds a URL from a name (Keycloak's group-by-path collapsed "acme/." to "/acme").
+    /// \z, not $: in .NET, $ also matches before a final newline.
     /// </summary>
     public static bool IsSafeName(string name) => SafeName().IsMatch(name);
 
-    [GeneratedRegex("^[A-Za-z0-9._-]{1,64}$")]
+    [GeneratedRegex(@"\A[A-Za-z0-9][A-Za-z0-9._-]{0,63}\z")]
     private static partial Regex SafeName();
 }
 

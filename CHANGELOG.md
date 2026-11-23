@@ -35,8 +35,17 @@ tag that is not on `main`.
   model destroyed while OpenFGA keeps it.
 - New: `make test-model` (the model's 30 checks on OpenFGA's own engine),
   `make assert-fga` (41 checks against the real lab), one more browser test
-  (11). 294 .NET tests. 130 Terraform resources in `20-realm` and 2 in
+  (11). 310 .NET tests. 130 Terraform resources in `20-realm` and 2 in
   `25-openfga` locally.
+- An independent adversarial review found five problems, none of them a way to
+  see, share or delete a document; all fixed, each with a test that fails
+  without the fix. Looking someone up took ~300 ms for a directory person and
+  ~90 ms for nobody, telling an owner who exists in another tenant: every
+  share to a person now takes at least `Sharing:PersonLookupFloor` (1 s). A
+  delete that failed halfway could leave a document nobody could see or delete.
+  DELETE confirmed a classified document existed. The department names `.`
+  and `..` reached Keycloak's Admin API as path segments, and a name could end
+  in a newline.
 - `make clean` now removes the realm's local Terraform state. It has lived in a
   workspace since before 1.0.0, and `make clean` went on removing the old file.
 - Local lab and CI only.

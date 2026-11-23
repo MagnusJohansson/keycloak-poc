@@ -122,8 +122,17 @@ public sealed class OpenFgaDocumentAuthorizer(OpenFgaClient fga) : IDocumentAuth
     {
         // Read, then delete what was read. A share written in between survives, on a
         // document about to disappear from the store: it grants nothing that exists.
+        //
+        // The shares first, the document's tenant and owner in a last write of their own.
+        // Deletes go in writes of at most 100, and OpenFGA reads tuples back oldest first,
+        // so in one pass a failure after the first write had removed the owner and the
+        // tenant: a document nobody could see, so nobody could retry deleting it (found
+        // by review, shown against a real OpenFGA). This way a failure leaves the owner,
+        // who can try again.
         var tuples = await fga.ReadAsync(FgaNames.Document(document.Id), cancellationToken);
-        await fga.WriteAsync([], tuples, cancellationToken);
+        var last = tuples.Where(t => t.Relation is "tenant" or "owner").ToList();
+        await fga.WriteAsync([], tuples.Except(last).ToList(), cancellationToken);
+        await fga.WriteAsync([], last, cancellationToken);
     }
 
     public Task ShareAsync(Document document, ShareTarget target, CancellationToken cancellationToken) =>

@@ -26,7 +26,11 @@ public class OpenFgaApiFactory : DocVaultApiFactory
         ["Sharing:StoreId"] = FakeOpenFga.StoreId,
         ["Sharing:ModelId"] = FakeOpenFga.ModelId,
         ["Sharing:DirectoryClientSecret"] = "unused-by-the-fake",
+        // Off here; SharingTimingTests sets one and measures it.
+        ["Sharing:PersonLookupFloor"] = LookupFloor,
     };
+
+    protected virtual string LookupFloor => "00:00:00";
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {

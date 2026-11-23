@@ -26,7 +26,7 @@ make assert-saml # 43 checks of the brokered SAML provider - REQUIRES up + seed 
 make reports     # the legacy SAML application on :5003 (separate shell; needs up + seed)
 make assert-saml-app # 30 checks of that application - REQUIRES up + seed + reports
 make test-model  # the OpenFGA model's own tests (`fga model test` in Docker; no running lab needed)
-make test        # 294 .NET tests (76 API + 113 MCP + 48 SAML application + 57 desktop-auth) - no Docker, network or cloud
+make test        # 310 .NET tests (90 API + 115 MCP + 48 SAML application + 57 desktop-auth) - no Docker, network or cloud
 make e2e         # 11 Playwright tests - REQUIRES up + seed + api + web + reports running
 make plan        # realm + OpenFGA model diff; both should be EMPTY
 make token       # mint a real token and decode its claims
@@ -288,6 +288,19 @@ Every one of these cost real debugging time and is now load-bearing. Do not "sim
   revoked by user id (`DELETE .../shares/users/{id}`) so a renamed, moved or deleted person can still
   be removed. A lookup imports an LDAP person who never signed in; a brokered SAML person cannot be
   shared with before their first sign-in.
+- **Found by an independent review, each with a test that fails without the fix:**
+  - **A share to a person takes at least `Sharing:PersonLookupFloor` (1 s), found or not.** Looking
+    someone up took ~300 ms for an LDAP person (groups read from the directory) and ~90 ms for nobody,
+    telling an owner who exists in another tenant behind the same 404. Measured after: all ~1040 ms.
+    The API logs a warning when a lookup exceeds the floor. Do not drop it "for speed".
+  - **`DeletingAsync` deletes shares first and the document's `tenant`/`owner` in a last write.**
+    OpenFGA reads tuples back oldest first and deletes go in writes of 100, so one pass that failed
+    after its first write left a document nobody could see, hence nobody could delete.
+  - **DELETE finds a classified document only for `doc.admin`**; anyone else gets the unknown-id 404.
+  - **Names (`FgaNames.IsSafeName`, the MCP `DepartmentName`) start with a letter or digit and end
+    with `\z`.** `.`/`..` became path segments in Keycloak's `group-by-path`, and `$` matches before a
+    final newline.
+  - The timing test runs in a non-parallel xUnit collection; beside other classes it was flaky.
 - `assert-fga.py` checks "does not see it" with `Person.sees(...) is False`, never
   `title not in titles()`: a refused list (403, 503) passed the latter. Its mover check once passed
   only because erin had lost every group. The directory does not rewrite group members on a
@@ -568,7 +581,7 @@ A re-run refuses to replace an already-attached archive with different bytes.
 ## Verification status
 
 Proven against real software: 130 Terraform resources in `20-realm` (+2 in `25-openfga`) applied to the local Keycloak 26.6.3 with a
-clean re-plan (Azure was applied with the 74 that predate the MCP server); 76 API + 113 MCP +
+clean re-plan (Azure was applied with the 74 that predate the MCP server); 90 API + 115 MCP +
 48 SAML application + 57 desktop-auth .NET tests (including forged `alg:none`, wrong-key,
 wrong-audience, wrong-realm and expired tokens, and 404-not-403 across the tenant
 boundary); 11 Playwright tests in a real browser (a directory person, a SAML person, the SAML application, and a private document shared and unshared); 12 Flutter tests; React/Vue build;

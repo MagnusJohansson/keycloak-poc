@@ -44,6 +44,9 @@ public sealed class FakeOpenFga : HttpMessageHandler
     /// <summary>Objects whose check comes back as an error rather than a decision.</summary>
     public ConcurrentDictionary<string, byte> Erroring { get; } = new();
 
+    /// <summary>A write this says yes to fails as if OpenFGA had gone away mid-request.</summary>
+    public Func<JsonObject, bool>? FailWrite { get; set; }
+
     /// <summary>The model id the store says it has. Anything else is 404.</summary>
     public string KnownModelId { get; set; } = ModelId;
 
@@ -117,6 +120,11 @@ public sealed class FakeOpenFga : HttpMessageHandler
 
     private HttpResponseMessage Write(JsonObject body)
     {
+        if (FailWrite?.Invoke(body) == true)
+        {
+            throw new HttpRequestException("connection reset (FakeOpenFga.FailWrite)");
+        }
+
         _writes.Enqueue(body.DeepClone().AsObject());
         foreach (var key in Keys(body["writes"]))
         {
@@ -160,8 +168,19 @@ public sealed class FakeDirectory : DocVault.Api.Sharing.IPeopleDirectory
 
     public void AddDepartment(string tenant, string department) => _departments[$"{tenant}/{department}"] = 0;
 
-    public Task<Guid?> FindInTenantAsync(string username, string tenant, CancellationToken cancellationToken) =>
-        Task.FromResult(_people.TryGetValue(username, out var p) && p.Tenant == tenant ? p.Id : (Guid?)null);
+    /// <summary>How long a lookup of someone who exists takes; nobody is answered at once, as Keycloak does.</summary>
+    public TimeSpan ExistingPersonDelay { get; set; } = TimeSpan.Zero;
+
+    public async Task<Guid?> FindInTenantAsync(string username, string tenant, CancellationToken cancellationToken)
+    {
+        if (!_people.TryGetValue(username, out var p))
+        {
+            return null;
+        }
+
+        await Task.Delay(ExistingPersonDelay, cancellationToken);
+        return p.Tenant == tenant ? p.Id : null;
+    }
 
     public Task<bool> DepartmentExistsAsync(string tenant, string department, CancellationToken cancellationToken) =>
         Task.FromResult(_departments.ContainsKey($"{tenant}/{department}"));

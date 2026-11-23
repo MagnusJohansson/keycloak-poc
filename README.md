@@ -37,7 +37,7 @@ on a laptop and complete enough to show the decisions an identity platform needs
   consented scopes and token exchange, so an assistant can do only what the user
   consented to, as that user. An audit log records each call: who, through which
   client, which tool, and how it ended.
-- **Tested against the real thing.** 294 .NET tests with forged tokens and forged
+- **Tested against the real thing.** 310 .NET tests with forged tokens and forged
   SAML responses, browser
   tests against a real Keycloak, and end-to-end checks that sign in as the demo users.
 
@@ -331,7 +331,7 @@ Built and checked against real software, not just written down:
   the directory and the SAML provider);
   `acr_values_supported`, the audience mapper and service-account roles confirmed
   in a real token.
-- .NET 10 API: 76 tests pass, including forged `alg:none`, wrong-key,
+- .NET 10 API: 90 tests pass, including forged `alg:none`, wrong-key,
   wrong-audience, wrong-realm and expired tokens, 403-vs-401 for an
   authenticated-but-unauthorized caller, 404-not-403 across the tenant
   boundary, and what the API sends OpenFGA and does with each answer.
@@ -351,7 +351,7 @@ Built and checked against real software, not just written down:
   among them a person from the LDAP directory, one from the legacy SAML
   provider, a sign-in to the legacy SAML application, and a private document
   shared with carol and unshared.
-- MCP server: 113 tests pass with forged tokens (wrong audience, `alg:none`,
+- MCP server: 115 tests pass with forged tokens (wrong audience, `alg:none`,
   wrong key, wrong realm, expired), every scope challenge, the share tools and
   the audit log, and `make assert-mcp` passes 41 checks against the local Keycloak, API and MCP
   server, signing in as the demo users. The last eight read the audit log the

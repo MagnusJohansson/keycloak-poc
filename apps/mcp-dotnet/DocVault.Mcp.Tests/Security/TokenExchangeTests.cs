@@ -114,6 +114,8 @@ public sealed class TokenExchangeTests(McpServerFactory factory) : IClassFixture
     [InlineData("share_document", """{"id":"7b0c8f0e-4d0a-4c46-9f0a-1f2f3a4b5c6d","username":"  "}""")]
     [InlineData("share_document", """{"id":"7b0c8f0e-4d0a-4c46-9f0a-1f2f3a4b5c6d","department":"le#gal"}""")]
     [InlineData("share_document", """{"id":"7b0c8f0e-4d0a-4c46-9f0a-1f2f3a4b5c6d","department":"../admin"}""")]
+    [InlineData("share_document", """{"id":"7b0c8f0e-4d0a-4c46-9f0a-1f2f3a4b5c6d","department":"."}""")]
+    [InlineData("unshare_document", """{"id":"7b0c8f0e-4d0a-4c46-9f0a-1f2f3a4b5c6d","department":".."}""")]
     [InlineData("unshare_document", """{"id":"7b0c8f0e-4d0a-4c46-9f0a-1f2f3a4b5c6d"}""")]
     public async Task Bad_arguments_are_refused_before_any_downstream_call(string tool, string arguments)
     {

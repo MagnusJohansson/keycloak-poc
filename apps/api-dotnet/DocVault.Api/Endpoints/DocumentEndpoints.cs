@@ -128,7 +128,10 @@ public static class DocumentEndpoints
         // as for one that does not exist.
         group.MapDelete("/{id:guid}", async (Guid id, ClaimsPrincipal user, IDocumentStore store, IDocumentAuthorizer authorizer, CancellationToken ct) =>
         {
-            var (document, access) = await FindAsync(id, user, store, authorizer, ct, includeClassified: true);
+            // Classified documents only for doc.admin, who could always delete them. For
+            // anyone else a classified id is a 404, as on GET: a 403 would confirm that a
+            // document behind the step-up policy exists (found by review).
+            var (document, access) = await FindAsync(id, user, store, authorizer, ct, includeClassified: user.IsInRole("doc.admin"));
             if (document is null)
             {
                 return Results.NotFound();
@@ -176,8 +179,8 @@ public static class DocumentEndpoints
     /// The tenant is compared here, before OpenFGA is asked, and OpenFGA's model requires
     /// the tenant too. Two checks on purpose: either alone holds the boundary.
     /// A classified document is only reachable through /classified, behind the step-up
-    /// policy, unless <paramref name="includeClassified"/> (delete, which needs doc.admin
-    /// and has never asked for step-up).
+    /// policy, unless <paramref name="includeClassified"/> (delete by a doc.admin, which
+    /// has never asked for step-up).
     /// </remarks>
     internal static async Task<(Document? Document, DocumentAccess Access)> FindAsync(
         Guid id, ClaimsPrincipal user, IDocumentStore store, IDocumentAuthorizer authorizer,

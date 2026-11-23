@@ -287,6 +287,9 @@ public sealed class SharingTests(OpenFgaApiFactory factory) : IClassFixture<Open
     [InlineData("""{"department":"le#gal"}""")]
     [InlineData("""{"username":"car\nol"}""")]
     [InlineData("""{"username":""}""")]
+    [InlineData("""{"department":"."}""")]
+    [InlineData("""{"department":".."}""")]
+    [InlineData("""{"department":"-legal"}""")]
     public async Task A_share_names_exactly_one_person_or_department(string body)
     {
         var (owner, id) = await PrivateDocumentAsync();
@@ -360,6 +363,52 @@ public sealed class SharingTests(OpenFgaApiFactory factory) : IClassFixture<Open
     }
 
     [Fact]
+    public async Task A_delete_that_fails_halfway_leaves_the_owner_able_to_try_again()
+    {
+        // More shares than one write holds, and OpenFGA failing on the second write. In
+        // one pass the first write took the owner and tenant with it: a document nobody
+        // could see, so nobody could delete it (found by review, on a real OpenFGA).
+        var (owner, id) = await PrivateDocumentAsync();
+        var shares = Enumerable.Range(0, 120)
+            .Select(_ => new { user = $"user:{Guid.NewGuid():D}", relation = "viewer", @object = FakeOpenFga.Document(id) })
+            .ToArray();
+        await WriteDirectlyAsync(shares);
+        Fga.Allow(FakeOpenFga.User(owner), "can_delete", FakeOpenFga.Document(id));
+        var client = Client(Token(owner, ["doc.editor"], "/acme"));
+
+        var deletes = 0;
+        Fga.FailWrite = body => body["deletes"] is not null && ++deletes == 2;
+        try
+        {
+            Assert.Equal(HttpStatusCode.ServiceUnavailable, (await client.DeleteAsync($"/documents/{id}")).StatusCode);
+        }
+        finally
+        {
+            Fga.FailWrite = null;
+        }
+
+        Assert.Contains(($"user:{owner}", "owner"), Fga.StoredFor(FakeOpenFga.Document(id)));
+        Assert.Contains(("tenant:acme", "tenant"), Fga.StoredFor(FakeOpenFga.Document(id)));
+        Assert.Equal(HttpStatusCode.NoContent, (await client.DeleteAsync($"/documents/{id}")).StatusCode);
+        Assert.Empty(Fga.StoredFor(FakeOpenFga.Document(id)));
+    }
+
+    [Fact]
+    public async Task Deleting_a_classified_document_without_doc_admin_is_a_404_like_any_unknown_id()
+    {
+        // A 403 here confirmed that a document behind the step-up policy exists.
+        var sub = NewSub();
+        Fga.Allow(FakeOpenFga.User(sub), "can_view", FakeOpenFga.Document(Memo));
+        var client = Client(Token(sub, ["doc.editor"], "/acme"));
+
+        var classified = await client.DeleteAsync($"/documents/{Memo}");
+        var unknown = await client.DeleteAsync($"/documents/{Guid.NewGuid()}");
+
+        Assert.Equal(HttpStatusCode.NotFound, classified.StatusCode);
+        Assert.Equal(await unknown.Content.ReadAsStringAsync(), await classified.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
     public async Task Seeing_a_document_is_not_enough_to_delete_it()
     {
         var sub = NewSub();
@@ -384,6 +433,18 @@ public sealed class SharingTests(OpenFgaApiFactory factory) : IClassFixture<Open
     }
 
     private static string NewSub() => Guid.NewGuid().ToString("D");
+
+    /// <summary>Tuples straight into the fake, as if written earlier.</summary>
+    private async Task WriteDirectlyAsync(object[] tuples)
+    {
+        using var http = new HttpClient(Fga, disposeHandler: false);
+        using var request = new HttpRequestMessage(HttpMethod.Post, $"http://fga.test/stores/{FakeOpenFga.StoreId}/write")
+        {
+            Content = JsonContent.Create(new { writes = new { tuple_keys = tuples } }),
+        };
+        request.Headers.Authorization = new("Bearer", "test-fga-key");
+        (await http.SendAsync(request)).EnsureSuccessStatusCode();
+    }
 
     private string Token(string sub, string[] roles, params string[] groups) =>
         factory.Tokens.CreateToken(apiRoles: roles, groups: groups, sub: sub);

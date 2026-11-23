@@ -183,7 +183,9 @@ public sealed partial class DocumentTools(
         return null;
     }
 
-    [System.Text.RegularExpressions.GeneratedRegex("^[A-Za-z0-9._-]{1,64}$")]
+    // As the API's FgaNames.IsSafeName: a letter or digit first ("." and ".." are path
+    // segments), and \z rather than $, which also matches before a final newline.
+    [System.Text.RegularExpressions.GeneratedRegex(@"\A[A-Za-z0-9][A-Za-z0-9._-]{0,63}\z")]
     private static partial System.Text.RegularExpressions.Regex DepartmentName();
 
     private async Task<CallToolResult> RunAsync(
