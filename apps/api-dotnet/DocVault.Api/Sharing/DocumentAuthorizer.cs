@@ -50,8 +50,12 @@ public interface IDocumentAuthorizer
     /// <summary>Records a new document's tenant, owner and visibility.</summary>
     Task CreatedAsync(Document document, CancellationToken cancellationToken);
 
-    /// <summary>Removes every relationship of a document. Called BEFORE it leaves the store.</summary>
-    Task DeletingAsync(Document document, CancellationToken cancellationToken);
+    /// <summary>
+    /// Removes every relationship of a document. Called BEFORE it leaves the store, by
+    /// <paramref name="user"/>, who can see it: if this fails partway, they still can, and
+    /// can try again.
+    /// </summary>
+    Task DeletingAsync(ClaimsPrincipal user, Document document, CancellationToken cancellationToken);
 
     Task ShareAsync(Document document, ShareTarget target, CancellationToken cancellationToken);
 
@@ -118,7 +122,7 @@ public sealed class OpenFgaDocumentAuthorizer(OpenFgaClient fga) : IDocumentAuth
         return fga.WriteAsync(tuples, [], cancellationToken);
     }
 
-    public async Task DeletingAsync(Document document, CancellationToken cancellationToken)
+    public async Task DeletingAsync(ClaimsPrincipal user, Document document, CancellationToken cancellationToken)
     {
         // Read, then delete what was read. A share written in between survives, on a
         // document about to disappear from the store: it grants nothing that exists.
@@ -130,9 +134,12 @@ public sealed class OpenFgaDocumentAuthorizer(OpenFgaClient fga) : IDocumentAuth
         // leave a document nobody can see, because then nobody can delete it again. In one
         // pass, oldest first as OpenFGA reads them back, the first write took the tenant
         // and owner (found by review). So what lets anyone see the document goes in a last
-        // write: its tenant, its owner, and its tenant-wide visibility, which is how an
-        // administrator sees a document nobody owns, such as a seeded one. Before that
-        // last write, only individual and department shares are gone.
+        // write: its tenant, its owner, its tenant-wide visibility (how an administrator
+        // sees a document nobody owns, such as a seeded one), and whatever lets the person
+        // deleting it see it: a share to them, or to a department they are in. An
+        // administrator who sees a private document only through such a share, whose owner
+        // has left, would otherwise lose it to the first write (third review). Before the
+        // last write, only other people's shares are gone.
         var tuples = await fga.ReadAsync(FgaNames.Document(document.Id), cancellationToken);
         if (tuples.Count <= OpenFgaClient.MaxTuplesPerWrite)
         {
@@ -140,8 +147,16 @@ public sealed class OpenFgaDocumentAuthorizer(OpenFgaClient fga) : IDocumentAuth
             return;
         }
 
-        var tenantWide = FgaNames.TenantMembers(document.Tenant);
-        var last = tuples.Where(t => t.Relation is "tenant" or "owner" || (t.Relation == "viewer" && t.User == tenantWide)).ToList();
+        var keepsSight = new HashSet<string>(StringComparer.Ordinal) { FgaNames.TenantMembers(document.Tenant) };
+        if (Caller.From(user) is { } caller)
+        {
+            keepsSight.Add(caller.User);
+            keepsSight.UnionWith(caller.Memberships
+                .Where(m => m.Object.StartsWith("department:", StringComparison.Ordinal))
+                .Select(m => $"{m.Object}#member"));
+        }
+
+        var last = tuples.Where(t => t.Relation is "tenant" or "owner" || (t.Relation == "viewer" && keepsSight.Contains(t.User))).ToList();
         await fga.WriteAsync([], tuples.Except(last).ToList(), cancellationToken);
         await fga.WriteAsync([], last, cancellationToken);
     }
@@ -207,7 +222,7 @@ public sealed class TenantOnlyAuthorizer : IDocumentAuthorizer
             // this stops the document being created visible to the whole tenant.
             : throw new InvalidOperationException("A private document needs Sharing:Mode OpenFga.");
 
-    public Task DeletingAsync(Document document, CancellationToken cancellationToken) => Task.CompletedTask;
+    public Task DeletingAsync(ClaimsPrincipal user, Document document, CancellationToken cancellationToken) => Task.CompletedTask;
 
     public Task ShareAsync(Document document, ShareTarget target, CancellationToken cancellationToken) => throw NoSharing();
 

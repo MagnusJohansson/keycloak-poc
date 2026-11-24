@@ -26,7 +26,7 @@ make assert-saml # 43 checks of the brokered SAML provider - REQUIRES up + seed 
 make reports     # the legacy SAML application on :5003 (separate shell; needs up + seed)
 make assert-saml-app # 30 checks of that application - REQUIRES up + seed + reports
 make test-model  # the OpenFGA model's own tests (`fga model test` in Docker; no running lab needed)
-make test        # 313 .NET tests (93 API + 115 MCP + 48 SAML application + 57 desktop-auth) - no Docker, network or cloud
+make test        # 314 .NET tests (94 API + 115 MCP + 48 SAML application + 57 desktop-auth) - no Docker, network or cloud
 make e2e         # 11 Playwright tests - REQUIRES up + seed + api + web + reports running
 make plan        # realm + OpenFGA model diff; both should be EMPTY
 make token       # mint a real token and decode its claims
@@ -298,7 +298,10 @@ Every one of these cost real debugging time and is now load-bearing. Do not "sim
     last write. OpenFGA reads tuples back oldest first, so one pass that failed after its first write
     left a document nobody could see, hence nobody could delete. The first fix (always two writes,
     tenant/owner last) still lost the tenant-wide viewer when the second failed, so an administrator
-    lost sight of a document nobody owns (second review).
+    lost sight of a document nobody owns (second review). The last write also keeps the CALLER's
+    `viewer user:<sub>` and `viewer department:<t>/<d>#member` (from their token): an administrator
+    who sees a private document only through a share, its owner gone, lost it to the first write
+    (third review). That is why `DeletingAsync` takes the `ClaimsPrincipal`.
   - **The share list marks someone who left the tenant (`inTenant: false`)**, and still lists them so
     the owner can remove a share that would switch on again if they came back.
   - **`docvault-api-directory` is optional (`sharing_people_lookup_enabled`, local tfvars only).**
@@ -308,7 +311,8 @@ Every one of these cost real debugging time and is now load-bearing. Do not "sim
   - **Names (`FgaNames.IsSafeName`, the MCP `DepartmentName`) start with a letter or digit and end
     with `\z`.** `.`/`..` became path segments in Keycloak's `group-by-path`, and `$` matches before a
     final newline.
-  - The timing test runs in a non-parallel xUnit collection; beside other classes it was flaky.
+  - The timing test runs in a non-parallel xUnit collection; beside other classes it was flaky. It
+    allows 10 ms under the floor: `Task.Delay` and a `Stopwatch` disagree (399.7 ms against 400).
   - **The "refuses to start" tests (`SharingModeTests`) also read the exception the host logs.**
     `WebApplicationFactory` sometimes throws `ObjectDisposedException` instead of the API's own
     exception (the failed host is disposed before it reads `IHostApplicationLifetime`; seen in CI).
@@ -389,7 +393,8 @@ Every one of these cost real debugging time and is now load-bearing. Do not "sim
 - **Sharing has its own scope, `docvault:share`**, not in `ToolScopes.Initial`, so a client asks for it
   only when `share_document`/`unshare_document` is first used and the consent screen shows that line
   on its own. Only the first time: Keycloak remembers the grant for that user and the MCP client
-  (shared by every assistant) and asks again only on `prompt=consent`. Do not fold it into `docvault:write`: a share is how a document reaches people who could
+  (shared by every assistant) and asks again only on `prompt=consent` or after the consent is
+  revoked (account console, or admin API: measured, both screens came back). Do not fold it into `docvault:write`: a share is how a document reaches people who could
   not see it, the thing a prompt injection would most want. Inside the tenant nothing tells a share
   the user meant from one a document asked for; the scope, the API's owner/tenant rules and the audit
   record (`share.with`) are what there is. `unshare_document` looks the person's id up in the
@@ -593,7 +598,7 @@ A re-run refuses to replace an already-attached archive with different bytes.
 ## Verification status
 
 Proven against real software: 130 Terraform resources in `20-realm` (+2 in `25-openfga`) applied to the local Keycloak 26.6.3 with a
-clean re-plan (Azure was applied with the 74 that predate the MCP server); 93 API + 115 MCP +
+clean re-plan (Azure was applied with the 74 that predate the MCP server); 94 API + 115 MCP +
 48 SAML application + 57 desktop-auth .NET tests (including forged `alg:none`, wrong-key,
 wrong-audience, wrong-realm and expired tokens, and 404-not-403 across the tenant
 boundary); 11 Playwright tests in a real browser (a directory person, a SAML person, the SAML application, and a private document shared and unshared); 12 Flutter tests; React/Vue build;

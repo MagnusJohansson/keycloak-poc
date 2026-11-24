@@ -53,7 +53,11 @@ public sealed class SharingTimingTests(SharingTimingTests.Factory factory) : ICl
         var elsewhere = await Timed("frank");
         var nobody = await Timed("no-such-person");
 
-        Assert.True(elsewhere >= Floor && nobody >= Floor, $"{elsewhere.TotalMilliseconds} / {nobody.TotalMilliseconds} ms");
+        // A few ms short of the floor is still the floor: Task.Delay and this Stopwatch do
+        // not tick together, and 399.7 ms against 400 failed one run in four (third review).
+        // Without the floor these are ~150 ms and ~0 ms.
+        var atLeast = Floor - TimeSpan.FromMilliseconds(10);
+        Assert.True(elsewhere >= atLeast && nobody >= atLeast, $"{elsewhere.TotalMilliseconds} / {nobody.TotalMilliseconds} ms");
         Assert.True((elsewhere - nobody).Duration() < TimeSpan.FromMilliseconds(100),
             $"{elsewhere.TotalMilliseconds} / {nobody.TotalMilliseconds} ms");
     }

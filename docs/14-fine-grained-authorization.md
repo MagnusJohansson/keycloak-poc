@@ -143,10 +143,11 @@ documents"), and never "allow".
   Without its tuples nobody could see it, its owner included.
 - Deleting removes the tuples first. A document with 100 tuples or fewer goes in
   one write, which OpenFGA applies whole or not at all, so a failure changes
-  nothing. A larger one is split, with everything that lets anyone see the
-  document (its tenant, its owner and its tenant-wide visibility) in the last
-  write: if a write fails, the document is still there and whoever could see it
-  before (the owner, or an administrator) can try again.
+  nothing. A larger one is split, and the last write holds its tenant, its owner,
+  its tenant-wide visibility, and whatever lets the person deleting it see it (a
+  share to them, or to a department they are in). If a write fails, the document
+  is still there, its owner and the person who was deleting it can still see it,
+  and either can try again. Other people's shares may already be gone.
 - The OpenFGA client is a few dozen lines over HTTP rather than the SDK, so there
   is no retry loop or fallback between a failure and the 503.
 
@@ -250,10 +251,11 @@ answered from a table each test fills in, and the fake records what the API sent
 A fake that evaluated the model would be a second implementation of it, and the
 tests would be testing that.
 
-Each guard was broken on purpose to see a test fail. The last seven rows come
-from two rounds of independent adversarial review of the branch. The first found
+Each guard was broken on purpose to see a test fail. The last eight rows come
+from three rounds of independent adversarial review of the branch. The first found
 five problems, the second a gap left by one of the fixes and a share list that
-hid a leaver. None of them was a way to see, share or delete a document, and
+hid a leaver, the third another gap in the same delete: an administrator who saw
+a private document only through a share. None of them was a way to see, share or delete a document, and
 each fix has a test that fails without it:
 
 | Broken | Fails |
@@ -272,10 +274,11 @@ each fix has a test that fails without it:
 | no time floor on a person lookup (~300 ms for a directory person, ~90 ms for nobody: an oracle for who exists in another tenant) | 1 API test (`SharingTimingTests`) |
 | a delete removing the owner and tenant in its first write (a failure after it left a document nobody could see or delete) | 1 API test |
 | DELETE finding a classified document for anyone (a 403 confirmed it existed) | 1 API test |
-| `.`, `..` or a trailing newline accepted as a department name | 7 API tests |
+| `.`, `..`, a leading `-` or a trailing newline accepted as a department name | 7 API tests (5 for `.`, `..` and the newline, 2 for the `-`) |
 | a small delete split into two writes (a failure at the second left a tenant-wide document the administrator could no longer see) | 1 API test |
 | a split delete removing the tenant-wide visibility before its last write | 1 API test |
 | a share to someone who has left the tenant listed like any other | 1 API test |
+| a split delete removing, before its last write, the share through which the person deleting it sees it | 1 API test (two mutations: their own share, their department's) |
 
 ## What is not here
 

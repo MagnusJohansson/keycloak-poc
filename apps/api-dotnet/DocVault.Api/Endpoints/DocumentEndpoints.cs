@@ -145,7 +145,7 @@ public static class DocumentEndpoints
 
             // Relationships first. If that fails the document is still there, intact; the
             // other order could leave a document in the store that nobody may see.
-            await authorizer.DeletingAsync(document, ct);
+            await authorizer.DeletingAsync(user, document, ct);
             store.Delete(id);
             return Results.NoContent();
         })

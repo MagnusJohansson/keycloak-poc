@@ -128,7 +128,9 @@ there is:
   your organisation"* on its own. Until then every share is a 403 challenge. It
   is asked once: Keycloak remembers the grant for that user and the MCP client,
   which every assistant shares, and shows the screen again only if the client
-  sends `prompt=consent`.
+  sends `prompt=consent` or the consent is revoked: by the user, on the account
+  console's *Applications* page, or by an administrator. (Revoked through the
+  admin API, the next sign-in showed both consent screens again.)
 - **The API's rules, whatever the assistant was told.** Only the owner shares,
   only documents they can see, only with people and departments of the same
   tenant. bob is refused with the same answer as someone who does not exist.

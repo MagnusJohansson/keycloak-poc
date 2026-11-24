@@ -479,6 +479,47 @@ public sealed class SharingTests(OpenFgaApiFactory factory) : IClassFixture<Open
     }
 
     [Fact]
+    public async Task A_large_delete_that_fails_at_the_end_keeps_what_lets_the_administrator_deleting_it_see_it()
+    {
+        // A private document whose owner has left, and an administrator who sees it only
+        // through a share: to them, and to their department. The last write fails. With
+        // only tenant and owner kept, the first write took both shares and nobody could
+        // see the document any more, so nobody could delete it (found by the third review).
+        var (owner, id) = await PrivateDocumentAsync();
+        var admin = NewSub();
+        var document = FakeOpenFga.Document(id);
+        await WriteDirectlyAsync(Enumerable.Range(0, 120)
+            .Select(_ => (object)new { user = $"user:{Guid.NewGuid():D}", relation = "viewer", @object = document })
+            .Append(new { user = $"user:{admin}", relation = "viewer", @object = document })
+            .Append(new { user = "department:acme/legal#member", relation = "viewer", @object = document })
+            .Append(new { user = "department:acme/engineering#member", relation = "viewer", @object = document })
+            .ToArray());
+        Fga.Allow(FakeOpenFga.User(admin), "can_view", document);
+        var client = Client(Token(admin, ["doc.admin"], "/acme/legal"));
+
+        Fga.FailWrite = DeletesTheTenant;
+        try
+        {
+            Assert.Equal(HttpStatusCode.ServiceUnavailable, (await client.DeleteAsync($"/documents/{id}")).StatusCode);
+        }
+        finally
+        {
+            Fga.FailWrite = null;
+        }
+
+        // Not engineering's share: the administrator is not in engineering.
+        (string, string)[] kept =
+        [
+            ("tenant:acme", "tenant"), ($"user:{owner}", "owner"),
+            ($"user:{admin}", "viewer"), ("department:acme/legal#member", "viewer"),
+        ];
+        Assert.Equal(kept.Order(), Fga.StoredFor(document).Order());
+
+        Assert.Equal(HttpStatusCode.NoContent, (await client.DeleteAsync($"/documents/{id}")).StatusCode);
+        Assert.Empty(Fga.StoredFor(document));
+    }
+
+    [Fact]
     public async Task Deleting_a_classified_document_without_doc_admin_is_a_404_like_any_unknown_id()
     {
         // A 403 here confirmed that a document behind the step-up policy exists.
