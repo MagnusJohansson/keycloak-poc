@@ -85,7 +85,7 @@ For the local lab — everything in the Quickstart below:
 
 | Tool | Version | Why |
 |---|---|---|
-| **Docker** | with Compose v2 | runs Keycloak, Postgres, the LDAP directory and Mailpit |
+| **Docker** | with Compose v2 | runs Keycloak, Postgres, the LDAP directory, OpenFGA and Mailpit |
 | **Terraform** | **≥ 1.9** | applies the realm — `make seed` *is* Terraform, not a script |
 | **.NET SDK** | **10.0** | the API, the worker and the test suite |
 | **Node** | **20.19+ or 22.12+** | the React and Vue clients (Vite 8 requires it) |
@@ -193,6 +193,12 @@ sequenceDiagram
 The two steps that fail *silently* when misconfigured are both visible here: the
 audience mapper (`aud=docvault-api`) and the roles/groups claims. Without them
 sign-in still succeeds and every API call returns 401 or 403.
+
+In the local lab the API then asks OpenFGA which of those documents this caller
+may see, sending the tenant and departments from the token with the question;
+private documents and shares are decided there. See
+[chapter 14](docs/14-fine-grained-authorization.md). On Azure, which runs no
+OpenFGA, every document is visible to its whole tenant.
 
 ## Deploying to Azure
 
