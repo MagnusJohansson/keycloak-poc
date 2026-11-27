@@ -27,8 +27,9 @@ public static class ToolScopes
     /// injection would most want. The first time a client asks for it, the consent screen
     /// shows it on its own line. After that Keycloak remembers the grant for the user and
     /// this client, which every assistant shares, and asks again only if the client sends
-    /// prompt=consent or the consent is revoked (by the user on the account console's
-    /// Applications page, or by an administrator).
+    /// prompt=consent or the consent is revoked. Revoked through the admin API, the next
+    /// sign-in showed both consent screens again (measured); the account console's
+    /// Applications page revokes it too, which was not tried.
     /// </summary>
     public const string Share = "docvault:share";
 

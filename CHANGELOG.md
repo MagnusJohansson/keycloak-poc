@@ -34,7 +34,7 @@ tag that is not on `main`.
   alike; it believes contextual tuples completely; Terraform reports a replaced
   model destroyed while OpenFGA keeps it.
 - New: `make test-model` (the model's 30 checks on OpenFGA's own engine),
-  `make assert-fga` (42 checks against the real lab), one more browser test
+  `make assert-fga` (45 checks against the real lab), one more browser test
   (11). 314 .NET tests. 130 Terraform resources in `20-realm` and 2 in
   `25-openfga` locally.
 - An independent adversarial review found five problems, none of them a way to

@@ -336,7 +336,7 @@ Built and checked against real software, not just written down:
   authenticated-but-unauthorized caller, 404-not-403 across the tenant
   boundary, and what the API sends OpenFGA and does with each answer.
 - Sharing: the OpenFGA model passes 30 checks on OpenFGA's own engine
-  (`make test-model`), and `make assert-fga` passes 42 checks against the local
+  (`make test-model`), and `make assert-fga` passes 45 checks against the local
   Keycloak, directory, OpenFGA and API: private documents, shares to a person and
   a department, a revoke, a directory person moved and renamed, and OpenFGA
   frozen. **Local lab and CI only**; Azure runs without OpenFGA.

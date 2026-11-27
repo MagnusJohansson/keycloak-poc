@@ -20,7 +20,7 @@ make api         # .NET 10 API on :5001 (needs up + seed: reads OpenFGA's store/
 make web         # React SPA on :5173      (separate shell)
 make mcp         # MCP server on :5002  (separate shell; needs up + seed + api)
 make assert-mcp  # 41 checks of MCP authorization (2 consent-screen checks only before alice has consented) - REQUIRES up + seed + api + mcp running
-make assert-fga  # 42 checks of sharing with the real OpenFGA - REQUIRES up + seed + api; freezes OpenFGA, renames and moves a directory person and restores them
+make assert-fga  # 45 checks of sharing with the real OpenFGA - REQUIRES up + seed + api; freezes OpenFGA, renames and moves a directory person and restores them
 make assert-ldap # 53 checks of LDAP federation - REQUIRES up + seed + api; changes the directory and restores it
 make assert-saml # 43 checks of the brokered SAML provider - REQUIRES up + seed + api
 make reports     # the legacy SAML application on :5003 (separate shell; needs up + seed)
@@ -301,7 +301,9 @@ Every one of these cost real debugging time and is now load-bearing. Do not "sim
     lost sight of a document nobody owns (second review). The last write also keeps the CALLER's
     `viewer user:<sub>` and `viewer department:<t>/<d>#member` (from their token): an administrator
     who sees a private document only through a share, its owner gone, lost it to the first write
-    (third review). That is why `DeletingAsync` takes the `ClaimsPrincipal`.
+    (third review). That is why `DeletingAsync` takes the `ClaimsPrincipal`. The API test can only
+    check WHICH tuples remain (the fake does not evaluate them); assert-fga asks the real OpenFGA
+    whether those still give the deleter `can_view` ("What a failed delete leaves").
   - **The share list marks someone who left the tenant (`inTenant: false`)**, and still lists them so
     the owner can remove a share that would switch on again if they came back.
   - **`docvault-api-directory` is optional (`sharing_people_lookup_enabled`, local tfvars only).**
@@ -394,7 +396,8 @@ Every one of these cost real debugging time and is now load-bearing. Do not "sim
   only when `share_document`/`unshare_document` is first used and the consent screen shows that line
   on its own. Only the first time: Keycloak remembers the grant for that user and the MCP client
   (shared by every assistant) and asks again only on `prompt=consent` or after the consent is
-  revoked (account console, or admin API: measured, both screens came back). Do not fold it into `docvault:write`: a share is how a document reaches people who could
+  revoked. Measured through the admin API only (both screens came back); the account console's
+  Applications page was not tried. Do not fold it into `docvault:write`: a share is how a document reaches people who could
   not see it, the thing a prompt injection would most want. Inside the tenant nothing tells a share
   the user meant from one a document asked for; the scope, the API's owner/tenant rules and the audit
   record (`share.with`) are what there is. `unshare_document` looks the person's id up in the

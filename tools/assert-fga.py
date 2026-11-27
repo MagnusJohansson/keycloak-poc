@@ -28,6 +28,7 @@ import os
 import sys
 import time
 import urllib.parse
+import uuid
 
 _spec = importlib.util.spec_from_file_location(
     "assert_ldap", os.path.join(os.path.dirname(os.path.abspath(__file__)), "assert-ldap.py"))
@@ -201,6 +202,39 @@ def main():
             check("the API still shows bob nothing", bob.sees("assert-fga private") is False)
         finally:
             fga("POST", "write", {"deletes": {"tuple_keys": [bob_share]}})
+
+        # ------------------------------------------------------------------ #
+        print("\nWhat a failed delete leaves")
+        # A large delete that fails at its last write leaves the tenant, the owner and
+        # the shares through which the person deleting it sees it (DeletingAsync). The
+        # API tests check which tuples remain; whether those still let the deleter see
+        # the document is the model's answer, asked here of the real OpenFGA. A private
+        # document whose owner has left, shared with carol and with legal.
+        left = f"document:{uuid.uuid4()}"
+        remains = [
+            {"user": "tenant:acme", "relation": "tenant", "object": left},
+            {"user": f"user:{uuid.uuid4()}", "relation": "owner", "object": left},
+            {"user": f"user:{carol.sub}", "relation": "viewer", "object": left},
+            {"user": "department:acme/legal#member", "relation": "viewer", "object": left},
+        ]
+        fga("POST", "write", {"writes": {"tuple_keys": remains}})
+        try:
+            def can_view(sub, *departments):
+                member = [{"user": f"user:{sub}", "relation": "member", "object": "tenant:acme"}]
+                member += [{"user": f"user:{sub}", "relation": "member", "object": f"department:acme/{d}"} for d in departments]
+                return fga("POST", "check", {
+                    "authorization_model_id": MODEL, "consistency": "HIGHER_CONSISTENCY",
+                    "tuple_key": {"user": f"user:{sub}", "relation": "can_view", "object": left},
+                    "contextual_tuples": {"tuple_keys": member},
+                })[1].get("allowed")
+            check("carol, who was deleting it, still sees it through her own share",
+                  can_view(carol.sub) is True, str(can_view(carol.sub)))
+            check("someone in legal still sees it through the department's share",
+                  can_view(uuid.uuid4(), "legal") is True)
+            check("someone only in engineering does not",
+                  can_view(uuid.uuid4(), "engineering") is False)
+        finally:
+            fga("POST", "write", {"deletes": {"tuple_keys": remains}})
 
         # ------------------------------------------------------------------ #
         print("\nThe directory changes under it")

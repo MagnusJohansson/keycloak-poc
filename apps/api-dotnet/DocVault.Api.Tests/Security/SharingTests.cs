@@ -482,9 +482,15 @@ public sealed class SharingTests(OpenFgaApiFactory factory) : IClassFixture<Open
     public async Task A_large_delete_that_fails_at_the_end_keeps_what_lets_the_administrator_deleting_it_see_it()
     {
         // A private document whose owner has left, and an administrator who sees it only
-        // through a share: to them, and to their department. The last write fails. With
-        // only tenant and owner kept, the first write took both shares and nobody could
-        // see the document any more, so nobody could delete it (found by the third review).
+        // through a share: to them, and to the two departments they are in. The last write
+        // fails. With only tenant and owner kept, the first write took those shares and
+        // nobody could see the document any more, so nobody could delete it (found by the
+        // third review).
+        //
+        // The fake answers checks from its table, not from the stored tuples, so the
+        // retry's 204 does not show that sight survived: the StoredFor assertion does.
+        // That those tuples give the administrator can_view is the model's business, and
+        // assert-fga checks it against the real OpenFGA.
         var (owner, id) = await PrivateDocumentAsync();
         var admin = NewSub();
         var document = FakeOpenFga.Document(id);
@@ -492,10 +498,11 @@ public sealed class SharingTests(OpenFgaApiFactory factory) : IClassFixture<Open
             .Select(_ => (object)new { user = $"user:{Guid.NewGuid():D}", relation = "viewer", @object = document })
             .Append(new { user = $"user:{admin}", relation = "viewer", @object = document })
             .Append(new { user = "department:acme/legal#member", relation = "viewer", @object = document })
+            .Append(new { user = "department:acme/finance#member", relation = "viewer", @object = document })
             .Append(new { user = "department:acme/engineering#member", relation = "viewer", @object = document })
             .ToArray());
         Fga.Allow(FakeOpenFga.User(admin), "can_view", document);
-        var client = Client(Token(admin, ["doc.admin"], "/acme/legal"));
+        var client = Client(Token(admin, ["doc.admin"], "/acme/legal", "/acme/finance"));
 
         Fga.FailWrite = DeletesTheTenant;
         try
@@ -512,6 +519,7 @@ public sealed class SharingTests(OpenFgaApiFactory factory) : IClassFixture<Open
         [
             ("tenant:acme", "tenant"), ($"user:{owner}", "owner"),
             ($"user:{admin}", "viewer"), ("department:acme/legal#member", "viewer"),
+            ("department:acme/finance#member", "viewer"),
         ];
         Assert.Equal(kept.Order(), Fga.StoredFor(document).Order());
 

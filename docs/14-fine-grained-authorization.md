@@ -158,7 +158,7 @@ default). Measured with it on: a revoked share stayed **allowed**, and a new
 share stayed **refused**, until the entry expired (10 seconds by default).
 
 The API asks every check with `consistency: HIGHER_CONSISTENCY`, which skips the
-cache. With the cache on and the API unchanged, all 42 `assert-fga` checks pass;
+cache. With the cache on and the API unchanged, all 45 `assert-fga` checks pass;
 with the cache on and `HIGHER_CONSISTENCY` removed, "carol sees it now" fails.
 The cache is also stated `false` in the compose file, so turning it on is a
 visible decision.
@@ -244,7 +244,7 @@ Three layers, each testing what the others cannot:
 |---|---|---|
 | The model | `docvault.fga.yml`: 30 checks, 3 lists | `make test-model`, CI |
 | The API's wiring | `SharingTests`, `SharingModeTests`: over a fake OpenFGA | `make test`, CI |
-| Both, for real | `assert-fga.py`: 42 checks | `make assert-fga`, CI |
+| Both, for real | `assert-fga.py`: 45 checks | `make assert-fga`, CI |
 
 The fake OpenFGA in the API's tests **does not evaluate the model**. Checks are
 answered from a table each test fills in, and the fake records what the API sent.
@@ -278,7 +278,7 @@ each fix has a test that fails without it:
 | a small delete split into two writes (a failure at the second left a tenant-wide document the administrator could no longer see) | 1 API test |
 | a split delete removing the tenant-wide visibility before its last write | 1 API test |
 | a share to someone who has left the tenant listed like any other | 1 API test |
-| a split delete removing, before its last write, the share through which the person deleting it sees it | 1 API test (two mutations: their own share, their department's) |
+| a split delete removing, before its last write, the share through which the person deleting it sees it | 1 API test (three mutations: their own share dropped, their departments' dropped, only the first of two departments kept) |
 
 ## What is not here
 
