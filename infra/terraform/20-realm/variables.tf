@@ -165,3 +165,10 @@ variable "saml_legacy_idp_enabled" {
   type        = bool
   default     = false
 }
+
+# --- Sharing: the API looking people up (optional). See directory.tf. ---------
+variable "sharing_people_lookup_enabled" {
+  description = "Create docvault-api-directory, the client the API looks people up with to share a document. Needed only where the API runs with Sharing__Mode=OpenFga (the local lab and CI)."
+  type        = bool
+  default     = false
+}

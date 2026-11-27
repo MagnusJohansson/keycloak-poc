@@ -14,19 +14,21 @@ identity and access management server — OIDC, OAuth 2.0, SAML, MFA, RBAC, fede
 ## Commands
 
 ```bash
-make up          # Keycloak + Postgres + the LDAP directory + Mailpit (~30s, waits for readiness)
-make seed        # apply the DocVault realm via Terraform, then print secrets
-make api         # .NET 10 API on :5001
+make up          # Keycloak + Postgres + the LDAP directory + OpenFGA + Mailpit (~30s, waits for readiness)
+make seed        # apply the DocVault realm, then the OpenFGA store + model, via Terraform; print secrets
+make api         # .NET 10 API on :5001 (needs up + seed: reads OpenFGA's store/model and a client secret)
 make web         # React SPA on :5173      (separate shell)
 make mcp         # MCP server on :5002  (separate shell; needs up + seed + api)
-make assert-mcp  # 34 checks of MCP authorization - REQUIRES up + seed + api + mcp running
+make assert-mcp  # 41 checks of MCP authorization (2 consent-screen checks only before alice has consented) - REQUIRES up + seed + api + mcp running
+make assert-fga  # 45 checks of sharing with the real OpenFGA - REQUIRES up + seed + api; freezes OpenFGA, renames and moves a directory person and restores them
 make assert-ldap # 53 checks of LDAP federation - REQUIRES up + seed + api; changes the directory and restores it
 make assert-saml # 43 checks of the brokered SAML provider - REQUIRES up + seed + api
 make reports     # the legacy SAML application on :5003 (separate shell; needs up + seed)
 make assert-saml-app # 30 checks of that application - REQUIRES up + seed + reports
-make test        # 238 .NET tests (37 API + 96 MCP + 48 SAML application + 57 desktop-auth) - no Docker, network or cloud
-make e2e         # 10 Playwright tests - REQUIRES up + seed + api + web + reports running
-make plan        # realm diff; should be EMPTY on an unchanged realm
+make test-model  # the OpenFGA model's own tests (`fga model test` in Docker; no running lab needed)
+make test        # 314 .NET tests (94 API + 115 MCP + 48 SAML application + 57 desktop-auth) - no Docker, network or cloud
+make e2e         # 11 Playwright tests - REQUIRES up + seed + api + web + reports running
+make plan        # realm + OpenFGA model diff; both should be EMPTY
 make token       # mint a real token and decode its claims
 make down        # stop (keeps data)   /   make clean = also wipe volume + tfstate
 ```
@@ -70,9 +72,10 @@ module environment-specific defeats the point.
 |---|---|---|
 | `10-keycloak-azure` | `azurerm` | Keycloak itself on Azure: Container Apps + private Postgres + Key Vault |
 | `20-realm` | `keycloak/keycloak` | **the realm — source of truth** |
+| `25-openfga` | `openfga/openfga` | the OpenFGA store + model (local lab and CI only) |
 | `30-azure` | `azurerm` | your apps: Container Apps, Static Web Apps, Log Analytics (Sentinel opt-in) |
 
-Apply order for cloud: `10-keycloak-azure` → `20-realm` → `30-azure`.
+Apply order for cloud: `10-keycloak-azure` → `20-realm` → `30-azure`. Locally: `20-realm` → `25-openfga`.
 
 `infra/local/realm-export/docvault-realm.json` is a **generated artifact** (`make export-realm`).
 Never hand-edit it — the next `make seed` overwrites it. Terraform is the source of truth.
@@ -234,6 +237,97 @@ Every one of these cost real debugging time and is now load-bearing. Do not "sim
   test run: the older timestamp can leave a stale build.
 - The application is a stand-in written for the lab. Do not describe it as a real legacy product.
 
+**OpenFGA and sharing (`infra/openfga/`, `25-openfga`, `apps/api-dotnet/DocVault.Api/Sharing/`, UC1)**:
+
+- **OpenFGA holds relationships only** (owner, shared with, a document's tenant). Tenant and department
+  membership come from the caller's token as **contextual tuples** on each request, never stored, so a
+  leaver loses access with their next token. **OpenFGA believes contextual tuples completely**: a check
+  that says bob is in acme lets bob in (measured; a model test states it). Build them from the validated
+  token alone.
+- Every permission is intersected with `member from tenant`. A share across tenants is therefore
+  inert, and is still to be refused when written: it would switch on if the person joined the tenant.
+- Users are Keycloak user ids (`sub`), never usernames: a renamed or reused username would carry grants.
+- **`list-objects` truncates silently** at `OPENFGA_LIST_OBJECTS_MAX_RESULTS` (default 1000): HTTP 200,
+  no flag, no header (measured, v1.22.1). Do not list a person's documents with it.
+- **The check query cache keeps a revoked share allowed AND a new share refused** until the entry
+  expires (10 s default; both measured). Off by default and stated `false` in compose. The API's
+  `HIGHER_CONSISTENCY` skips it: `assert-fga` passes with the cache on, and fails with it on and
+  `HIGHER_CONSISTENCY` removed ("carol sees it now").
+- **Its own Postgres (`openfga-db`)**, not a database inside `postgres`: init scripts run only on an
+  empty data directory, so an existing lab's `pgdata` would never get it.
+- Host port **8090** (OpenFGA's 8080 is Keycloak's here). Preshared key `docvault-fga-lab-key`, the lab
+  default like admin/admin; `infra/environments/local/openfga.tfvars` is committed for that reason.
+  The image has no shell: the healthcheck uses its `grpc_health_probe`.
+- **Terraform owns the store and model, never tuples** (they change at run time; `make plan` would never
+  be empty). A model change shows as a replacement and the apply says "Destruction complete", but
+  OpenFGA cannot delete a model and the old id still answers. A comment-only DSL change is no change.
+- **Provider 0.5.2 cannot recover from a wiped OpenFGA**: it drops the missing store from state, then
+  fails reading the model (`authorization_model_not_found`). `make seed` forgets the state first, only
+  when OpenFGA answers 404 for the stored id. Leave that guard.
+- `fga model test` (CLI v0.8.2) has no contextual tuples for a check; the tests give membership as each
+  test's own tuples, which evaluate the same way.
+- **`Sharing:Mode` is required, with no default** (`OpenFga` | `TenantOnly`). TenantOnly as a default
+  would quietly make every private document tenant-wide. `TenantOnly` (Azure) **refuses** a private
+  document (400) and has no shares (404). `make api` and CI set `OpenFga` and the four values with it.
+- **The API asks OpenFGA by batch-check over the tenant's documents from the store**, never
+  list-objects (it truncates silently, above). Batch-check takes at most 50 checks (measured); a
+  per-check error is a 503, not a "no". Every check sends `HIGHER_CONSISTENCY`, so enabling the
+  check cache cannot make a revoke slow; the test fake rejects a check without it.
+- **Fail closed and say so: 503**, never 404/403/empty list. The client has a 3 s timeout and no
+  retries. A create whose tuples fail is taken out of the store again; a delete removes tuples
+  first. `OpenFgaClient` is hand-written over HTTP, not the SDK, so there is no retry loop or fallback.
+- **The tenant is checked twice**: by the API before OpenFGA is asked (`DocumentEndpoints.FindAsync`)
+  and by the model. A test proves the API's check holds even when OpenFGA says allow.
+- **Delete = (`doc.admin` OR owner) AND can_view.** An admin cannot delete a private document they
+  cannot see (404). Seeded documents have fixed GUIDs and **no owner** (Keycloak picks user ids at
+  realm creation), so nobody can share them and only an admin deletes them. `assert-mcp`'s
+  "scope is not the role" check deletes the seeded roadmap for that reason, not alice's own document.
+- **Sharing with a person** resolves the username through Keycloak's Admin API as
+  `docvault-api-directory` (`20-realm/directory.tf`, `view-users` only), a client of its own, not
+  `docvault-api`'s service account. Someone in another tenant gets the SAME 404 as nobody. Shares are
+  revoked by user id (`DELETE .../shares/users/{id}`) so a renamed, moved or deleted person can still
+  be removed. A lookup imports an LDAP person who never signed in; a brokered SAML person cannot be
+  shared with before their first sign-in.
+- **Found by an independent review, each with a test that fails without the fix:**
+  - **A share to a person takes at least `Sharing:PersonLookupFloor` (1 s), found or not.** Looking
+    someone up took ~300 ms for an LDAP person (groups read from the directory) and ~90 ms for nobody,
+    telling an owner who exists in another tenant behind the same 404. Measured after: all ~1040 ms.
+    The API logs a warning when a lookup exceeds the floor. Do not drop it "for speed".
+  - **`DeletingAsync` deletes in ONE write when the tuples fit (≤100); a write is atomic.** Only a
+    larger document is split, and then its `tenant`, `owner` AND `viewer tenant:<t>#member` go in the
+    last write. OpenFGA reads tuples back oldest first, so one pass that failed after its first write
+    left a document nobody could see, hence nobody could delete. The first fix (always two writes,
+    tenant/owner last) still lost the tenant-wide viewer when the second failed, so an administrator
+    lost sight of a document nobody owns (second review). The last write also keeps the CALLER's
+    `viewer user:<sub>` and `viewer department:<t>/<d>#member` (from their token): an administrator
+    who sees a private document only through a share, its owner gone, lost it to the first write
+    (third review). That is why `DeletingAsync` takes the `ClaimsPrincipal`. The API test can only
+    check WHICH tuples remain (the fake does not evaluate them); assert-fga asks the real OpenFGA
+    whether those still give the deleter `can_view` ("What a failed delete leaves").
+  - **The share list marks someone who left the tenant (`inTenant: false`)**, and still lists them so
+    the owner can remove a share that would switch on again if they came back.
+  - **`docvault-api-directory` is optional (`sharing_people_lookup_enabled`, local tfvars only).**
+    It can read every person in the realm; Azure runs `TenantOnly` and never looks anyone up.
+    `moved` blocks in `directory.tf` keep an existing lab's client and secret.
+  - **DELETE finds a classified document only for `doc.admin`**; anyone else gets the unknown-id 404.
+  - **Names (`FgaNames.IsSafeName`, the MCP `DepartmentName`) start with a letter or digit and end
+    with `\z`.** `.`/`..` became path segments in Keycloak's `group-by-path`, and `$` matches before a
+    final newline.
+  - The timing test runs in a non-parallel xUnit collection; beside other classes it was flaky. It
+    allows 10 ms under the floor: `Task.Delay` and a `Stopwatch` disagree (399.7 ms against 400).
+  - **The "refuses to start" tests (`SharingModeTests`) also read the exception the host logs.**
+    `WebApplicationFactory` sometimes throws `ObjectDisposedException` instead of the API's own
+    exception (the failed host is disposed before it reads `IHostApplicationLifetime`; seen in CI).
+- `assert-fga.py` checks "does not see it" with `Person.sees(...) is False`, never
+  `title not in titles()`: a refused list (403, 503) passed the latter. Its mover check once passed
+  only because erin had lost every group. The directory does not rewrite group members on a
+  rename, so the rename check moves `engineering` to the new name; `assert-ldap` passes after it.
+- Responses carry `isOwner` (the store's recorded owner id = the caller's `sub`) so the React app
+  knows where to offer Share/Delete. A hint, not a decision; seeded documents are nobody's.
+- The API tests' `FakeOpenFga` **does not evaluate the model**: checks come from a table, writes are
+  recorded. The model's meaning is `make test-model`'s job. Do not "improve" the fake into a second
+  implementation of docvault.fga.
+
 **One module, two environments (`20-realm`):**
 
 - `20-realm` is applied to BOTH the local Docker Keycloak and Azure, so every target selects a
@@ -248,6 +342,8 @@ Every one of these cost real debugging time and is now load-bearing. Do not "sim
 - The API's startup guard refuses a non-loopback authority over plain HTTP, so `30-azure` MUST set
   `Keycloak__RequireHttpsMetadata=true`. `appsettings.json` ships `false` for the loopback default;
   without the override the container exits with `ActivationFailed`.
+- `30-azure` MUST set `Sharing__Mode=TenantOnly` for the same reason: unset, the API refuses to
+  start. Azure runs no OpenFGA; do not claim sharing or private documents there.
 - A VNet-integrated Container Apps environment makes Azure create a third, platform-managed
   resource group (`ME_<env>_<rg>_<region>`) holding its load balancer and public IP. Expected, not
   drift — `managedBy` points at the environment, and it is deleted with it. Do not try to manage
@@ -295,6 +391,17 @@ Every one of these cost real debugging time and is now load-bearing. Do not "sim
   production while silently weakening both.
 
 **MCP server (`apps/mcp-dotnet`, `20-realm/mcp.tf`)** - see `docs/13-integration-mcp.md`:
+
+- **Sharing has its own scope, `docvault:share`**, not in `ToolScopes.Initial`, so a client asks for it
+  only when `share_document`/`unshare_document` is first used and the consent screen shows that line
+  on its own. Only the first time: Keycloak remembers the grant for that user and the MCP client
+  (shared by every assistant) and asks again only on `prompt=consent` or after the consent is
+  revoked. Measured through the admin API only (both screens came back); the account console's
+  Applications page was not tried. Do not fold it into `docvault:write`: a share is how a document reaches people who could
+  not see it, the thing a prompt injection would most want. Inside the tenant nothing tells a share
+  the user meant from one a document asked for; the scope, the API's owner/tenant rules and the audit
+  record (`share.with`) are what there is. `unshare_document` looks the person's id up in the
+  document's shares, because the API revokes by id.
 
 - **The MCP server's Keycloak `client_id` is its URL** (`var.mcp_resource_url`), on purpose. With
   resource indicators the token's `aud` is that URL, and standard token exchange only lets a
@@ -493,11 +600,11 @@ A re-run refuses to replace an already-attached archive with different bytes.
 
 ## Verification status
 
-Proven against real software: 127 Terraform resources applied to the local Keycloak 26.6.3 with a
-clean re-plan (Azure was applied with the 74 that predate the MCP server); 37 API + 96 MCP +
+Proven against real software: 130 Terraform resources in `20-realm` (+2 in `25-openfga`) applied to the local Keycloak 26.6.3 with a
+clean re-plan (Azure was applied with the 74 that predate the MCP server); 94 API + 115 MCP +
 48 SAML application + 57 desktop-auth .NET tests (including forged `alg:none`, wrong-key,
 wrong-audience, wrong-realm and expired tokens, and 404-not-403 across the tenant
-boundary); 10 Playwright tests in a real browser (a directory person, a SAML person, and the SAML application); 12 Flutter tests; React/Vue build;
+boundary); 11 Playwright tests in a real browser (a directory person, a SAML person, the SAML application, and a private document shared and unshared); 12 Flutter tests; React/Vue build;
 Flutter analyzes clean.
 
 **`10-keycloak-azure` has been applied for real** (Azure, swedencentral) and works: Keycloak came

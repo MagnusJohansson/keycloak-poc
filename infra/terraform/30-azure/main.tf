@@ -189,6 +189,13 @@ resource "azurerm_container_app" "api" {
         name  = "Keycloak__Audience"
         value = "docvault-api"
       }
+      # Required, with no default, so it is stated: Azure runs no OpenFGA. Every
+      # document is visible to its whole tenant and private documents are refused.
+      # Unset, the API refuses to start (ActivationFailed), like the setting above.
+      env {
+        name  = "Sharing__Mode"
+        value = "TenantOnly"
+      }
       env {
         name  = "APPLICATIONINSIGHTS_CONNECTION_STRING"
         value = azurerm_application_insights.api.connection_string

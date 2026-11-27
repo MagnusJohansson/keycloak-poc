@@ -5,6 +5,7 @@
 
 using System.Collections.Concurrent;
 using System.Net;
+using System.Net.Http.Json;
 using DocVault.Api.Auth;
 using DocVault.Api.Tests.Support;
 using Microsoft.AspNetCore.Hosting;
@@ -82,16 +83,17 @@ public sealed class AccessLogTests(DocVaultApiFactory factory) : IClassFixture<D
     [Fact]
     public async Task A_request_authorization_refuses_is_logged_too()
     {
-        // The assistant had the scope; the user does not have the role.
+        // The assistant had the scope; the user does not have the role. Creating needs
+        // doc.editor, and the policy refuses before the endpoint runs.
         var token = factory.Tokens.CreateToken(
-            username: "alice", apiRoles: ["doc.editor"], groups: ["/acme"], client: "http://localhost:5002/mcp");
+            username: "alice", apiRoles: ["doc.reader"], groups: ["/acme"], client: "http://localhost:5002/mcp");
         var (client, log) = ClientFor(token);
 
-        var response = await client.DeleteAsync($"/documents/{Guid.NewGuid()}");
+        var response = await client.PostAsJsonAsync("/documents", new { title = "refused" });
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
         var line = Assert.Single(log.Lines);
-        Assert.Contains("method=DELETE", line);
+        Assert.Contains("method=POST", line);
         Assert.Contains("status=403", line);
         Assert.Contains("client=http://localhost:5002/mcp", line);
     }

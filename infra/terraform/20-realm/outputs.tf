@@ -79,3 +79,9 @@ output "reports_saml_signing_key" {
   value     = tls_private_key.reports.private_key_pem
   sensitive = true
 }
+
+output "api_directory_client_secret" {
+  description = "The API's secret for looking people up to share a document with (directory.tf). Null unless sharing_people_lookup_enabled."
+  value       = one(keycloak_openid_client.api_directory[*].client_secret)
+  sensitive   = true
+}

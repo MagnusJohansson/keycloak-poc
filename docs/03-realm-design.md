@@ -31,6 +31,7 @@ realm: docvault
     ├── docvault-reactnative       public + PKCE, io.docvault.rn://
     ├── docvault-desktop           public + PKCE, loopback
     ├── docvault-worker            confidential, client_credentials
+    ├── docvault-api-directory     confidential, view-users only: looks people up for a share (lab and CI only)
     └── docvault-analytics         confidential, consent, pairwise sub
 ```
 
@@ -128,7 +129,7 @@ make seed-azure                        # Keycloak on Azure, same module
 make plan                              # diff without applying
 ```
 
-Around 127 resources on the local lab — `terraform -chdir=infra/terraform/20-realm state list | grep -vc '^data\.'`
+Around 130 resources on the local lab — `terraform -chdir=infra/terraform/20-realm state list | grep -vc '^data\.'`
 is the authoritative count, since it grows as clients are added. Two ordering rules
 the module encodes for you:
 

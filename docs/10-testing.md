@@ -1,8 +1,10 @@
 # 10. Testing and validation
 
 ```bash
-make test    # 238 tests (37 API + 96 MCP server + 48 SAML application + 57 desktop-auth), no Docker, no secrets, no network
-make assert-mcp   # 34 checks of MCP authorization against the running lab (needs up + seed + api + mcp)
+make test    # 314 tests (94 API + 115 MCP server + 48 SAML application + 57 desktop-auth), no Docker, no secrets, no network
+make test-model   # the OpenFGA model's 30 checks on OpenFGA's own engine (Docker, no running lab)
+make assert-fga   # 45 checks of sharing against the running lab (needs up + seed + api)
+make assert-mcp   # 41 checks of MCP authorization against the running lab (needs up + seed + api + mcp)
 ```
 
 ## The pyramid
@@ -111,6 +113,14 @@ make assert-ldap   # 53 checks; needs up + seed + api
 It changes the lab's directory (takes a person out of a group, deletes one,
 freezes the directory) and puts it back. See
 [UC7](use-cases/uc7-ldap-directory.md).
+
+Sharing is tested in three layers, because each can be wrong in a way the others
+cannot see. The model runs on OpenFGA's own engine (`make test-model`). The API's
+tests run over a fake OpenFGA that records what it is sent and answers checks from
+a table, and **does not evaluate the model**: a fake that did would be a second
+implementation of it. And `make assert-fga` puts the two together with real
+people, moves and renames one in the directory, and freezes OpenFGA to see a 503.
+See [chapter 14](14-fine-grained-authorization.md#testing).
 
 The brokered SAML provider has one too. It plays the browser between DocVault
 and the legacy provider, and changes real SAML responses on their way:

@@ -1,0 +1,153 @@
+# DocVault - a Keycloak proof-of-concept lab.
+# Copyright (C) 2026 Magnus Johansson
+# SPDX-License-Identifier: GPL-3.0-or-later
+# See the LICENSE file for the full licence text.
+
+# Tests of the model alone, on OpenFGA's own engine: `make test-model`.
+#
+# The API's tests do not evaluate the model (a fake that did would test the
+# fake), and tools/assert-fga.py tests the API and OpenFGA together. This file
+# is where the model's meaning is pinned down.
+#
+# Membership is per test, under each test's own `tuples`. The API sends it as
+# contextual tuples, built from the caller's token on each request and never
+# stored; `fga model test` has no contextual tuples for a check (v0.8.2), and a
+# test's own tuples evaluate the same way. assert-fga.py covers the real path.
+# The people are the lab's:
+#   alice  /acme/engineering      carol  /acme/legal
+#   bob    /globex                dave   no groups at all
+#   pat    /acme, no department (exists only in these tests)
+name: DocVault documents
+model_file: ./docvault.fga
+
+tuples:
+  # Visible to the whole tenant: what every document was before sharing existed.
+  - { user: tenant:acme, relation: tenant, object: document:roadmap }
+  - { user: user:alice, relation: owner, object: document:roadmap }
+  - { user: tenant:acme#member, relation: viewer, object: document:roadmap }
+
+  # Private to alice.
+  - { user: tenant:acme, relation: tenant, object: document:private }
+  - { user: user:alice, relation: owner, object: document:private }
+
+  # Private, shared with one person.
+  - { user: tenant:acme, relation: tenant, object: document:for-carol }
+  - { user: user:alice, relation: owner, object: document:for-carol }
+  - { user: user:carol, relation: viewer, object: document:for-carol }
+
+  # Private, shared with a department.
+  - { user: tenant:acme, relation: tenant, object: document:for-legal }
+  - { user: user:alice, relation: owner, object: document:for-legal }
+  - { user: department:acme/legal#member, relation: viewer, object: document:for-legal }
+
+  # Shared across the tenant boundary. The API refuses to write this; the
+  # model must make it inert anyway.
+  - { user: tenant:acme, relation: tenant, object: document:for-bob }
+  - { user: user:alice, relation: owner, object: document:for-bob }
+  - { user: user:bob, relation: viewer, object: document:for-bob }
+
+  # Globex's own.
+  - { user: tenant:globex, relation: tenant, object: document:supplier-list }
+  - { user: user:bob, relation: owner, object: document:supplier-list }
+  - { user: tenant:globex#member, relation: viewer, object: document:supplier-list }
+
+tests:
+  - name: Everyone in their usual groups
+    tuples:
+      - { user: user:alice, relation: member, object: tenant:acme }
+      - { user: user:alice, relation: member, object: department:acme/engineering }
+      - { user: user:carol, relation: member, object: tenant:acme }
+      - { user: user:carol, relation: member, object: department:acme/legal }
+      - { user: user:pat, relation: member, object: tenant:acme }
+      - { user: user:bob, relation: member, object: tenant:globex }
+    check:
+      # Tenant visibility reaches the whole tenant and no further.
+      - user: user:carol
+        object: document:roadmap
+        assertions: { can_view: true, can_share: false, can_delete: false }
+      - user: user:bob
+        object: document:roadmap
+        assertions: { can_view: false, can_share: false, can_delete: false }
+      - user: user:alice
+        object: document:supplier-list
+        assertions: { can_view: false }
+
+      # A private document is its owner's alone. carol is a doc.admin, and
+      # that is a role: the model has no say in it, and gives her nothing here.
+      # The API requires can_view for an administrator's delete too.
+      - user: user:alice
+        object: document:private
+        assertions: { can_view: true, can_share: true, can_delete: true }
+      - user: user:carol
+        object: document:private
+        assertions: { can_view: false, can_share: false, can_delete: false }
+
+      # A share to a person reaches that person only, and gives no right to
+      # share it on.
+      - user: user:carol
+        object: document:for-carol
+        assertions: { can_view: true, can_share: false, can_delete: false }
+      - user: user:pat
+        object: document:for-carol
+        assertions: { can_view: false }
+
+      # A share to a department reaches its members, not the rest of the tenant.
+      - user: user:carol
+        object: document:for-legal
+        assertions: { can_view: true, can_share: false }
+      - user: user:pat
+        object: document:for-legal
+        assertions: { can_view: false }
+
+      # A share across the tenant boundary grants nothing.
+      - user: user:bob
+        object: document:for-bob
+        assertions: { can_view: false, can_share: false, can_delete: false }
+
+    list_objects:
+      - user: user:alice
+        type: document
+        assertions:
+          can_view: [document:roadmap, document:private, document:for-carol, document:for-legal, document:for-bob]
+      - user: user:carol
+        type: document
+        assertions:
+          can_view: [document:roadmap, document:for-carol, document:for-legal]
+      - user: user:bob
+        type: document
+        assertions:
+          can_view: [document:supplier-list]
+
+  - name: A department share follows membership, so leaving the department ends it
+    # carol's next token after she leaves /acme/legal: still in acme, no department.
+    tuples:
+      - { user: user:carol, relation: member, object: tenant:acme }
+    check:
+      - user: user:carol
+        object: document:for-legal
+        assertions: { can_view: false }
+      - user: user:carol
+        object: document:roadmap
+        assertions: { can_view: true }
+
+  - name: No membership means no access, even to your own document
+    # A token with no groups (dave, or a client that dropped the claim). The
+    # owner is refused too: fail closed, by construction.
+    check:
+      - user: user:alice
+        object: document:private
+        assertions: { can_view: false, can_share: false, can_delete: false }
+      - user: user:dave
+        object: document:roadmap
+        assertions: { can_view: false }
+
+  # Not a feature: where the trust boundary is. Membership is believed. bob,
+  # said to be in acme, is let in, which is why the API builds membership from
+  # the validated token alone, and checks the tenant itself as well.
+  - name: Membership is believed, so it must come from the token
+    tuples:
+      - { user: user:bob, relation: member, object: tenant:acme }
+    check:
+      - user: user:bob
+        object: document:for-bob
+        assertions: { can_view: true }

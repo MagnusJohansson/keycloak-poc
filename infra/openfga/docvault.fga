@@ -1,0 +1,54 @@
+# DocVault - a Keycloak proof-of-concept lab.
+# Copyright (C) 2026 Magnus Johansson
+# SPDX-License-Identifier: GPL-3.0-or-later
+# See the LICENSE file for the full licence text.
+
+# ---------------------------------------------------------------------------
+# Who may see THIS document. The one question Keycloak's roles cannot answer,
+# because it depends on data. See docs/use-cases/uc1-rbac-document-sharing.md.
+#
+# This model holds RELATIONSHIPS only: who owns a document, who it is shared
+# with, which tenant it belongs to. It never holds who belongs to a tenant or a
+# department. That comes from the caller's Keycloak token on every request, as
+# contextual tuples (user:<sub> member tenant:acme, user:<sub> member
+# department:acme/legal), so there is no second copy of membership to go
+# stale. A person who leaves /acme/legal loses that department's shares with
+# their next token.
+#
+# Users are Keycloak user ids (the token's `sub`), never usernames: a username
+# can be renamed, or given to the next person, who would inherit the grants.
+#
+# OpenFGA believes contextual tuples completely. Claim a membership and it is
+# granted (measured on v1.22.1). They must therefore be built from the
+# validated token and nothing else.
+# ---------------------------------------------------------------------------
+model
+  schema 1.1
+
+type user
+
+type tenant
+  relations
+    define member: [user]
+
+# Id is the Keycloak group path without its leading slash: acme/legal.
+type department
+  relations
+    define member: [user]
+
+type document
+  relations
+    define tenant: [tenant]
+    define owner: [user]
+    # tenant#member here is the "everyone in the tenant" visibility.
+    define viewer: [user, department#member, tenant#member]
+
+    define in_tenant: member from tenant
+
+    # Every permission is intersected with membership of the document's tenant.
+    # A share to someone in another tenant is therefore inert: it exists, and
+    # grants nothing. It is still refused when it is made, because it would
+    # switch on if that person ever joined the tenant.
+    define can_view: (owner or viewer) and in_tenant
+    define can_share: owner and in_tenant
+    define can_delete: owner and in_tenant

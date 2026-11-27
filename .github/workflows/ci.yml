@@ -103,7 +103,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        module: [10-keycloak-azure, 20-realm, 30-azure]
+        module: [10-keycloak-azure, 20-realm, 25-openfga, 30-azure]
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
@@ -133,12 +133,35 @@ jobs:
           docker compose -f infra/local/docker-compose.yml logs keycloak
           exit 1
 
+      - name: Wait for OpenFGA
+        run: |
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:8090/healthz | grep -q SERVING && exit 0
+            sleep 2
+          done
+          docker compose -f infra/local/docker-compose.yml logs openfga-migrate openfga
+          exit 1
+
       - name: Apply the realm
         working-directory: infra/terraform/20-realm
         run: |
           terraform init -backend=false -input=false
           terraform apply -auto-approve -input=false \
             -var-file="$GITHUB_WORKSPACE/infra/environments/local/realm.tfvars"
+
+      # The store and model the API asks about individual documents.
+      - name: Apply the OpenFGA store and model
+        working-directory: infra/terraform/25-openfga
+        run: |
+          terraform init -backend=false -input=false
+          terraform apply -auto-approve -input=false \
+            -var-file="$GITHUB_WORKSPACE/infra/environments/local/openfga.tfvars"
+
+      # The model's meaning, on OpenFGA's own engine: a private document stays
+      # private, a share across tenants grants nothing, no membership means no
+      # access. Dropping the tenant intersection from can_view fails two tests.
+      - name: OpenFGA model tests
+        run: make test-model
 
       - name: Assert the silent-failure configuration actually took effect
         run: |
@@ -200,6 +223,15 @@ jobs:
           # The script reads what the servers wrote about its own calls.
           echo "MCP_AUDIT_LOG=$PWD/mcp-audit.jsonl" >> "$GITHUB_ENV"
           echo "DOCVAULT_API_LOG=$PWD/api.log" >> "$GITHUB_ENV"
+          # Per-document authorization: the OpenFGA store and model 25-openfga made,
+          # and the client that looks people up for a share (20-realm/directory.tf).
+          directory_secret=$(terraform -chdir=infra/terraform/20-realm output -raw api_directory_client_secret)
+          echo "::add-mask::$directory_secret"
+          Sharing__Mode=OpenFga \
+          Sharing__StoreId="$(terraform -chdir=infra/terraform/25-openfga output -raw store_id)" \
+          Sharing__ModelId="$(terraform -chdir=infra/terraform/25-openfga output -raw model_id)" \
+          Sharing__OpenFgaApiKey=docvault-fga-lab-key \
+          Sharing__DirectoryClientSecret="$directory_secret" \
           ASPNETCORE_URLS=http://localhost:5001 nohup dotnet run --no-build --configuration Release \
             --project apps/api-dotnet/DocVault.Api --no-launch-profile > api.log 2>&1 &
           ASPNETCORE_URLS=http://localhost:5002 Mcp__ClientSecret="$secret" Audit__File="$PWD/mcp-audit.jsonl" nohup dotnet run --no-build --configuration Release \
@@ -215,6 +247,15 @@ jobs:
 
       - name: MCP authorization works end to end
         run: python3 tools/assert-mcp-authz.py
+
+      # Per-document authorization with the real OpenFGA: private documents,
+      # shares to a person and to a department, a revoke, a share written past
+      # the API, a directory person moved and renamed, and OpenFGA frozen.
+      - name: Sharing works end to end
+        run: |
+          FGA_STORE_ID="$(terraform -chdir=infra/terraform/25-openfga output -raw store_id)" \
+          FGA_MODEL_ID="$(terraform -chdir=infra/terraform/25-openfga output -raw model_id)" \
+            python3 tools/assert-fga.py
 
       # LDAP federation: people who exist only in the directory sign in, and then
       # the directory changes under Keycloak. With Keycloak's default cache a
@@ -260,6 +301,7 @@ jobs:
           # Keycloak's events say WHY a sign-in was refused; its pages do not.
           docker compose -f infra/local/docker-compose.yml logs keycloak | grep -E "org.keycloak.events|ERROR|WARN|requires user" | tail -60 || true
           docker compose -f infra/local/docker-compose.yml logs ldap | tail -40 || true
+          docker compose -f infra/local/docker-compose.yml logs openfga-migrate openfga | tail -40 || true
 
       - name: Plan is empty (no drift)
         working-directory: infra/terraform/20-realm
@@ -267,3 +309,10 @@ jobs:
           terraform plan -detailed-exitcode -input=false \
             -var-file="$GITHUB_WORKSPACE/infra/environments/local/realm.tfvars" \
             || { code=$?; [ "$code" = "2" ] && echo "Realm drifted on re-plan" && exit 1; exit $code; }
+
+      - name: OpenFGA plan is empty (no drift)
+        working-directory: infra/terraform/25-openfga
+        run: |
+          terraform plan -detailed-exitcode -input=false \
+            -var-file="$GITHUB_WORKSPACE/infra/environments/local/openfga.tfvars" \
+            || { code=$?; [ "$code" = "2" ] && echo "OpenFGA model drifted on re-plan" && exit 1; exit $code; }

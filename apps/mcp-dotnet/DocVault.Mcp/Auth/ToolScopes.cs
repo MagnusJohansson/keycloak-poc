@@ -21,15 +21,31 @@ public static class ToolScopes
     public const string Write = "docvault:write";
     public const string Delete = "docvault:delete";
 
+    /// <summary>
+    /// Sharing is its own scope, and not one a client asks for at first: a share is how a
+    /// document leaves the people who can see it, which makes it the tool a prompt
+    /// injection would most want. The first time a client asks for it, the consent screen
+    /// shows it on its own line. After that Keycloak remembers the grant for the user and
+    /// this client, which every assistant shares, and asks again only if the client sends
+    /// prompt=consent or the consent is revoked. Revoked through the admin API, the next
+    /// sign-in showed both consent screens again (measured); the account console's
+    /// Applications page revokes it too, which was not tried.
+    /// </summary>
+    public const string Share = "docvault:share";
+
     public const string ListDocuments = "list_documents";
     public const string CreateDocument = "create_document";
     public const string DeleteDocument = "delete_document";
+    public const string ShareDocument = "share_document";
+    public const string UnshareDocument = "unshare_document";
 
     private static readonly Dictionary<string, string> Required = new(StringComparer.Ordinal)
     {
         [ListDocuments] = Read,
         [CreateDocument] = Write,
         [DeleteDocument] = Delete,
+        [ShareDocument] = Share,
+        [UnshareDocument] = Share,
     };
 
     /// <summary>

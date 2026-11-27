@@ -4,6 +4,60 @@ Each release attaches a source archive with a signed build provenance
 attestation; see [Releases](README.md#releases). The release workflow refuses a
 tag that is not on `main`.
 
+## 1.5.0
+
+- **Sharing a document, decided by OpenFGA.** A document can be private to its
+  owner, who shares it with a person or a department of the same tenant, and
+  revokes it again. The API asks OpenFGA about every document before showing
+  it. See [UC1](docs/use-cases/uc1-rbac-document-sharing.md) and
+  [chapter 14](docs/14-fine-grained-authorization.md).
+- Keycloak stays the only place membership lives. OpenFGA stores who owns a
+  document and who it is shared with; the caller's tenant and departments go
+  with each check, built from the token. A person moved out of a department in
+  the directory loses its shares with their next token.
+- A share records the person's Keycloak user id, never their username, which
+  could be renamed or reused. The API looks people up as a new client,
+  `docvault-api-directory`, with `view-users` only. Someone in another tenant
+  gets the same 404 as nobody.
+- Fails closed: if OpenFGA cannot answer, the API answers 503, never 404, 403,
+  an empty list or "allow". An administrator cannot delete a private document
+  they cannot see. Owners may delete their own documents.
+- An AI assistant can share and unshare, behind a new scope of its own,
+  `docvault:share`, with its own line on the consent screen. The audit log
+  records who each share went to.
+- The React app offers private documents, a sharing panel, and Delete on your
+  own documents.
+- `Sharing:Mode` is required. Azure runs no OpenFGA: `30-azure` sets
+  `TenantOnly`, where a private document is refused.
+- Measured on the way, and written up: OpenFGA's list-objects drops results
+  past its limit with a 200; its check cache delays a new share and a revoke
+  alike; it believes contextual tuples completely; Terraform reports a replaced
+  model destroyed while OpenFGA keeps it.
+- New: `make test-model` (the model's 30 checks on OpenFGA's own engine),
+  `make assert-fga` (45 checks against the real lab), one more browser test
+  (11). 314 .NET tests. 130 Terraform resources in `20-realm` and 2 in
+  `25-openfga` locally.
+- An independent adversarial review found five problems, none of them a way to
+  see, share or delete a document; all fixed, each with a test that fails
+  without the fix. Looking someone up took ~300 ms for a directory person and
+  ~90 ms for nobody, telling an owner who exists in another tenant: every
+  share to a person now takes at least `Sharing:PersonLookupFloor` (1 s). A
+  delete that failed halfway could leave a document nobody could see or delete.
+  DELETE confirmed a classified document existed. The department names `.`
+  and `..` reached Keycloak's Admin API as path segments, and a name could end
+  in a newline.
+- A second review of those fixes: a delete now goes in one write when it can,
+  and a larger one keeps everything that lets anyone see the document until its
+  last write. A share to someone who has left the tenant is marked as such.
+  A third review found one more gap in that delete: an administrator who saw a
+  private document only through a share lost it to the first write. The last
+  write now also keeps the shares through which the person deleting it sees it.
+  The people-lookup client (`docvault-api-directory`) exists only where
+  `sharing_people_lookup_enabled` is set, so Azure no longer gets it.
+- `make clean` now removes the realm's local Terraform state. It has lived in a
+  workspace since before 1.0.0, and `make clean` went on removing the old file.
+- Local lab and CI only.
+
 ## 1.4.0
 
 - **A legacy application that only speaks SAML.** `apps/saml-reports` signs its

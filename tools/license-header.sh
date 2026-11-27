@@ -49,7 +49,7 @@ EXCLUDE_GLOBS=(
 style_for() {
   case "$1" in
     *.cs|*.ts|*.tsx|*.js|*.dart|*.kt)             echo slash ;;
-    *.tf|*.tfvars|*.sh|*.yml|Makefile|Dockerfile|*/Dockerfile) echo hash ;;
+    *.tf|*.tfvars|*.sh|*.yml|*.fga|Makefile|Dockerfile|*/Dockerfile) echo hash ;;
     *.html|*.vue|*.xaml)                          echo xml ;;
     *.css)                                        echo css ;;
     *)                                            echo "" ;;

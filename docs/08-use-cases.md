@@ -5,7 +5,7 @@ code, and — most importantly — **how to verify it actually works**.
 
 | # | Scenario |
 |---|---|
-| [1](use-cases/uc1-rbac-document-sharing.md) | **RBAC + per-document authorization** — tenant isolation, roles on groups, Keycloak Authorization Services |
+| [1](use-cases/uc1-rbac-document-sharing.md) | **RBAC + per-document authorization** — tenant isolation, roles on groups, private documents shared through OpenFGA |
 | [2](use-cases/uc2-enterprise-sso-entra.md) | **Enterprise SSO** — Entra ID federated as an upstream OIDC IdP, group→role mapping |
 | [3](use-cases/uc3-step-up-mfa.md) | **Step-up MFA** — `acr_values`, ACR→LoA map, conditional OTP, RFC 9470 challenge |
 | [4](use-cases/uc4-service-to-service.md) | **Machine-to-machine** — `client_credentials`, service accounts, no standing API key |
