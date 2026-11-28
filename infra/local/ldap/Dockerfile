@@ -13,7 +13,7 @@
 # The directory is filled at build time and has no volume: every `make up` on a
 # fresh container starts from the same people, with the same entryUUIDs, so
 # Keycloak's link to each of them survives a rebuild.
-FROM mirror.gcr.io/library/alpine:3.22@sha256:49340b346798875b5592e5d420241f2f9cfba5f47e62ebb1446a1b34734e898f
+FROM mirror.gcr.io/library/alpine:3.24@sha256:f59abe656b692d901e184be3445e084786602108599d2a51d229c0f5a48c71bf
 
 RUN apk add --no-cache openldap openldap-back-mdb openldap-clients openldap-passwd-argon2 openssl \
  && install -d -o ldap -g ldap -m 0700 /var/lib/openldap/openldap-data /run/openldap \
